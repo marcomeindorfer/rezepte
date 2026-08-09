@@ -942,17 +942,90 @@ function parseZutat(zeile){
 const parseZutaten=txt=>String(txt||"").split("\n").map(parseZutat).filter(Boolean);
 const parseSchritte=txt=>String(txt||"").split("\n").map(z=>z.trim().replace(/^\d+[.)]\s*/,"")).filter(Boolean);
 
+/* ===== Rezept aus einem Link holen ===== */
+async function ausLinkHolen(){
+  nfLesen();
+  const u=(nf.q||"").trim();
+  if(!/^https?:\/\//.test(u)){alert("Trag zuerst die Adresse des Rezepts ein.");return;}
+  if(!cfg.leser){
+    alert("Dafür fehlt noch der Rezept-Leser. Trag ihn unter Mehr ein – oder nimm „Rezepttext einfügen“, das geht ohne.");
+    return;
+  }
+  nf.status="Wird geholt …"; formZeigen(true);
+  try{
+    const res=await fetch(cfg.leser.replace(/\/$/,"")+"/?url="+encodeURIComponent(u));
+    const d=await res.json();
+    if(d.fehler){nf.status=d.fehler;formZeigen(true);return;}
+    if(d.name&&!nf.n.trim()) nf.n=d.name;
+    if(d.zutaten&&d.zutaten.length) nf.zText=d.zutaten.join("\n");
+    if(d.schritte&&d.schritte.length) nf.sText=d.schritte.join("\n");
+    if(d.minuten) nf.min=Math.min(180,d.minuten);
+    if(d.portionen>1) nf.port=d.portionen;
+    if(d.rohtext&&!(d.zutaten||[]).length) nf.zText=d.rohtext;
+    nf.status=d.hinweis||(d.zutaten.length?"Übernommen. Bitte einmal gegenlesen.":"Nichts Verwertbares gefunden.");
+  }catch(e){ nf.status="Der Rezept-Leser war nicht erreichbar."; }
+  formZeigen(true);
+}
+/* Mengen von N Portionen auf eine herunterrechnen */
+function aufEinePortion(){
+  nfLesen();
+  const n=nf.port||1; if(n<=1) return;
+  nf.zText=parseZutaten(nf.zText).map(([name,q,e])=>{
+    if(!q) return name;
+    let v=q/n; v=v<1?Math.round(v*100)/100:Math.round(v*10)/10;
+    return String(v).replace(".",",")+" "+(e?e+" ":"")+name;
+  }).join("\n");
+  nf.port=1; nf.status="Auf eine Portion umgerechnet.";
+  formZeigen(true);
+}
+/* Ohne Worker: kompletten Rezepttext einfügen und automatisch aufteilen */
+function textEinfuegen(){
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Rezepttext einfügen</h2>
+    <p class="note" style="margin:8px 0 12px">Kopier den Rezeptteil der Seite oder die Videobeschreibung hier hinein. Die App trennt Zutaten von der Zubereitung – Zeilen, die mit einer Menge beginnen, gelten als Zutat.</p>
+    <textarea id="roh" rows="12" placeholder="200 g Möhren&#10;1 Dose Kichererbsen&#10;&#10;Möhren würfeln und andünsten."></textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="textAufteilen()">Aufteilen und übernehmen</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="formZeigen()">Zurück</button>`);
+}
+function textAufteilen(){
+  const roh=document.getElementById("roh").value;
+  const zeilen=roh.split("\n").map(z=>z.trim().replace(/^[-–•*]\s*/,"")).filter(Boolean);
+  const zut=[],schr=[];
+  let modus=null;   /* Überschriften im Text sind das verlässlichste Signal */
+  const einheiten="g|kg|ml|l|el|tl|stk|st|stück|dose|dosen|bund|zehe|zehen|prise|blatt|packung|pck|scheibe|scheiben|tasse|glas|kopf|stange|stangen|becher|zweig|zweige|handvoll|msp";
+  zeilen.forEach(z=>{
+    if(/^(zutaten|ingredients|einkaufsliste)\b/i.test(z)){modus="z";return;}
+    if(/^(zubereitung|anleitung|schritte|so geht|zubereiten|instructions|und so)\b/i.test(z)){modus="s";return;}
+    if(/^(tipp|hinweis|notiz|quelle|n(ä|ae)hrwerte)\b/i.test(z)) return;
+    if(/^f(ü|ue)r (die|den|das)\b/i.test(z)&&z.length<40) return;   /* Zwischenüberschrift wie "Für die Sauce" */
+
+    const nummeriert=/^\d+[.)]\s+\S/.test(z);
+    if(nummeriert){schr.push(z.replace(/^\d+[.)]\s*/,""));return;}
+    if(modus==="z"){zut.push(z);return;}
+    if(modus==="s"){schr.push(z);return;}
+
+    const mitMenge=new RegExp("^\\d+([.,]\\d+)?\\s*("+einheiten+")?\\.?\\s+\\S","i").test(z);
+    const satzende=/[.!?:]\s*$/.test(z);
+    const woerter=z.split(/\s+/).length;
+    if(mitMenge&&!satzende&&z.length<70) zut.push(z);
+    else if(!satzende&&woerter<=6&&z.length<45) zut.push(z);
+    else schr.push(z);
+  });
+  nf.zText=zut.join("\n"); nf.sText=schr.join("\n");
+  nf.status=zut.length+" Zutaten und "+schr.length+" Schritte erkannt. Bitte gegenlesen.";
+  formZeigen();
+}
+
 /* ===== Formular ===== */
 let nf=null;
 function neuesRezept(vorgabe){
-  nf={id:null,n:"",q:"",k:"veg",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",...(vorgabe||{})};
+  nf={id:null,n:"",q:"",k:"veg",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",...(vorgabe||{})};
   formZeigen();
 }
 function rezeptBearbeiten(id){
   const r=(S.eigene||{})[id]; if(!r) return;
   nf={id,n:r.n,q:r.q||"",k:r.k,ma:[...r.ma],min:r.min,p:r.p,why:r.why||"",
       zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
-      sText:(r.s||[]).join("\n")};
+      sText:(r.s||[]).join("\n"),port:1,status:""};
   formZeigen();
 }
 function nfLesen(){
@@ -975,6 +1048,12 @@ function formZeigen(behalten){
     <input type="text" id="nfn" value="${esc(nf.n)}" placeholder="Auberginen-Pasta">
     <label class="fl" for="nfq">Link zum Originalrezept (optional)</label>
     <input type="text" id="nfq" value="${esc(nf.q)}" placeholder="https://...">
+    <div class="row-btns" style="margin-top:8px">
+      <button class="btn btn-s${cfg.leser?" btn-primary":""}" onclick="ausLinkHolen()">Aus Link holen</button>
+      <button class="btn btn-s" onclick="textEinfuegen()">Rezepttext einfügen</button>
+      ${nf.port>1?`<button class="btn btn-s" onclick="aufEinePortion()">Von ${nf.port} auf 1 Portion rechnen</button>`:""}
+    </div>
+    ${nf.status?`<p class="note" style="margin-top:8px;color:var(--sea)">${esc(nf.status)}</p>`:""}
     <label class="fl">Art</label>
     <div class="pickrow">${[["veg","Vegetarisch"],["fisch","Fisch"],["fleisch","Fleisch"]]
       .map(([v,l])=>`<button aria-pressed="${nf.k===v}" onclick="nfSet('k','${v}')">${l}</button>`).join("")}</div>
@@ -1070,7 +1149,7 @@ function importAusfuehren(){
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.3";
+const VERSION="1.4";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
@@ -1082,7 +1161,7 @@ const leer=()=>({
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
 let S=leer();
-let cfg={db:"",hid:""};
+let cfg={db:"",hid:"",leser:""};
 let tab="woche", filter="alle", suche="", routeOffen=false, es=null, syncState="lokal", queue=[];
 
 const RZ=()=>REZEPTE.concat(Object.values(S.eigene||{}));
@@ -1511,6 +1590,10 @@ function vMehr(){
         <button class="btn btn-s btn-primary" onclick="neuesRezept()">Neues anlegen</button>
         <button class="btn btn-s" onclick="eigeneImportieren()">Einspielen</button>
         <button class="btn btn-s" onclick="eigeneExportieren()">Sichern</button></div>
+      <label class="fl" for="leser">Rezept-Leser (optional)</label>
+      <input type="url" id="leser" value="${esc(cfg.leser)}" placeholder="https://rezeptleser.dein-name.workers.dev">
+      <button class="btn btn-s" style="margin-top:8px" onclick="leserSpeichern()">Speichern</button>
+      <p class="note" style="margin-top:9px">Damit füllt „Aus Link holen“ Zutaten und Zubereitung automatisch aus einer Rezeptseite. Ohne Eintrag funktioniert weiterhin „Rezepttext einfügen“.</p>
       <p class="note" style="margin-top:10px">Damit „Küchenplan“ im Teilen-Menü deines Handys auftaucht, muss die App über das Chrome-Menü installiert sein. Danach kannst du beim Surfen auf Teilen tippen und die Seite landet direkt hier im Formular.</p>
     </div>
 
@@ -1586,6 +1669,10 @@ function cfgSpeichern(){
   cfg.hid=document.getElementById("hid").value.trim();
   if(cfg.hid&&cfg.hid.length<20){alert("Der Haushalts-Code muss mindestens 20 Zeichen haben – so verlangen es die Firebase-Regeln.");return;}
   schreibenLokal();verbinden();render();
+}
+function leserSpeichern(){
+  cfg.leser=document.getElementById("leser").value.trim().replace(/\/$/,"");
+  schreibenLokal(); render();
 }
 async function hochladen(){
   if(!confirm("Den Stand dieses Geräts in die Datenbank schreiben? Ein dort vorhandener Stand wird überschrieben."))return;
