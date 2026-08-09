@@ -1152,16 +1152,128 @@ function importAusfuehren(){
   closeSheet(); alert(n+" Rezept"+(n===1?"":"e")+" eingespielt."); go("rezepte");
 }
 
+/* ===== Beilagen-Vielfalt, Angebote, Mehrwochenplanung ===== */
+
+const KH={nudeln:"Nudeln",reis:"Reis",kartoffeln:"Kartoffeln",getreide:"Getreide",brot:"Brot",huelsen:"Hülsenfrüchte",ohne:"Ohne Beilage"};
+/* Reihenfolge entscheidet: Dal mit Reis zählt als Reis, Linsensalat als Hülsenfrucht */
+const KH_REGELN=[
+ ["nudeln",/nudel|pasta|spaghetti|lasagne|udon|reisnudel|gnocchi|tortellini/i],
+ ["reis",/^reis$|risottoreis|langkornreis|vollkornreis|basmati/i],
+ ["kartoffeln",/kartoffel|s(ü|ue)(ß|ss)kartoffel/i],
+ ["getreide",/couscous|hirse|quinoa|grie(ß|ss)|haferflocken|bulgur|polenta|mehl|paniermehl/i],
+ ["brot",/brot|br(ö|oe)tchen|tortilla|bagel|baguette|ciabatta|fladen|toast|reispapier|wrap/i],
+ ["huelsen",/linsen|bohnen|kichererbsen|erbsen/i]
+];
+const _khCache={};
+function khVon(r){
+  if(!r) return "ohne";
+  if(_khCache[r.id]!==undefined&&r.src!=="eigen") return _khCache[r.id];
+  let treffer="ohne";
+  for(const [k,re] of KH_REGELN){ if(r.z.some(z=>re.test(z[0]))){treffer=k;break;} }
+  if(r.src!=="eigen") _khCache[r.id]=treffer;
+  return treffer;
+}
+/* Welche Beilagen kommen in der gewählten Woche schon vor? */
+function khInWoche(w,ausser){
+  const z={};
+  slots(w).forEach(k=>{ if(k===ausser) return;
+    const e=S.plan[k]; if(!e) return; const r=R(e.r); if(!r) return;
+    const b=khVon(r); z[b]=(z[b]||0)+1; });
+  return z;
+}
+function khOffen(w,ausser){
+  const da=khInWoche(w,ausser);
+  return ["nudeln","reis","kartoffeln","getreide","huelsen","brot"].filter(k=>!da[k]);
+}
+
+/* ===== Angebote ===== */
+const angebotBis=()=>{const a=S.angebote; return a&&a.bis?a.bis:"";};
+const angeboteAktiv=()=>{
+  const a=S.angebote;
+  if(!a||!Array.isArray(a.items)||!a.items.length) return [];
+  if(a.bis&&new Date(a.bis+"T23:59:59")<new Date()) return [];
+  return a.items;
+};
+/* Produktnamen bei Aldi tragen Marken und Größen mit sich. Deshalb wird
+   wortweise verglichen: "Meine Metzgerei Puten-Geschnetzeltes" trifft "Putenschnitzel". */
+const ANG_STOPP=new Set(["meine","aldi","aktion","gramm","packung","frisch","deutscher","deutsche","marken",
+ "artikel","produkt","stueck","sorten","verschiedene","classic","original","family","gutbio","bio","tiefgekuehlt",
+ "gekuehlt","angebot","kracher","aktionspreis","preis","stueckpreis"]);
+function angebotWorte(o){
+  return slug(o).split("_").filter(t=>t.length>=5&&!ANG_STOPP.has(t));
+}
+function imAngebot(r){
+  const off=angeboteAktiv(); if(!off.length||!r) return [];
+  /* Zutatennamen und ihre Einzelwörter, etwa "rote_bete" -> auch "bete" */
+  const zut=new Set();
+  r.z.forEach(z=>{const a=slug(z[0]);if(a.length>=4)zut.add(a);a.split("_").forEach(t=>{if(t.length>=4)zut.add(t);});});
+  /* Nur eine Richtung: die Zutat darf das Angebotswort enthalten, nicht umgekehrt.
+     Sonst trifft "Gartenschlauch" die Zutat "Lauch". Dazu ein Wortstamm-Vergleich
+     ab sechs Buchstaben, damit "Hähnchenbrustfilet" auch "Hähnchenschenkel" findet. */
+  const passt=(w,z)=>z.includes(w)||(w.length>=6&&z.length>=6&&w.slice(0,6)===z.slice(0,6));
+  const treffer=[];
+  off.forEach(o=>{
+    const worte=angebotWorte(o); if(!worte.length) return;
+    if(worte.some(w=>[...zut].some(z=>passt(w,z)))) treffer.push(o);
+  });
+  return [...new Set(treffer)];
+}
+function angeboteSpeichern(){
+  const roh=document.getElementById("angtext").value;
+  const bis=document.getElementById("angbis").value.trim();
+  /* Preise zuerst entfernen, sonst zerbricht "1,29 €" am Komma */
+  const items=roh
+    .replace(/\d+[.,]\d+[ \t]*(€|EUR)?/g," ")
+    .replace(/\b\d+[ \t]*(g|kg|ml|l|St(ü|ue)ck|Pack(ung)?)\b/gi," ")
+    .split(/[\n,;]/)
+    .map(z=>z.trim().replace(/^[-–•*]\s*/,"").replace(/[-–:]\s*$/,"").trim())
+    .filter(z=>z.length>2).slice(0,120);
+  mut("angebote",{items,bis,geholt:Date.now()});
+  closeSheet();
+}
+function angeboteBearbeiten(){
+  const a=S.angebote||{items:[],bis:""};
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Angebote eintragen</h2>
+    <p class="note" style="margin:8px 0 12px">Prospekt öffnen, die für euch interessanten Lebensmittel hier hineinschreiben – eines je Zeile oder durch Komma getrennt. Preise dürfen dranbleiben, die schneidet die App weg. Rezepte mit diesen Zutaten werden im Wochenvorschlag bevorzugt und mit „Im Angebot“ gekennzeichnet.</p>
+    <label class="fl" for="angbis">Gültig bis</label>
+    <input type="date" id="angbis" value="${esc(a.bis||"")}">
+    <label class="fl" for="angtext">Angebote</label>
+    <textarea id="angtext" rows="10" placeholder="Hähnchenbrustfilet&#10;Zucchini 1,29 €&#10;Lachsfilet&#10;Feta">${esc((a.items||[]).join("\n"))}</textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="angeboteSpeichern()">Speichern</button>
+    ${cfg.leser?`<button class="btn btn-wide" style="margin-top:6px" onclick="angeboteHolen()">Automatisch versuchen</button>`:""}
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`);
+}
+async function angeboteHolen(){
+  const feld=document.getElementById("angtext");
+  if(!cfg.leser){alert("Dafür braucht es den Rezept-Leser unter Mehr.");return;}
+  feld.value="Wird versucht …";
+  try{
+    const res=await fetch(cfg.leser.replace(/\/$/,"")+"/angebote?tage=14");
+    const d=await res.json();
+    if(d.items&&d.items.length){
+      feld.value=d.items.join("\n");
+      const bis=document.getElementById("angbis"); if(d.bis&&bis)bis.value=d.bis;
+      alert(d.items.length+" Produkte aus den Angeboten der nächsten 14 Tage. Nicht Essbares stört nicht, es passt einfach auf keine Zutat. Zum Übernehmen speichern.");
+    }else{
+      feld.value=(S.angebote&&S.angebote.items||[]).join("\n");
+      alert(d.fehler||d.hinweis||"Es kam nichts Verwertbares zurück. Trag die Angebote von Hand ein – das dauert zwei Minuten und ist verlässlicher.");
+    }
+  }catch(e){
+    feld.value=(S.angebote&&S.angebote.items||[]).join("\n");
+    alert("Der Abruf hat nicht geklappt. Trag die Angebote von Hand ein.");
+  }
+}
+
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.5";
+const VERSION="1.7";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{items:[],bis:""}, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -1191,16 +1303,20 @@ function lesenLokal(){
 function migrieren(){
   let neu=false;
   ["spaeter","archiv","geprueft","eigene"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
+  if(!S.angebote){S.angebote={items:[],bis:""};neu=true;}
   if(S.abgelehnt&&Object.keys(S.abgelehnt).length){
     Object.keys(S.abgelehnt).forEach(id=>{if(!S.archiv[id])S.archiv[id]=Date.now();});
     delete S.abgelehnt; neu=true;
   }
   /* Sammlung: aus true wird ein Zeitstempel. Bestand wird zurückdatiert,
      damit der Aufräum-Stapel nicht erst in zwei Monaten anspringt. */
+  Object.keys(S.plan||{}).forEach(k=>{
+    if(k.indexOf("/")===-1){S.plan["0/"+k]=S.plan[k];delete S.plan[k];neu=true;}
+  });
   Object.entries(S.sammlung||{}).forEach(([id,v])=>{
     if(typeof v!=="number"){S.sammlung[id]=Date.now()-FRIST.alt*TAG;neu=true;}
   });
-  if(neu){schreibenLokal();if(basis()){senden("sammlung",S.sammlung);senden("archiv",S.archiv);senden("spaeter",S.spaeter);senden("geprueft",S.geprueft);}}
+  if(neu){schreibenLokal();if(basis()){senden("plan",S.plan);senden("sammlung",S.sammlung);senden("archiv",S.archiv);senden("spaeter",S.spaeter);senden("geprueft",S.geprueft);}}
 }
 function schreibenLokal(){
   try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(KEY+".cfg",JSON.stringify(cfg));localStorage.setItem(KEY+".q",JSON.stringify(queue));}catch(e){}
@@ -1277,27 +1393,33 @@ function render(){
 }
 
 /* ============ Wochenplan ============ */
-const slots=()=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push(d+"-"+mk);return a;};
-function planStat(){
+let planWoche=0;   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
+const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push(w+"/"+d+"-"+mk);return a;};
+function kwPlus(n){const d=new Date();d.setDate(d.getDate()+n*7);return kw(d);}
+function planStat(w=planWoche){
   const z={fisch:0,fleisch:0,veg:0};
-  slots().forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;});
-  return {z,belegt:slots().filter(k=>S.plan[k]).length};
+  slots(w).forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;});
+  return {z,belegt:slots(w).filter(k=>S.plan[k]).length};
 }
 function vWoche(){
   const {z,belegt}=planStat();
+  const offen=khOffen(planWoche);
+  const wahl=`<div class="toggle" style="width:100%;margin-bottom:12px">
+    ${[0,1,2].map(w=>`<button style="flex:1" aria-pressed="${planWoche===w}" onclick="planWoche=${w};render()">${["Diese","Nächste","Übernächste"][w]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(w)}</span></button>`).join("")}</div>`;
   const kopf=`<div class="rhythm">
     <div class="rh ${z.fisch===1?"":"warn"}"><b>${z.fisch}</b><span>Fisch</span></div>
     <div class="rh ${z.fleisch===1?"":"warn"}"><b>${z.fleisch}</b><span>Fleisch</span></div>
     <div class="rh"><b>${z.veg}</b><span>Vegetarisch</span></div>
     <div class="rh"><b>${belegt}</b><span>von 21 geplant</span></div></div>
+    ${belegt?`<p class="note" style="margin-top:9px">${offen.length?"Noch ohne Beilage in dieser Woche: "+offen.map(k=>KH[k]).join(", ")+".":"Alle Beilagen sind in dieser Woche vertreten."}</p>`:""}
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="autoWoche()">Woche vorschlagen</button>
-      <button class="btn btn-s" onclick="if(confirm('Kompletten Plan leeren?'))mut('plan',{})">Plan leeren</button>
+      <button class="btn btn-s" onclick="if(confirm('Plan dieser Woche leeren?'))leereWoche()">Plan leeren</button>
       ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Woche abschließen</button>`:""}
     </div>`;
 
   const tage_html=TAGE.map((tn,d)=>{
-    const eintraege=["f","m","a"].map(mk=>({mk,k:d+"-"+mk,e:S.plan[d+"-"+mk]}));
+    const eintraege=["f","m","a"].map(mk=>({mk,k:planWoche+"/"+d+"-"+mk,e:S.plan[planWoche+"/"+d+"-"+mk]}));
     const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
     const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
     return `<div class="day">
@@ -1307,10 +1429,11 @@ function vWoche(){
         if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-e">+ Gericht wählen</span></button></div>`;
         const [lbl,,dot]=KIND[r.k];
+        const ang=imAngebot(r);
         return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
             <span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}<span class="pill">${r.p} g Protein</span></span></span></button>
+            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}<span class="pill">${r.p} g Protein</span><span class="pill">${KH[khVon(r)]}</span>${ang.length?'<span class="pill" style="background:var(--sun-bg);color:var(--sun);border-color:var(--sun)">Im Angebot</span>':""}</span></span></button>
           <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p||2}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
           <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">✕</button></div>`;
       }).join("")}
@@ -1321,22 +1444,21 @@ function vWoche(){
   const hist=Object.entries(S.verlauf||{}).sort((a,b)=>b[0]-a[0]).slice(0,10)
     .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw}</div></div></div>`:"";}).join("");
 
-  return `${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
-    ${belegt?`<button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="vorratFrage()">Einkaufsliste erstellen</button>
+  return `${wahl}${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
+    ${belegt?`<button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
       <p class="note" style="margin-top:9px">Vorher fragt die App kurz ab, was vom Vorrat noch da ist.</p>`:""}
     ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}`;
 }
+function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
 function port(k,d){const e=S.plan[k];if(!e)return;mut("plan/"+k,{...e,p:Math.max(1,(e.p||2)+d)});}
 function wocheAbschliessen(){
-  if(!confirm("Alle geplanten Gerichte ins Archiv verschieben und den Plan leeren?"))return;
-  const w=kw(),v={...S.verlauf};
-  slots().forEach((k,i)=>{const e=S.plan[k];if(e)v[Date.now()+i]={r:e.r,kw:w};});
+  if(!confirm("Alle Gerichte dieser Woche ins Archiv verschieben und den Plan leeren?"))return;
+  const w=kwPlus(planWoche),v={...S.verlauf},p={...S.plan};
+  slots().forEach((k,i)=>{if(p[k]){v[Date.now()+i]={r:p[k].r,kw:w};delete p[k];}});
   const keys=Object.keys(v).sort((a,b)=>b-a).slice(0,80);
   mut("verlauf",Object.fromEntries(keys.map(k=>[k,v[k]])),false);
-  mut("plan",{});
+  mut("plan",p);
 }
-
-/* Auswahl für einen Slot */
 function waehle(k,mk){
   let q="";
   const treffer=()=>{
@@ -1344,13 +1466,16 @@ function waehle(k,mk){
     let pool=RZ().filter(r=>r.ma.includes(mk)&&(S.sammlung[r.id]||false));
     if(pool.length<4)pool=RZ().filter(r=>r.ma.includes(mk));
     if(q)pool=pool.filter(r=>r.n.toLowerCase().includes(q.toLowerCase()));
-    pool=pool.slice().sort((a,b)=>(benutzt.has(a.id)-benutzt.has(b.id))||(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
+    const fehlt=new Set(khOffen(planWoche,k));
+    /* Ganz oben steht, was der Woche noch fehlt, danach Angebote, dann Saison */
+    const rang=r=>(fehlt.has(khVon(r))?0:1)*8 + (imAngebot(r).length?0:1)*4 + (benutzt.has(r.id)?2:0) + (r.m.includes(m)?0:1);
+    pool=pool.slice().sort((a,b)=>rang(a)-rang(b)||a.n.localeCompare(b.n));
     if(!pool.length)return `<div class="empty"><b>Nichts gefunden</b>Andere Schreibweise probieren.</div>`;
     return pool.map(r=>{const [lbl,tag,,kk]=KIND[r.k];
       return `<div class="rec ${kk}" onclick="setSlot('${k}','${r.id}')"><div class="rec-b">
         <div class="rec-t">${esc(r.n)}</div>
         <div class="rec-m">${r.min} MIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
-        <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
+        <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${KH[khVon(r)]}${fehlt.has(khVon(r))?" · fehlt noch":""}</span>${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}<span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
       </div><span class="add-b">+</span></div>`;}).join("");
   };
   /* Wie bei der Suche: nur die Trefferliste tauschen, damit die Tastatur offen bleibt */
@@ -1364,15 +1489,21 @@ function setSlot(k,rid){mut("plan/"+k,{r:rid,p:2});if(!S.sammlung[rid])mut("samm
 
 /* Wochenvorschlag: genau 1× Fisch, 1× Fleisch, Rest vegetarisch */
 function autoWoche(){
-  if(planStat().belegt&&!confirm("Bestehenden Plan überschreiben?"))return;
+  if(planStat().belegt&&!confirm("Plan dieser Woche überschreiben?"))return;
   const m=monat();
   const kürzlich=new Set(Object.values(S.verlauf||{}).slice(-25).map(v=>v.r));
   const sam=r=>S.sammlung[r.id];
   const pool=mk=>{let p=RZ().filter(r=>r.ma.includes(mk)&&sam(r));if(p.length<3)p=RZ().filter(r=>r.ma.includes(mk));return p;};
-  const punkte=r=>(r.m.includes(m)?3:0)+(kürzlich.has(r.id)?-2:0)+(S.still&&r.bl===2?-2:S.still&&r.bl===1?-0.5:0)+Math.random()*2;
+  const khZahl={};
+  const punkte=r=>(r.m.includes(m)?3:0)
+    +(kürzlich.has(r.id)?-2:0)
+    +(S.still&&r.bl===2?-2:S.still&&r.bl===1?-0.5:0)
+    +(imAngebot(r).length?2.5:0)                  /* was gerade im Prospekt steht */
+    -1.8*(khZahl[khVon(r)]||0)                    /* je öfter eine Beilage schon vorkommt, desto unattraktiver */
+    +Math.random()*2;
   const plan={},benutzt=new Set(),blTag=[0,0,0,0,0,0,0];
   const nimm=(k,mk,arten)=>{
-    const d=+k.split("-")[0];
+    const d=+k.split("/")[1].split("-")[0];
     const p=pool(mk).filter(r=>arten.includes(r.k));
     const ok=r=>!S.still||!(r.bl===2&&blTag[d]>=1);
     /* Stufen: erst neu und verträglich, dann Wiederholung vor Verstoß gegen die Stillzeit-Regel */
@@ -1383,8 +1514,9 @@ function autoWoche(){
     if(!c.length)return;
     const r=c.sort((a,b)=>punkte(b)-punkte(a))[0];
     plan[k]={r:r.id,p:2};benutzt.add(r.id);if(r.bl===2)blTag[d]++;
+    const b=khVon(r); khZahl[b]=(khZahl[b]||0)+1;
   };
-  const warm=[];for(let d=0;d<7;d++){warm.push(d+"-m");warm.push(d+"-a");}
+  const warm=[];for(let d=0;d<7;d++){warm.push(planWoche+"/"+d+"-m");warm.push(planWoche+"/"+d+"-a");}
   const fischSlot=warm[Math.floor(Math.random()*warm.length)];
   let fleischSlot;do{fleischSlot=warm[Math.floor(Math.random()*warm.length)];}while(fleischSlot===fischSlot);
   nimm(fischSlot,fischSlot.split("-")[1],["fisch"]);
@@ -1400,7 +1532,8 @@ function autoWoche(){
       if(kand.length)plan[ziel]={r:kand.sort((a,b)=>punkte(b)-punkte(a))[0].id,p:2};
     }
   }
-  mut("plan",plan);
+  const ganz={...S.plan}; slots().forEach(k=>delete ganz[k]);
+  mut("plan",{...ganz,...plan});   /* andere Wochen bleiben stehen */
 }
 
 /* ============ Rezepte ============ */
@@ -1423,7 +1556,7 @@ function trefferHtml(){
     return `<div class="rec ${kk}" onclick="detail('${r.id}')"><div class="rec-b">
       <div class="rec-t">${esc(r.n)}</div>
       <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
-      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}<span class="pill">${r.p} g Protein</span>${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
+      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}<span class="pill">${KH[khVon(r)]}</span><span class="pill">${r.p} g Protein</span>${r.nut.slice(0,1).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
     </div></div>`;}).join("");
 }
 function chipsHtml(){
@@ -1604,6 +1737,19 @@ function vMehr(){
   return `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div><b style="font-size:15px">Stillzeit-Modus</b><p class="note" style="margin-top:3px">Markiert stark blähende Gerichte, warnt bei zwei davon am selben Tag und hebt Jod-Quellen hervor.</p></div>
       <div class="toggle"><button aria-pressed="${!!S.still}" onclick="mut('still',true)">An</button><button aria-pressed="${!S.still}" onclick="mut('still',false)">Aus</button></div></div></div>
+
+    <div class="sect"><h2>Angebote bei Aldi Süd</h2></div>
+    <div class="card">
+      ${(()=>{const a=angeboteAktiv();const bis=angebotBis();
+        if(!a.length) return `<p class="note">Noch keine Angebote hinterlegt${bis?" oder der Zeitraum ist abgelaufen":""}.${cfg.leser?" Mit „Automatisch holen“ liest die App die Angebotsseiten von Aldi Süd für die nächsten 14 Tage aus.":" Mit hinterlegtem Rezept-Leser geht das auch automatisch."}</p>`;
+        return `<p class="note">${a.length} Angebote hinterlegt${bis?`, gültig bis ${new Date(bis).toLocaleDateString("de-DE")}`:""}. Passende Rezepte tragen das Kennzeichen „Im Angebot“.</p>
+          <p class="note" style="margin-top:6px;color:var(--ink-2)">${a.slice(0,12).map(esc).join(" · ")}${a.length>12?" …":""}</p>`;})()}
+      <div class="row-btns" style="margin-top:10px">
+        <button class="btn btn-s btn-primary" onclick="angeboteBearbeiten()">Angebote pflegen</button>
+        ${cfg.leser?`<button class="btn btn-s" onclick="angeboteBearbeiten();setTimeout(angeboteHolen,80)">Automatisch holen</button>`:""}
+        ${angeboteAktiv().length?`<button class="btn btn-s" onclick="if(confirm('Angebote löschen?'))mut('angebote',{items:[],bis:''})">Löschen</button>`:""}
+      </div>
+    </div>
 
     <div class="sect"><h2>Eigene Rezepte</h2></div>
     <div class="card">
