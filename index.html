@@ -85,7 +85,8 @@ header h1{font-size:26px}
 .slot-l{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);width:48px;flex:none}
 .slot-m{flex:1;min-width:0}
 .slot-n{font-size:14.5px;font-weight:550;line-height:1.25}
-.slot-s{font-size:11.5px;color:var(--ink-3);margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.slot-s{font-size:11.5px;color:var(--ink-3);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pill{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.01em;padding:2px 7px;border-radius:99px;background:var(--card-2);color:var(--ink-2);border:0.5px solid var(--line);white-space:nowrap}
 .slot-e{font-size:14.5px;color:var(--ink-3)}
 .slot button.pick{flex:1;text-align:left;background:transparent;border:0;padding:0;min-width:0}
 .mini{display:flex;align-items:center;gap:1px;border:1px solid var(--line-2);border-radius:99px;padding:1px;flex:none}
@@ -878,12 +879,15 @@ VORRAT_STD.push(
 );
 
 /* ============ Zustand ============ */
-const KEY="kuechenplan.v2";
+const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
+const VERSION="1.2";
+const TAG=86400000;
+const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
-  sammlung:Object.fromEntries(START.map(i=>[i,true])),
-  abgelehnt:{}, plan:{}, liste:{}, verlauf:{}, still:true,
+  sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
+  spaeter:{}, archiv:{}, geprueft:{}, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -907,6 +911,21 @@ function lesenLokal(){
   try{const v=localStorage.getItem(KEY); if(v)S={...leer(),...JSON.parse(v)};}catch(e){}
   try{const c=localStorage.getItem(KEY+".cfg"); if(c)cfg={...cfg,...JSON.parse(c)};}catch(e){}
   try{const q=localStorage.getItem(KEY+".q"); if(q)queue=JSON.parse(q);}catch(e){}
+}
+/* Bringt Stände älterer Versionen auf das aktuelle Format, ohne etwas zu verlieren */
+function migrieren(){
+  let neu=false;
+  ["spaeter","archiv","geprueft"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
+  if(S.abgelehnt&&Object.keys(S.abgelehnt).length){
+    Object.keys(S.abgelehnt).forEach(id=>{if(!S.archiv[id])S.archiv[id]=Date.now();});
+    delete S.abgelehnt; neu=true;
+  }
+  /* Sammlung: aus true wird ein Zeitstempel. Bestand wird zurückdatiert,
+     damit der Aufräum-Stapel nicht erst in zwei Monaten anspringt. */
+  Object.entries(S.sammlung||{}).forEach(([id,v])=>{
+    if(typeof v!=="number"){S.sammlung[id]=Date.now()-FRIST.alt*TAG;neu=true;}
+  });
+  if(neu){schreibenLokal();if(basis()){senden("sammlung",S.sammlung);senden("archiv",S.archiv);senden("spaeter",S.spaeter);senden("geprueft",S.geprueft);}}
 }
 function schreibenLokal(){
   try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(KEY+".cfg",JSON.stringify(cfg));localStorage.setItem(KEY+".q",JSON.stringify(queue));}catch(e){}
@@ -985,18 +1004,17 @@ function render(){
 /* ============ Wochenplan ============ */
 const slots=()=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push(d+"-"+mk);return a;};
 function planStat(){
-  const z={fisch:0,fleisch:0,veg:0},prot=[0,0,0,0,0,0,0];
-  slots().forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;prot[+k.split("-")[0]]+=r.p*(e.p||2);});
-  return {z,prot,belegt:slots().filter(k=>S.plan[k]).length};
+  const z={fisch:0,fleisch:0,veg:0};
+  slots().forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;});
+  return {z,belegt:slots().filter(k=>S.plan[k]).length};
 }
 function vWoche(){
-  const {z,prot,belegt}=planStat();
-  const tage=+prot.filter(p=>p>0).length||1;
+  const {z,belegt}=planStat();
   const kopf=`<div class="rhythm">
     <div class="rh ${z.fisch===1?"":"warn"}"><b>${z.fisch}</b><span>Fisch</span></div>
     <div class="rh ${z.fleisch===1?"":"warn"}"><b>${z.fleisch}</b><span>Fleisch</span></div>
     <div class="rh"><b>${z.veg}</b><span>Vegetarisch</span></div>
-    <div class="rh"><b>${Math.round(prot.reduce((a,b)=>a+b,0)/tage)}</b><span>g Protein/Tag</span></div></div>
+    <div class="rh"><b>${belegt}</b><span>von 21 geplant</span></div></div>
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="autoWoche()">Woche vorschlagen</button>
       <button class="btn btn-s" onclick="if(confirm('Kompletten Plan leeren?'))mut('plan',{})">Plan leeren</button>
@@ -1005,10 +1023,10 @@ function vWoche(){
 
   const tage_html=TAGE.map((tn,d)=>{
     const eintraege=["f","m","a"].map(mk=>({mk,k:d+"-"+mk,e:S.plan[d+"-"+mk]}));
-    const tp=eintraege.reduce((s,x)=>{const r=x.e&&R(x.e.r);return s+(r?r.p*(x.e.p||2):0);},0);
+    const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
     const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
     return `<div class="day">
-      <div class="day-h"><b>${tn}</b><span>${tp?Math.round(tp)+" G PROTEIN":"OFFEN"}</span></div>
+      <div class="day-h"><b>${tn}</b><span>${voll?voll+" VON 3":"OFFEN"}</span></div>
       ${eintraege.map(({mk,k,e})=>{
         const r=e&&R(e.r);
         if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
@@ -1017,7 +1035,7 @@ function vWoche(){
         return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
             <span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}</span></span></button>
+            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}<span class="pill">${r.p} g Protein</span></span></span></button>
           <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p||2}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
           <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">✕</button></div>`;
       }).join("")}
@@ -1057,15 +1075,15 @@ function waehle(k,mk){
       ${pool.map(r=>{const [lbl,tag,,kk]=KIND[r.k];
         return `<div class="rec ${kk}" onclick="setSlot('${k}','${r.id}')"><div class="rec-b">
           <div class="rec-t">${esc(r.n)}</div>
-          <div class="rec-m">${r.min} MIN · ${r.p} G PROTEIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
-          <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
+          <div class="rec-m">${r.min} MIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
+          <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
         </div><span class="add-b">+</span></div>`;}).join("")}
       <button class="btn btn-wide btn-ghost" style="margin-top:10px" onclick="closeSheet()">Abbrechen</button>`;
   };
   window.wq=v=>{q=v;openSheet(body(),true);};
   openSheet(body());
 }
-function setSlot(k,rid){mut("plan/"+k,{r:rid,p:2});if(!S.sammlung[rid])mut("sammlung/"+rid,true,false);closeSheet();}
+function setSlot(k,rid){mut("plan/"+k,{r:rid,p:2});if(!S.sammlung[rid])mut("sammlung/"+rid,Date.now(),false);closeSheet();}
 
 /* Wochenvorschlag: genau 1× Fisch, 1× Fleisch, Rest vegetarisch */
 function autoWoche(){
@@ -1118,8 +1136,8 @@ function vRezepte(){
     const letzt=Object.values(S.verlauf||{}).filter(v=>v.r===r.id).pop();
     return `<div class="rec ${kk}" onclick="detail('${r.id}')"><div class="rec-b">
       <div class="rec-t">${esc(r.n)}</div>
-      <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN · ${r.p} G PROTEIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
-      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
+      <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
+      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}<span class="pill">${r.p} g Protein</span>${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
     </div></div>`;}).join(""):`<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
   return `<input type="search" placeholder="Rezept suchen" value="${esc(suche)}" oninput="suche=this.value;render()" style="margin-bottom:12px">
     <div class="chips">${chips}</div>${cards}`;
@@ -1129,7 +1147,7 @@ function detail(id,slotK){
   let p=slotK&&S.plan[slotK]?(S.plan[slotK].p||2):2;
   const body=()=>`<div class="grab"></div><div class="det">
     <h2>${esc(r.n)}</h2>
-    <div class="rec-tags" style="margin:10px 0 14px"><span class="tag ${KIND[r.k][1]}">${KIND[r.k][0]}</span>${r.nut.map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
+    <div class="rec-tags" style="margin:10px 0 14px"><span class="tag ${KIND[r.k][1]}">${KIND[r.k][0]}</span><span class="pill">${r.p} g Protein pro Portion</span>${r.nut.map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
     <p class="note" style="font-size:14.5px;color:var(--ink-2)">${esc(r.why)}</p>
     ${r.q?`<p style="margin-top:10px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:14px">Originalrezept öffnen</a></p>`:""}
     <div class="sect"><h2>Zutaten</h2><div class="stepper"><button onclick="dp(-1)">−</button><b>${p}</b><button onclick="dp(1)">+</button></div></div>
@@ -1143,12 +1161,38 @@ function detail(id,slotK){
 }
 
 /* ============ Entdecken ============ */
-const deckPool=()=>REZEPTE.filter(r=>!S.sammlung[r.id]&&!S.abgelehnt[r.id]).sort((a,b)=>(b.m.includes(monat())-a.m.includes(monat()))||(S.still?a.bl-b.bl:0));
+let deckMode="neu";
+const zuletztGekocht=id=>{const t=Object.entries(S.verlauf||{}).filter(([,v])=>v.r===id).map(([k])=>+k);return t.length?Math.max(...t):0;};
+/* Neue Vorschläge: noch nie bewertet, oder vor über 60 Tagen einmal weggewischt */
+const poolNeu=()=>REZEPTE.filter(r=>!S.sammlung[r.id]&&!S.archiv[r.id]&&
+    (!S.spaeter[r.id]||Date.now()-S.spaeter[r.id]>FRIST.spaeter*TAG))
+  .sort((a,b)=>(b.m.includes(monat())-a.m.includes(monat()))||(S.still?a.bl-b.bl:0));
+/* Karteileichen: lange in der Sammlung, nie oder ewig nicht gekocht, zuletzt nicht bestätigt */
+const poolAlt=()=>REZEPTE.filter(r=>{
+    const rein=S.sammlung[r.id]; if(!rein) return false;
+    if(Date.now()-rein<FRIST.alt*TAG) return false;
+    const g=zuletztGekocht(r.id);
+    if(g&&Date.now()-g<FRIST.ungekocht*TAG) return false;
+    const p=S.geprueft[r.id];
+    if(p&&Date.now()-p<FRIST.geprueft*TAG) return false;
+    return true;
+  }).sort((a,b)=>zuletztGekocht(a.id)-zuletztGekocht(b.id));
+const deckPool=()=>deckMode==="neu"?poolNeu():poolAlt();
 function vEntdecken(){
+  const nA=poolNeu().length, aA=poolAlt().length;
+  const kopf=`<div class="toggle" style="width:100%;margin-bottom:12px">
+      <button style="flex:1" aria-pressed="${deckMode==="neu"}" onclick="deckMode='neu';render()">Neu${nA?" · "+nA:""}</button>
+      <button style="flex:1" aria-pressed="${deckMode==="alt"}" onclick="deckMode='alt';render()">Aufräumen${aA?" · "+aA:""}</button></div>`;
   const pool=deckPool();
-  if(!pool.length)return `<div class="empty"><b>Alles gesichtet</b>Du hast jeden Vorschlag bewertet.<div style="margin-top:14px"><button class="btn" onclick="mut('abgelehnt',{})">Abgelehnte zurücksetzen</button></div></div>`;
+  if(!pool.length)return kopf+(deckMode==="neu"
+    ? `<div class="empty"><b>Alles gesichtet</b>Du hast jeden Vorschlag bewertet. Weggewischte tauchen nach ${FRIST.spaeter} Tagen noch einmal auf, endgültig Aussortiertes findest du unter Mehr im Archiv.</div>`
+    : `<div class="empty"><b>Nichts zum Aufräumen</b>In deiner Sammlung liegt gerade keine Karteileiche. Hier landen Rezepte, die seit ${FRIST.alt} Tagen dabei sind und die ihr nie oder seit über ${FRIST.ungekocht} Tagen nicht gekocht habt.</div>`);
   const r=pool[0],[lbl,tag]=KIND[r.k];
-  return `<p class="note" style="margin-bottom:12px">Nach rechts für die Sammlung, nach links zum Aussortieren. ${pool.length} Vorschläge offen.</p>
+  const g=zuletztGekocht(r.id);
+  const hinweis=deckMode==="neu"
+    ? `Nach rechts in die Sammlung, nach links zurückstellen. ${pool.length} Vorschläge offen.${S.spaeter[r.id]?" Dieses hattest du schon einmal weggewischt – noch einmal und es wandert ins Archiv.":""}`
+    : `Nach rechts behalten, nach links aussortieren. ${pool.length} Rezepte zur Durchsicht. ${g?"Zuletzt gekocht vor "+Math.round((Date.now()-g)/TAG)+" Tagen.":"Noch nie gekocht."}`;
+  return kopf+`<p class="note" style="margin-bottom:12px">${hinweis}</p>
     <div class="deck"><div class="swipe" id="sw">
       <div class="stamp stamp-y" id="sy">Merken</div><div class="stamp stamp-n" id="sn">Nein</div>
       <div class="rec-tags" style="margin-bottom:12px"><span class="tag ${tag}">${lbl}</span><span class="tag t-neutral">${r.ma.map(x=>MAHL[x]).join(" · ")}</span><span class="tag t-neutral">${r.min} Min</span>${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.m.includes(monat())?'<span class="tag t-sun">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
@@ -1156,10 +1200,23 @@ function vEntdecken(){
       ${r.q?`<p style="margin-top:8px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13.5px">Originalrezept öffnen</a></p>`:""}
       <div class="ing"><b>Zutaten</b><br>${r.z.map(z=>esc(z[0])).join(" · ")}</div>
     </div></div>
-    <div class="deck-btns"><button class="circ no" onclick="swipe(-1)" aria-label="Aussortieren">✕</button>
-      <button class="circ yes" onclick="swipe(1)" aria-label="Merken">♥</button></div>`;
+    <div class="deck-btns"><button class="circ no" onclick="swipe(-1)" aria-label="${deckMode==="neu"?"Zurückstellen":"Aussortieren"}">✕</button>
+      <button class="circ yes" onclick="swipe(1)" aria-label="${deckMode==="neu"?"Merken":"Behalten"}">♥</button></div>`;
 }
-function swipe(d){const p=deckPool();if(!p.length)return;mut((d>0?"sammlung/":"abgelehnt/")+p[0].id,true);}
+function swipe(d){
+  const p=deckPool(); if(!p.length) return;
+  const id=p[0].id, jetzt=Date.now();
+  if(deckMode==="neu"){
+    if(d>0){ mut("spaeter/"+id,null,false); mut("sammlung/"+id,jetzt); }
+    else if(S.spaeter[id]){ mut("spaeter/"+id,null,false); mut("archiv/"+id,jetzt); }   /* zweites Nein */
+    else mut("spaeter/"+id,jetzt);
+  }else{
+    if(d>0) mut("geprueft/"+id,jetzt);
+    else { mut("sammlung/"+id,null,false); mut("archiv/"+id,jetzt); }
+  }
+}
+function zurueckholen(id){mut("archiv/"+id,null,false);mut("sammlung/"+id,Date.now());}
+function nochmalZeigen(id){mut("archiv/"+id,null);}
 function deckInit(){
   const c=document.getElementById("sw");if(!c)return;
   let x0=null,dx=0;const sy=document.getElementById("sy"),sn=document.getElementById("sn");
@@ -1243,6 +1300,19 @@ function vMehr(){
       <div><b style="font-size:15px">Stillzeit-Modus</b><p class="note" style="margin-top:3px">Markiert stark blähende Gerichte, warnt bei zwei davon am selben Tag und hebt Jod-Quellen hervor.</p></div>
       <div class="toggle"><button aria-pressed="${!!S.still}" onclick="mut('still',true)">An</button><button aria-pressed="${!S.still}" onclick="mut('still',false)">Aus</button></div></div></div>
 
+    <div class="sect"><h2>Archiv</h2></div>
+    ${(()=>{
+      const arch=Object.entries(S.archiv||{}).sort((a,b)=>b[1]-a[1]);
+      const spa=Object.entries(S.spaeter||{}).length;
+      if(!arch.length) return `<p class="note">Noch nichts aussortiert.${spa?` ${spa} Rezept${spa>1?"e liegen":" liegt"} auf „Später nochmal" und taucht nach ${FRIST.spaeter} Tagen wieder unter Entdecken auf.`:""}</p>`;
+      return `<p class="note" style="margin-bottom:10px">${arch.length} aussortiert.${spa?` Weitere ${spa} auf „Später nochmal“.`:""} Nichts davon ist gelöscht – du kannst jedes Rezept einzeln zurückholen.</p>
+        ${arch.map(([id])=>{const r=R(id);if(!r)return "";
+          return `<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(r.n)}</div>
+            <div class="meal-sub">${KIND[r.k][0]} · ${r.min} Min</div></div>
+            <button class="btn btn-s" onclick="nochmalZeigen('${id}')">Nochmal zeigen</button>
+            <button class="btn btn-s btn-primary" onclick="zurueckholen('${id}')">In die Sammlung</button></div>`;}).join("")}`;
+    })()}
+
     <div class="sect"><h2>Sync zwischen euren Handys</h2></div>
     <div class="card">
       <p class="note">Status: <b style="color:var(--ink)">${b?syncState:"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length} Änderungen warten`:""}</p>
@@ -1287,7 +1357,8 @@ function vMehr(){
       <p class="note" style="margin-top:8px">Die URL steht oben in der Datenbankansicht. Wer den Haushalts-Code kennt, kann eure Liste lesen und ändern – auflisten oder erraten kann sie niemand. Für eine Einkaufsliste ist das in Ordnung, für Sensibleres wäre es das nicht.</p></div>
 
     <div class="sect"><h2>Zurücksetzen</h2></div>
-    <button class="btn btn-wide" onclick="if(confirm('Alle lokalen Daten löschen?')){localStorage.clear();location.reload()}">App zurücksetzen</button>`;
+    <button class="btn btn-wide" onclick="if(confirm('Alle lokalen Daten löschen?')){localStorage.clear();location.reload()}">App zurücksetzen</button>
+    <p class="note" style="margin-top:12px;text-align:center">Version ${VERSION} · ${REZEPTE.length} Rezepte</p>`;
 }
 function addV(){const n=document.getElementById("vn").value.trim();if(!n)return;
   mut("vorrat/"+slug(n),{n,k:document.getElementById("vk").value,da:true});}
@@ -1318,6 +1389,7 @@ function closeSheet(){document.getElementById("sheet").innerHTML="";document.bod
 
 /* ============ Start ============ */
 lesenLokal();
+migrieren();
 render();
 if(basis())verbinden();
 
