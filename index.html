@@ -7,6 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Küchenplan</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%234A7A3D'/><path d='M20 16v12a6 6 0 0 0 6 6v14M26 16v12M32 34V16M44 16c-4 0-6 6-6 12s2 8 4 8v12' stroke='%23EFF1EC' stroke-width='4' fill='none' stroke-linecap='round'/></svg>">
 <style>
 :root{
@@ -168,6 +170,13 @@ nav button[aria-current="page"]{color:var(--herb);font-weight:600}
 .note{font-size:13px;color:var(--ink-3);line-height:1.55}
 input[type=text],input[type=search],input[type=url],select{font-family:inherit;font-size:16px;width:100%;padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--card);color:var(--ink)}
 label.fl{display:block;font-size:13px;color:var(--ink-2);margin:12px 0 5px;font-weight:550}
+textarea{font-family:inherit;font-size:16px;width:100%;padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--card);color:var(--ink);line-height:1.5;resize:vertical}
+.pickrow{display:flex;gap:6px;flex-wrap:wrap}
+.pickrow button{border:1px solid var(--line-2);background:var(--card);border-radius:99px;padding:8px 14px;font-size:14px}
+.pickrow button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.zline{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:6px 0;border-bottom:0.5px solid var(--line)}
+.zline:last-child{border-bottom:0}
+.zline em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
 code{font-family:var(--mono);font-size:12.5px;background:var(--card-2);padding:2px 5px;border-radius:5px;word-break:break-all}
 pre{font-family:var(--mono);font-size:12px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-s);padding:11px;overflow-x:auto;line-height:1.5}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
@@ -878,16 +887,197 @@ VORRAT_STD.push(
  {n:"Couscous",k:"tr"},{n:"Sesam",k:"tr"},{n:"Balsamico",k:"gw"}
 );
 
+/* ===== Eigene Rezepte: anlegen, teilen, importieren ===== */
+
+/* Abteilungswissen aus den 120 mitgelieferten Rezepten ableiten,
+   damit eingetippte Zutaten automatisch im richtigen Laufplan-Abschnitt landen. */
+let _katIndex=null;
+const KAT_INDEX=()=>{
+  if(_katIndex) return _katIndex;
+  const m={}; REZEPTE.forEach(r=>r.z.forEach(([n,,,k])=>{m[slug(n)]=k;}));
+  VORRAT_STD.forEach(v=>{if(!m[slug(v.n)])m[slug(v.n)]=v.k;});
+  return (_katIndex=m);
+};
+const KAT_WORT=[
+ [/milch|kaese|käse|joghurt|quark|sahne|butter|\bei\b|eier|tofu|feta|mozzarella|schmand|frischkaese|halloumi|kefir|burrata|paneer|sauerkraut|kimchi|gnocchi|falafel/i,"kr"],
+ [/haehnchen|hähnchen|hühner|huhn|rind|pute|lachs|fisch|kabeljau|forelle|garnele|hack|schnitzel|filet/i,"ff"],
+ [/\btk\b|tiefkuehl|tiefkühl|gefroren/i,"tk"],
+ [/brot|broetchen|brötchen|tortilla|bagel|baguette|ciabatta|fladen|toast|semmel/i,"bw"],
+ [/oel$|öl$|essig|salz|pfeffer|gewuerz|gewürz|honig|sirup|zucker|bruehe|brühe|paste|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver/i,"gw"],
+ [/nudel|pasta|spaghetti|reis|linsen|bohnen|kichererbsen|dose|mehl|hafer|couscous|quinoa|hirse|samen|kerne|nuss|nuesse|nüsse|mandeln|sesam|sojasosse|sojasoße|tomatenmark|passierte/i,"tr"],
+ [/wasser|saft|wein|bier|limo|cola/i,"gt"],
+ [/teig|pizzaboden|wrap/i,"bw"],
+ /* Obst und Gemuese bewusst zuletzt: "Kuerbiskerne" soll ins Trockensortiment, nicht ins Gemuese */
+ [/beere|erdbeer|himbeer|apfel|äpfel|birne|pflaume|kirsche|traube|melone|orange|zitrone|limette|banane|mango|pfirsich|ananas|avocado|granatapfel|feige|dattel/i,"og"],
+ [/salat|kohl|kraut|lauch|sellerie|spinat|spargel|kuerbis|kürbis|zucchini|aubergine|paprika|gurke|tomate|kartoffel|zwiebel|knoblauch|moehre|möhre|karotte|radies|rucola|petersilie|basilikum|minze|dill|schnittlauch|koriander|thymian|rosmarin|salbei|ingwer|chili|pilz|champignon|fenchel|rote bete|rettich|brokkoli|blumenkohl|erbse|mais|bete|kresse|sprossen/i,"og"]
+];
+const EINH={g:"g",gr:"g",gramm:"g",kg:"kg",ml:"ml",l:"l",liter:"l",el:"EL",essloeffel:"EL",tl:"TL",teeloeffel:"TL",
+ stk:"Stk","stück":"Stk",stueck:"Stk",st:"Stk",dose:"Dose",dosen:"Dose",bund:"Bund",zehe:"Zehe",zehen:"Zehe",
+ prise:"Prise",prisen:"Prise",blatt:"Blatt","blätter":"Blatt",packung:"Packung",pck:"Packung",
+ scheibe:"Scheibe",scheiben:"Scheibe",tasse:"Tasse",schale:"Schale",
+ stange:"Stange",stangen:"Stange",kopf:"Kopf",glas:"Glas",becher:"Becher",
+ zweig:"Zweig",zweige:"Zweig",handvoll:"Handvoll",msp:"Msp",wuerfel:"Würfel","würfel":"Würfel"};
+
+function katFuer(name){
+  const idx=KAT_INDEX(), a=slug(name);
+  if(idx[a]) return idx[a];
+  for(const v of [a+"n",a+"e",a.replace(/n$/,""),a.replace(/e$/,"")]) if(idx[v]) return idx[v];
+  for(const [re,k] of KAT_WORT) if(re.test(name)) return k;
+  return "so";
+}
+/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "Salz" */
+function parseZutat(zeile){
+  let t=zeile.trim().replace(/^[-–•*]\s*/,"");
+  if(!t) return null;
+  let menge=0, einheit="";
+  const mZahl=t.match(/^(\d+(?:[.,]\d+)?)\s*/);
+  if(mZahl){menge=parseFloat(mZahl[1].replace(",","."));t=t.slice(mZahl[0].length);}
+  const mEinh=t.match(/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
+  if(mEinh){const k=mEinh[1].toLowerCase().replace(".","");if(EINH[k]){einheit=EINH[k];t=t.slice(mEinh[0].length);}}
+  const name=t.trim().replace(/\s*,\s*$/,"");
+  if(!name) return null;
+  if(menge&&!einheit) einheit="Stk";
+  return [name,menge,einheit,katFuer(name)];
+}
+const parseZutaten=txt=>String(txt||"").split("\n").map(parseZutat).filter(Boolean);
+const parseSchritte=txt=>String(txt||"").split("\n").map(z=>z.trim().replace(/^\d+[.)]\s*/,"")).filter(Boolean);
+
+/* ===== Formular ===== */
+let nf=null;
+function neuesRezept(vorgabe){
+  nf={id:null,n:"",q:"",k:"veg",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",...(vorgabe||{})};
+  formZeigen();
+}
+function rezeptBearbeiten(id){
+  const r=(S.eigene||{})[id]; if(!r) return;
+  nf={id,n:r.n,q:r.q||"",k:r.k,ma:[...r.ma],min:r.min,p:r.p,why:r.why||"",
+      zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
+      sText:(r.s||[]).join("\n")};
+  formZeigen();
+}
+function nfLesen(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:"";};
+  nf.n=g("nfn"); nf.q=g("nfq"); nf.min=+g("nfmin")||30; nf.p=+g("nfp")||20;
+  nf.zText=g("nfz"); nf.sText=g("nfs");
+}
+function nfSet(feld,wert){
+  nfLesen();
+  if(feld==="ma"){nf.ma=nf.ma.includes(wert)?nf.ma.filter(x=>x!==wert):[...nf.ma,wert];if(!nf.ma.length)nf.ma=[wert];}
+  else nf[feld]=wert;
+  formZeigen(true);
+}
+function nfPruefen(){nfLesen();formZeigen(true);}
+function formZeigen(behalten){
+  const zut=parseZutaten(nf.zText), unklar=zut.filter(z=>z[3]==="so").length;
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:20px">${nf.id?"Rezept bearbeiten":"Eigenes Rezept"}</h2>
+    <label class="fl" for="nfn">Name</label>
+    <input type="text" id="nfn" value="${esc(nf.n)}" placeholder="Auberginen-Pasta">
+    <label class="fl" for="nfq">Link zum Originalrezept (optional)</label>
+    <input type="text" id="nfq" value="${esc(nf.q)}" placeholder="https://...">
+    <label class="fl">Art</label>
+    <div class="pickrow">${[["veg","Vegetarisch"],["fisch","Fisch"],["fleisch","Fleisch"]]
+      .map(([v,l])=>`<button aria-pressed="${nf.k===v}" onclick="nfSet('k','${v}')">${l}</button>`).join("")}</div>
+    <label class="fl">Passt zu</label>
+    <div class="pickrow">${["f","m","a"].map(v=>`<button aria-pressed="${nf.ma.includes(v)}" onclick="nfSet('ma','${v}')">${MAHL[v]}</button>`).join("")}</div>
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label class="fl" for="nfmin">Dauer in Minuten</label><input type="text" inputmode="numeric" id="nfmin" value="${nf.min}"></div>
+      <div style="flex:1"><label class="fl" for="nfp">Protein je Portion</label><input type="text" inputmode="numeric" id="nfp" value="${nf.p}"></div>
+    </div>
+    <label class="fl" for="nfz">Zutaten für eine Portion, eine je Zeile</label>
+    <textarea id="nfz" rows="7" placeholder="200 g Möhren&#10;1 Dose Kichererbsen&#10;1,5 EL Olivenöl&#10;Salz">${esc(nf.zText)}</textarea>
+    <div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="nfPruefen()">Zutaten prüfen</button></div>
+    ${zut.length?`<div class="card" style="margin-top:8px">
+      ${zut.map(([n,q,e,k])=>`<div class="zline"><span>${esc(n)}</span><span><em>${q?fmt(q,e):"nach Bedarf"} · ${ABT[k]}</em></span></div>`).join("")}
+      ${unklar?`<p class="note" style="margin-top:9px">${unklar} Zutat${unklar>1?"en konnten":" konnte"} keiner Abteilung zugeordnet werden und landet unter Sonstiges. Andere Schreibweise hilft oft, etwa „Möhren“ statt „Karotten“.</p>`:""}
+    </div>`:""}
+    <label class="fl" for="nfs">Zubereitung, ein Schritt je Zeile (optional)</label>
+    <textarea id="nfs" rows="5" placeholder="Möhren würfeln und andünsten.&#10;Kichererbsen zugeben.">${esc(nf.sText)}</textarea>
+    <div style="margin-top:14px">
+      <button class="btn btn-primary btn-wide" onclick="nfSpeichern()">${nf.id?"Änderungen speichern":"Rezept anlegen"}</button>
+      ${nf.id?`<button class="btn btn-wide" style="margin-top:6px" onclick="eigenesLoeschen('${nf.id}')">Rezept löschen</button>`:""}
+      <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button></div>`, behalten);
+}
+function nfSpeichern(){
+  nfLesen();
+  if(!nf.n.trim()){alert("Das Rezept braucht einen Namen.");return;}
+  const id=nf.id||("u"+Date.now().toString(36));
+  const r={id,n:nf.n.trim(),k:nf.k,ma:nf.ma,m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
+    why:nf.why||"Selbst angelegt.",z:parseZutaten(nf.zText),s:parseSchritte(nf.sText),src:"eigen"};
+  if(nf.q.trim())r.q=nf.q.trim();
+  mut("eigene/"+id,r,false);
+  if(!S.sammlung[id])mut("sammlung/"+id,Date.now(),false);
+  nf=null; closeSheet(); go("rezepte");
+}
+function eigenesLoeschen(id){
+  if(!confirm("Rezept endgültig löschen? Aus dem Wochenplan verschwindet es dann ebenfalls."))return;
+  Object.keys(S.plan).forEach(k=>{if(S.plan[k]&&S.plan[k].r===id)mut("plan/"+k,null,false);});
+  mut("sammlung/"+id,null,false); mut("archiv/"+id,null,false); mut("eigene/"+id,null,false);
+  nf=null; closeSheet(); render();
+}
+
+/* ===== Teilen aus anderen Apps ===== */
+function shareAufnehmen(){
+  const p=new URLSearchParams(location.search);
+  const url=p.get("url")||"", titel=p.get("title")||"", text=p.get("text")||"";
+  if(!url&&!titel&&!text) return false;
+  /* Manche Apps packen die Adresse in den Text statt ins URL-Feld */
+  const ausText=(text.match(/https?:\/\/\S+/)||[])[0]||"";
+  history.replaceState({},"",location.pathname);
+  neuesRezept({n:(titel||text.replace(/https?:\/\/\S+/,"")).trim().slice(0,80),
+               q:url||ausText, why:"Beim Surfen gefunden."});
+  return true;
+}
+
+/* ===== Import und Export ===== */
+function eigeneExportieren(){
+  const daten=JSON.stringify(Object.values(S.eigene||{}),null,1);
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Eigene Rezepte sichern</h2>
+    <p class="note" style="margin:8px 0 12px">${Object.keys(S.eigene||{}).length} Rezepte. Text kopieren und irgendwo ablegen – oder mir schicken, wenn ich etwas daran ändern soll.</p>
+    <textarea rows="12" onclick="this.select()">${esc(daten)}</textarea>
+    <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="closeSheet()">Schließen</button>`);
+}
+function eigeneImportieren(){
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Rezepte einspielen</h2>
+    <p class="note" style="margin:8px 0 12px">Rezeptpaket als JSON einfügen. Vorhandene Rezepte mit gleicher Kennung werden ersetzt, alles andere bleibt unangetastet.</p>
+    <textarea id="imp" rows="10" placeholder="[ { &quot;n&quot;: &quot;...&quot; } ]"></textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="importAusfuehren()">Einspielen</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`);
+}
+function importAusfuehren(){
+  let liste;
+  try{ liste=JSON.parse(document.getElementById("imp").value); }
+  catch(e){ alert("Das ist kein gültiges JSON. Achte darauf, den Text vollständig zu kopieren – von der eckigen Klammer bis zur schließenden."); return; }
+  if(!Array.isArray(liste)){alert("Erwartet wird eine Liste von Rezepten in eckigen Klammern.");return;}
+  let n=0;
+  liste.forEach(r=>{
+    if(!r||!r.n) return;
+    const id=r.id||("u"+Date.now().toString(36)+n);
+    const sauber={id,n:String(r.n),k:["veg","fisch","fleisch"].includes(r.k)?r.k:"veg",
+      ma:Array.isArray(r.ma)&&r.ma.length?r.ma.filter(x=>MAHL[x]):["a"],
+      m:Array.isArray(r.m)&&r.m.length?r.m:ALL,min:+r.min||30,p:+r.p||20,bl:[0,1,2].includes(r.bl)?r.bl:0,
+      nut:Array.isArray(r.nut)?r.nut.filter(x=>NUT[x]):[],why:r.why||"Eingespielt.",
+      z:Array.isArray(r.z)?r.z.map(z=>Array.isArray(z)?[z[0],+z[1]||0,z[2]||"",ABT[z[3]]?z[3]:katFuer(z[0])]:parseZutat(String(z))).filter(Boolean):[],
+      s:Array.isArray(r.s)?r.s.map(String):[],src:"eigen"};
+    if(r.q)sauber.q=String(r.q);
+    if(!sauber.ma.length)sauber.ma=["a"];
+    mut("eigene/"+id,sauber,false);
+    if(!S.sammlung[id])mut("sammlung/"+id,Date.now(),false);
+    n++;
+  });
+  closeSheet(); alert(n+" Rezept"+(n===1?"":"e")+" eingespielt."); go("rezepte");
+}
+
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.2";
+const VERSION="1.3";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -895,7 +1085,8 @@ let S=leer();
 let cfg={db:"",hid:""};
 let tab="woche", filter="alle", suche="", routeOffen=false, es=null, syncState="lokal", queue=[];
 
-const R=id=>REZEPTE.find(r=>r.id===id);
+const RZ=()=>REZEPTE.concat(Object.values(S.eigene||{}));
+const R=id=>(S.eigene&&S.eigene[id])||REZEPTE.find(r=>r.id===id);
 const monat=()=>new Date().getMonth()+1;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function kw(d=new Date()){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const j=new Date(Date.UTC(t.getUTCFullYear(),0,1));return "KW "+Math.ceil(((t-j)/86400000+1)/7);}
@@ -915,7 +1106,7 @@ function lesenLokal(){
 /* Bringt Stände älterer Versionen auf das aktuelle Format, ohne etwas zu verlieren */
 function migrieren(){
   let neu=false;
-  ["spaeter","archiv","geprueft"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
+  ["spaeter","archiv","geprueft","eigene"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
   if(S.abgelehnt&&Object.keys(S.abgelehnt).length){
     Object.keys(S.abgelehnt).forEach(id=>{if(!S.archiv[id])S.archiv[id]=Date.now();});
     delete S.abgelehnt; neu=true;
@@ -1066,8 +1257,8 @@ function waehle(k,mk){
   let q="";
   const body=()=>{
     const m=monat(), benutzt=new Set(slots().map(s=>S.plan[s]&&S.plan[s].r).filter(Boolean));
-    let pool=REZEPTE.filter(r=>r.ma.includes(mk)&&(S.sammlung[r.id]||false));
-    if(pool.length<4)pool=REZEPTE.filter(r=>r.ma.includes(mk));
+    let pool=RZ().filter(r=>r.ma.includes(mk)&&(S.sammlung[r.id]||false));
+    if(pool.length<4)pool=RZ().filter(r=>r.ma.includes(mk));
     if(q)pool=pool.filter(r=>r.n.toLowerCase().includes(q.toLowerCase()));
     pool=pool.slice().sort((a,b)=>(benutzt.has(a.id)-benutzt.has(b.id))||(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
     return `<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[+k.split("-")[0]]}</h2>
@@ -1091,7 +1282,7 @@ function autoWoche(){
   const m=monat();
   const kürzlich=new Set(Object.values(S.verlauf||{}).slice(-25).map(v=>v.r));
   const sam=r=>S.sammlung[r.id];
-  const pool=mk=>{let p=REZEPTE.filter(r=>r.ma.includes(mk)&&sam(r));if(p.length<3)p=REZEPTE.filter(r=>r.ma.includes(mk));return p;};
+  const pool=mk=>{let p=RZ().filter(r=>r.ma.includes(mk)&&sam(r));if(p.length<3)p=RZ().filter(r=>r.ma.includes(mk));return p;};
   const punkte=r=>(r.m.includes(m)?3:0)+(kürzlich.has(r.id)?-2:0)+(S.still&&r.bl===2?-2:S.still&&r.bl===1?-0.5:0)+Math.random()*2;
   const plan={},benutzt=new Set(),blTag=[0,0,0,0,0,0,0];
   const nimm=(k,mk,arten)=>{
@@ -1113,22 +1304,33 @@ function autoWoche(){
   nimm(fischSlot,fischSlot.split("-")[1],["fisch"]);
   nimm(fleischSlot,fleischSlot.split("-")[1],["fleisch"]);
   slots().forEach(k=>{if(plan[k])return;nimm(k,k.split("-")[1],["veg"]);});
+  /* Immer mindestens ein Gericht, das ihr noch nie gekocht habt */
+  const gekocht=new Set(Object.values(S.verlauf||{}).map(v=>v.r));
+  if(Object.values(plan).every(e=>gekocht.has(e.r))){
+    const frei=warm.filter(k=>plan[k]&&R(plan[k].r)&&R(plan[k].r).k==="veg");
+    const ziel=frei[Math.floor(Math.random()*frei.length)];
+    if(ziel){
+      const kand=pool(ziel.split("-")[1]).filter(r=>r.k==="veg"&&!gekocht.has(r.id)&&!benutzt.has(r.id));
+      if(kand.length)plan[ziel]={r:kand.sort((a,b)=>punkte(b)-punkte(a))[0].id,p:2};
+    }
+  }
   mut("plan",plan);
 }
 
 /* ============ Rezepte ============ */
 function vRezepte(){
   const m=monat();
-  let list=REZEPTE.filter(r=>S.sammlung[r.id]);
+  let list=RZ().filter(r=>S.sammlung[r.id]);
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
   if(["f","m","a"].includes(filter))list=list.filter(r=>r.ma.includes(filter));
   if(filter==="saison")list=list.filter(r=>r.m.includes(m));
   if(filter==="mild")list=list.filter(r=>r.bl===0);
   if(filter==="kurz")list=list.filter(r=>r.min<=25);
   if(filter==="asana")list=list.filter(r=>r.src==="asana");
+  if(filter==="eigen")list=list.filter(r=>r.src==="eigen");
   if(suche)list=list.filter(r=>r.n.toLowerCase().includes(suche.toLowerCase()));
   list.sort((a,b)=>(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
-  const chips=[["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"]]
+  const chips=[["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"]]
     .concat(S.still?[["mild","Magenfreundlich"]]:[])
     .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="filter='${v}';render()">${l}</button>`).join("");
   const cards=list.length?list.map(r=>{
@@ -1137,9 +1339,10 @@ function vRezepte(){
     return `<div class="rec ${kk}" onclick="detail('${r.id}')"><div class="rec-b">
       <div class="rec-t">${esc(r.n)}</div>
       <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
-      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}<span class="pill">${r.p} g Protein</span>${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
+      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}<span class="pill">${r.p} g Protein</span>${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
     </div></div>`;}).join(""):`<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
-  return `<input type="search" placeholder="Rezept suchen" value="${esc(suche)}" oninput="suche=this.value;render()" style="margin-bottom:12px">
+  return `<div class="row-btns" style="margin-bottom:10px"><button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button></div>
+    <input type="search" placeholder="Rezept suchen" value="${esc(suche)}" oninput="suche=this.value;render()" style="margin-bottom:12px">
     <div class="chips">${chips}</div>${cards}`;
 }
 function detail(id,slotK){
@@ -1155,6 +1358,7 @@ function detail(id,slotK){
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${r.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`:""}
+    ${r.src==="eigen"?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button></div>`;
   window.dp=d=>{p=Math.max(1,p+d);openSheet(body(),true);};
   openSheet(body());
@@ -1164,11 +1368,11 @@ function detail(id,slotK){
 let deckMode="neu";
 const zuletztGekocht=id=>{const t=Object.entries(S.verlauf||{}).filter(([,v])=>v.r===id).map(([k])=>+k);return t.length?Math.max(...t):0;};
 /* Neue Vorschläge: noch nie bewertet, oder vor über 60 Tagen einmal weggewischt */
-const poolNeu=()=>REZEPTE.filter(r=>!S.sammlung[r.id]&&!S.archiv[r.id]&&
+const poolNeu=()=>RZ().filter(r=>!S.sammlung[r.id]&&!S.archiv[r.id]&&
     (!S.spaeter[r.id]||Date.now()-S.spaeter[r.id]>FRIST.spaeter*TAG))
   .sort((a,b)=>(b.m.includes(monat())-a.m.includes(monat()))||(S.still?a.bl-b.bl:0));
 /* Karteileichen: lange in der Sammlung, nie oder ewig nicht gekocht, zuletzt nicht bestätigt */
-const poolAlt=()=>REZEPTE.filter(r=>{
+const poolAlt=()=>RZ().filter(r=>{
     const rein=S.sammlung[r.id]; if(!rein) return false;
     if(Date.now()-rein<FRIST.alt*TAG) return false;
     const g=zuletztGekocht(r.id);
@@ -1300,6 +1504,16 @@ function vMehr(){
       <div><b style="font-size:15px">Stillzeit-Modus</b><p class="note" style="margin-top:3px">Markiert stark blähende Gerichte, warnt bei zwei davon am selben Tag und hebt Jod-Quellen hervor.</p></div>
       <div class="toggle"><button aria-pressed="${!!S.still}" onclick="mut('still',true)">An</button><button aria-pressed="${!S.still}" onclick="mut('still',false)">Aus</button></div></div></div>
 
+    <div class="sect"><h2>Eigene Rezepte</h2></div>
+    <div class="card">
+      <p class="note">${Object.keys(S.eigene||{}).length} selbst angelegt. Sie synchronisieren sich wie alles andere auf beide Handys.</p>
+      <div class="row-btns" style="margin-top:10px">
+        <button class="btn btn-s btn-primary" onclick="neuesRezept()">Neues anlegen</button>
+        <button class="btn btn-s" onclick="eigeneImportieren()">Einspielen</button>
+        <button class="btn btn-s" onclick="eigeneExportieren()">Sichern</button></div>
+      <p class="note" style="margin-top:10px">Damit „Küchenplan“ im Teilen-Menü deines Handys auftaucht, muss die App über das Chrome-Menü installiert sein. Danach kannst du beim Surfen auf Teilen tippen und die Seite landet direkt hier im Formular.</p>
+    </div>
+
     <div class="sect"><h2>Archiv</h2></div>
     ${(()=>{
       const arch=Object.entries(S.archiv||{}).sort((a,b)=>b[1]-a[1]);
@@ -1358,7 +1572,7 @@ function vMehr(){
 
     <div class="sect"><h2>Zurücksetzen</h2></div>
     <button class="btn btn-wide" onclick="if(confirm('Alle lokalen Daten löschen?')){localStorage.clear();location.reload()}">App zurücksetzen</button>
-    <p class="note" style="margin-top:12px;text-align:center">Version ${VERSION} · ${REZEPTE.length} Rezepte</p>`;
+    <p class="note" style="margin-top:12px;text-align:center">Version ${VERSION} · ${RZ().length} Rezepte</p>`;
 }
 function addV(){const n=document.getElementById("vn").value.trim();if(!n)return;
   mut("vorrat/"+slug(n),{n,k:document.getElementById("vk").value,da:true});}
@@ -1391,6 +1605,8 @@ function closeSheet(){document.getElementById("sheet").innerHTML="";document.bod
 lesenLokal();
 migrieren();
 render();
+if(!shareAufnehmen()){}
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(basis())verbinden();
 
 </script>
