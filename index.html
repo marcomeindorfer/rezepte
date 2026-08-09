@@ -209,6 +209,7 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 </div>
 <nav id="nav"></nav>
 <div id="sheet"></div>
+<input type="file" id="pdfwahl" accept="application/pdf,.pdf" style="display:none">
 <script>
 const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
 const SOMMER=[5,6,7,8,9], WINTER=[10,11,12,1,2,3], HERBST=[9,10,11], KALT=[11,12,1,2];
@@ -1255,8 +1256,12 @@ function angeboteBearbeiten(){
     <input type="date" id="angbis" value="${esc(a.bis||"")}">
     <label class="fl" for="angtext">Angebote</label>
     <textarea id="angtext" rows="10" placeholder="Hähnchenbrustfilet&#10;Zucchini 1,29 €&#10;Lachsfilet&#10;Feta">${esc((a.items||[]).join("\n"))}</textarea>
+    <div class="row-btns" style="margin-top:10px">
+      <button class="btn btn-s btn-primary" onclick="prospektWaehlen()">Prospekt-PDF einlesen</button>
+      ${cfg.leser?`<button class="btn btn-s" onclick="angeboteHolen()">Von der Website holen</button>`:""}
+    </div>
+    <p class="note" id="pdfstand" style="margin-top:8px">Lade das Wochenprospekt bei Aldi Süd als PDF herunter und wähle es hier aus – die App liest die Produkte selbst heraus.</p>
     <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="angeboteSpeichern()">Speichern</button>
-    ${cfg.leser?`<button class="btn btn-wide" style="margin-top:6px" onclick="angeboteHolen()">Automatisch versuchen</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`);
 }
 async function angeboteHolen(){
@@ -1369,16 +1374,180 @@ async function listeTeilen(){
     <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="closeSheet()">Schließen</button>`);
 }
 
+/* ===== Prospekt als PDF einlesen ===== */
+const PDFJS_URL="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+let pdfLaden=null;
+
+function pdfBibliothek(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(pdfLaden) return pdfLaden;
+  pdfLaden=new Promise((ok,fehler)=>{
+    const s=document.createElement("script");
+    s.src=PDFJS_URL;
+    s.onload=()=>{ if(window.pdfjsLib){window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER; ok(window.pdfjsLib);} else fehler(new Error("nicht geladen")); };
+    s.onerror=()=>fehler(new Error("nicht erreichbar"));
+    document.head.appendChild(s);
+  });
+  return pdfLaden;
+}
+
+/* Zeilen aus den Textbausteinen einer Seite bilden – pdf.js liefert Schnipsel mit Koordinaten */
+function pdfZeilen(inhalt){
+  const zeilen=new Map();
+  inhalt.items.forEach(i=>{
+    const y=Math.round((i.transform&&i.transform[5])||0);
+    const schluessel=Math.round(y/4);
+    if(!zeilen.has(schluessel)) zeilen.set(schluessel,[]);
+    zeilen.get(schluessel).push({x:(i.transform&&i.transform[4])||0,t:i.str});
+  });
+  return [...zeilen.entries()].sort((a,b)=>b[0]-a[0])
+    .map(([,teile])=>teile.sort((a,b)=>a.x-b.x).map(t=>t.t).join(" ").replace(/\s+/g," ").trim())
+    .filter(Boolean);
+}
+/* Werbezeilen, Preise und Datumsangaben aussortieren */
+const PROSPEKT_RAUS=/^(bis zu|sparen|aktion|tiefpreis|deine|marken|zum|aldi preis|jederzeit|neu|nur|solange|angebot|im innenteil|mo\.|di\.|mi\.|do\.|fr\.|sa\.|so\.|ab |gültig|zzgl|versch|je |kg-preis|l-preis|stück-preis|preis je|www|seite|\*)/i;
+function prospektZeilen(zeilen){
+  const raus=[];
+  zeilen.forEach(z0=>{
+    const z=z0.replace(/\s{2,}/g," ").trim().replace(/^[*\s]+|[*\s]+$/g,"");
+    if(z.length<4||z.length>52) return;
+    if(!/[A-Za-zÄÖÜäöüß]{3}/.test(z)) return;
+    if(/^[\d.,%\-–\s€*]+$/.test(z)) return;
+    if(PROSPEKT_RAUS.test(z)) return;
+    if(/\d{1,2}\.\d{1,2}\./.test(z)) return;
+    if(z===z.toUpperCase()&&z.split(" ").length>4) return;
+    if(!raus.includes(z)) raus.push(z);
+  });
+  return raus;
+}
+/* "Gültig von Mo. 10.8. – Sa. 15.8." → Enddatum */
+function prospektBis(text){
+  const m=text.match(/Gültig\s+von[^0-9]*\d{1,2}\.\d{1,2}\.?\s*[–-]\s*[^0-9]*(\d{1,2})\.(\d{1,2})\.?/i)
+       || text.match(/(\d{1,2})\.(\d{1,2})\.?\s*[–-]\s*(\d{1,2})\.(\d{1,2})\./);
+  if(!m) return "";
+  const tag=+(m.length>3?m[3]:m[1]), monat=+(m.length>3?m[4]:m[2]);
+  if(!tag||!monat) return "";
+  const heute=new Date();
+  let jahr=heute.getFullYear();
+  const d=new Date(jahr,monat-1,tag,12);
+  if(d.getTime()<heute.getTime()-120*86400000) jahr++;
+  return new Date(jahr,monat-1,tag,12).toISOString().slice(0,10);
+}
+
+function prospektWaehlen(){ const f=document.getElementById("pdfwahl"); if(f&&f.click){f.value="";f.click();} }
+async function prospektLesen(datei){
+  const feld=document.getElementById("angtext");
+  const stand=document.getElementById("pdfstand");
+  const melde=t=>{ if(stand)stand.textContent=t; };
+  if(!datei) return;
+  melde("Programmteil zum Lesen von PDFs wird geladen …");
+  let pdfjs;
+  try{ pdfjs=await pdfBibliothek(); }
+  catch(e){ melde("Der PDF-Leser konnte nicht geladen werden. Dafür braucht es einmalig eine Internetverbindung."); return; }
+  try{
+    const puffer=await datei.arrayBuffer();
+    const dok=await pdfjs.getDocument({data:puffer}).promise;
+    let alle=[], roh="";
+    for(let s=1;s<=dok.numPages;s++){
+      melde("Seite "+s+" von "+dok.numPages+" …");
+      const seite=await dok.getPage(s);
+      const zeilen=pdfZeilen(await seite.getTextContent());
+      roh+=zeilen.join("\n")+"\n";
+      alle=alle.concat(zeilen);
+    }
+    const produkte=prospektZeilen(alle);
+    const bis=prospektBis(roh);
+    if(feld) feld.value=produkte.join("\n");
+    const datum=document.getElementById("angbis");
+    if(datum&&bis) datum.value=bis;
+    melde(produkte.length+" Einträge aus "+dok.numPages+" Seiten gelesen"+(bis?", gültig bis "+new Date(bis).toLocaleDateString("de-DE"):"")+". Bitte durchsehen und speichern.");
+  }catch(e){
+    melde("Das PDF ließ sich nicht lesen: "+(e&&e.message?e.message:"unbekannter Fehler"));
+  }
+}
+
+/* ===== Rezeptquellen ===== */
+const QUELLEN_START=[
+  {n:"eat this!",u:"https://www.eat-this.org"},
+  {n:"Bianca Zapatka",u:"https://biancazapatka.com/de"},
+  {n:"Kochkarussell",u:"https://kochkarussell.com"},
+  {n:"Emmi kocht einfach",u:"https://emmikochteinfach.de"},
+  {n:"Valentinas Kochbuch",u:"https://valentinas-kochbuch.de"}
+];
+let feedStand={laden:false,eintraege:[],fehler:[]};
+
+function quellen(){ return (S.quellen&&Object.keys(S.quellen).length)?S.quellen:null; }
+function quellenStarten(){
+  const q={};
+  QUELLEN_START.forEach((x,i)=>{q["q"+i]={n:x.n,u:x.u,an:true};});
+  mut("quellen",q);
+}
+function quellenVerwalten(){
+  if(!quellen()) quellenStarten();
+  const body=()=>`<div class="grab"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <h2 style="font-size:20px">Rezeptquellen</h2>
+      <button class="btn btn-ghost btn-s" onclick="closeSheet()">✕</button></div>
+    <p class="note" style="margin:8px 0 12px">Aus diesen Blogs holt die App unter Entdecken die neuesten Rezepte. Voreingestellt sind die Seiten, die in eurer Asana-Sammlung am häufigsten vorkamen.</p>
+    ${Object.entries(S.quellen||{}).map(([id,q])=>`<div class="meal">
+      <div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(q.n||q.u)}</div>
+        <div class="meal-sub">${esc(q.u)}</div></div>
+      <div class="toggle"><button aria-pressed="${!!q.an}" onclick="quelleSchalten('${id}',true)">An</button><button aria-pressed="${!q.an}" onclick="quelleSchalten('${id}',false)">Aus</button></div>
+      <button class="btn btn-ghost btn-s" onclick="quelleWeg('${id}')" aria-label="Entfernen">✕</button></div>`).join("")}
+    <label class="fl" for="qn">Weitere Seite</label>
+    <input type="text" id="qn" placeholder="Name, etwa „Zucker&Jagdwurst“">
+    <input type="url" id="qu" placeholder="https://beispiel.de" style="margin-top:7px">
+    <button class="btn btn-wide" style="margin-top:8px" onclick="quelleDazu()">Hinzufügen</button>
+    <p class="note" style="margin-top:10px">Die Adresse der Startseite genügt – die App sucht den Feed selbst unter /feed.</p>`;
+  window.__qBody=body;
+  openSheet(body());
+}
+function quelleSchalten(id,an){ mut("quellen/"+id+"/an",an,false); openSheet(window.__qBody(),true); }
+function quelleWeg(id){ mut("quellen/"+id,null,false); openSheet(window.__qBody(),true); }
+function quelleDazu(){
+  const n=document.getElementById("qn").value.trim(), u=document.getElementById("qu").value.trim();
+  if(!/^https?:\/\//.test(u)){ alert("Bitte eine vollständige Adresse mit https:// eintragen."); return; }
+  mut("quellen/q"+Date.now().toString(36),{n:n||u.replace(/^https?:\/\/(www\.)?/,""),u,an:true},false);
+  openSheet(window.__qBody(),true);
+}
+
+async function feedsHolen(){
+  if(!cfg.leser){ alert("Dafür braucht es den Rezept-Leser unter Mehr."); return; }
+  if(!quellen()) quellenStarten();
+  feedStand={laden:true,eintraege:[],fehler:[]};
+  render();
+  const aktive=Object.values(S.quellen||{}).filter(q=>q.an);
+  const alle=[], fehler=[];
+  await Promise.all(aktive.map(async q=>{
+    try{
+      const res=await fetch(cfg.leser.replace(/\/$/,"")+"/feed?url="+encodeURIComponent(q.u));
+      const d=await res.json();
+      if(d.eintraege&&d.eintraege.length) d.eintraege.slice(0,12).forEach(e=>alle.push({...e,quelle:q.n}));
+      else fehler.push(q.n);
+    }catch(e){ fehler.push(q.n); }
+  }));
+  feedStand={laden:false,eintraege:alle.sort((a,b)=>b.datum-a.datum),fehler};
+  render();
+}
+const feedSchonDa=link=>RZ().some(r=>r.q&&r.q.replace(/\/$/,"")===String(link).replace(/\/$/,""));
+function feedUebernehmen(i){
+  const e=feedStand.eintraege[i]; if(!e) return;
+  neuesRezept({n:e.titel.slice(0,80),q:e.link,why:"Aus "+e.quelle+" übernommen.",
+    status:cfg.leser?"Wird geholt …":""});
+  if(cfg.leser) setTimeout(ausLinkHolen,60);
+}
+
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="2.1";
+const VERSION="2.2";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{items:[],bis:""}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{items:[],bis:""}, quellen:{}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -1407,7 +1576,7 @@ function lesenLokal(){
 /* Bringt Stände älterer Versionen auf das aktuelle Format, ohne etwas zu verlieren */
 function migrieren(){
   let neu=false;
-  ["spaeter","archiv","geprueft","eigene"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
+  ["spaeter","archiv","geprueft","eigene","quellen"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
   if(!S.angebote){S.angebote={items:[],bis:""};neu=true;}
   if(S.abgelehnt&&Object.keys(S.abgelehnt).length){
     Object.keys(S.abgelehnt).forEach(id=>{if(!S.archiv[id])S.archiv[id]=Date.now();});
@@ -1800,7 +1969,9 @@ function vEntdecken(){
   const nA=poolNeu().length, aA=poolAlt().length;
   const kopf=`<div class="toggle" style="width:100%;margin-bottom:12px">
       <button style="flex:1" aria-pressed="${deckMode==="neu"}" onclick="deckMode='neu';render()">Neu${nA?" · "+nA:""}</button>
-      <button style="flex:1" aria-pressed="${deckMode==="alt"}" onclick="deckMode='alt';render()">Aufräumen${aA?" · "+aA:""}</button></div>`;
+      <button style="flex:1" aria-pressed="${deckMode==="alt"}" onclick="deckMode='alt';render()">Aufräumen${aA?" · "+aA:""}</button>
+      <button style="flex:1" aria-pressed="${deckMode==="netz"}" onclick="deckMode='netz';render()">Aus dem Netz</button></div>`;
+  if(deckMode==="netz") return kopf+vNetz();
   const pool=deckPool();
   if(!pool.length)return kopf+(deckMode==="neu"
     ? `<div class="empty"><b>Alles gesichtet</b>Du hast jeden Vorschlag bewertet. Weggewischte tauchen nach ${FRIST.spaeter} Tagen noch einmal auf, endgültig Aussortiertes findest du unter Mehr im Archiv.</div>`
@@ -1848,6 +2019,32 @@ function deckInit(){
 }
 
 /* ============ Vorrat & Einkauf ============ */
+/* ---------- Neues aus den Rezeptquellen ---------- */
+function vNetz(){
+  if(!cfg.leser) return `<div class="empty"><b>Rezept-Leser fehlt</b>Trag ihn unter Mehr ein, dann holt die App die neuesten Rezepte aus deinen Lieblingsblogs.
+    <div style="margin-top:14px"><button class="btn" onclick="go('mehr')">Zu den Einstellungen</button></div></div>`;
+  if(feedStand.laden) return `<div class="empty"><b>Wird geholt …</b>Die Blogs werden gerade abgefragt.</div>`;
+  if(!feedStand.eintraege.length) return `<div class="empty"><b>Neues aus deinen Quellen</b>
+    Die App liest die aktuellen Beiträge deiner Rezeptblogs. Was dich anspringt, übernimmst du mit einem Tipp – samt Zutaten.
+    <div class="row-btns" style="margin-top:14px;justify-content:center">
+      <button class="btn btn-primary" onclick="feedsHolen()">Jetzt laden</button>
+      <button class="btn" onclick="quellenVerwalten()">Quellen</button></div></div>`;
+  return `<div class="row-btns" style="margin-bottom:10px">
+      <button class="btn btn-s" onclick="feedsHolen()">Neu laden</button>
+      <button class="btn btn-s" onclick="quellenVerwalten()">Quellen</button>
+      <span class="rec-m" style="align-self:center">${feedStand.eintraege.length} Beiträge</span></div>
+    ${feedStand.fehler.length?`<p class="note" style="margin-bottom:10px">Kein Feed gefunden bei: ${feedStand.fehler.map(esc).join(", ")}</p>`:""}
+    ${feedStand.eintraege.map((e,i)=>{
+      const da=feedSchonDa(e.link);
+      return `<div class="rec k-veg"><div class="rec-b">
+        <div class="rec-t">${esc(e.titel)}</div>
+        <div class="rec-m">${esc(e.quelle).toUpperCase()}${e.datum?" · "+new Date(e.datum).toLocaleDateString("de-DE"):""}${da?" · SCHON IN DER SAMMLUNG":""}</div>
+        ${e.text?`<p class="note" style="margin-top:6px">${esc(e.text).slice(0,140)}</p>`:""}
+        <div class="rec-tags"><a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13px">Original ansehen</a></div>
+      </div><button class="add-b" onclick="feedUebernehmen(${i})" aria-label="Übernehmen">${da?"✓":"+"}</button></div>`;
+    }).join("")}`;
+}
+
 function vorratFrage(){
   const body=()=>`<div class="grab"></div><h2 style="font-size:20px">Was ist noch da?</h2>
     <p class="note" style="margin:7px 0 16px">Alles auf „Fehlt" landet automatisch auf der Einkaufsliste.</p>
@@ -1942,6 +2139,14 @@ function vMehr(){
         ${cfg.leser?`<button class="btn btn-s" onclick="angeboteBearbeiten();setTimeout(angeboteHolen,80)">Automatisch holen</button>`:""}
         ${angeboteAktiv().length?`<button class="btn btn-s" onclick="if(confirm('Angebote löschen?'))mut('angebote',{items:[],bis:''})">Löschen</button>`:""}
       </div>
+    </div>
+
+    <div class="sect"><h2>Rezeptquellen</h2></div>
+    <div class="card">
+      <p class="note">${Object.values(S.quellen||{}).filter(q=>q.an).length||QUELLEN_START.length} Blogs eingestellt. Unter Entdecken holst du daraus die neuesten Rezepte.</p>
+      <div class="row-btns" style="margin-top:10px">
+        <button class="btn btn-s btn-primary" onclick="quellenVerwalten()">Quellen verwalten</button>
+        <button class="btn btn-s" onclick="deckMode='netz';go('entdecken')">Neues ansehen</button></div>
     </div>
 
     <div class="sect"><h2>Eigene Rezepte</h2></div>
@@ -2057,6 +2262,8 @@ migrieren();
 render();
 if(!shareAufnehmen()){}
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+(function(){ const f=document.getElementById("pdfwahl"); if(f) f.onchange=()=>prospektLesen(f.files&&f.files[0]); })();
+(function(){ const f=document.getElementById("pdfwahl"); if(f) f.onchange=()=>prospektLesen(f.files&&f.files[0]); })();
 if(basis())verbinden();
 
 </script>
