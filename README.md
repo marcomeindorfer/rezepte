@@ -1,1 +1,1 @@
-# Rezepte und Einkauf
+# Rezepte, Einkauf und Planung
