@@ -1369,7 +1369,7 @@ async function listeTeilen(){
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.9";
+const VERSION="2.0";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
@@ -1434,6 +1434,7 @@ function schreibenLokal(){
   try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(KEY+".cfg",JSON.stringify(cfg));localStorage.setItem(KEY+".q",JSON.stringify(queue));}catch(e){}
 }
 const basis=()=>cfg.db&&cfg.hid?cfg.db.replace(/\/$/,"")+"/haushalte/"+cfg.hid:null;
+const adresse=pfad=>{const b=basis();return pfad?b+"/"+pfad+".json":b+".json";};
 
 function setPfad(o,pfad,daten){
   const p=pfad.split("/").filter(Boolean);
@@ -1443,40 +1444,94 @@ function setPfad(o,pfad,daten){
   if(daten===null)delete z[p[p.length-1]]; else z[p[p.length-1]]=daten;
 }
 async function senden(pfad,wert){
-  const b=basis(); if(!b) return;
+  if(!basis()) return false;
   try{
-    const res=await fetch(b+"/"+pfad+".json",{method:wert===null?"DELETE":"PUT",headers:{"Content-Type":"application/json"},body:wert===null?undefined:JSON.stringify(wert)});
-    if(!res.ok) throw new Error(res.status);
+    const res=await fetch(adresse(pfad),{method:wert===null?"DELETE":"PUT",
+      headers:{"Content-Type":"application/json"},body:wert===null?undefined:JSON.stringify(wert)});
+    if(!res.ok) throw new Error("HTTP "+res.status);
     if(syncState!=="live"){syncState="live";nav();}
+    return true;
   }catch(e){
-    queue.push({pfad,wert}); if(queue.length>400)queue.shift();
-    syncState="wartet"; schreibenLokal(); nav();
+    queue.push({pfad,wert}); if(queue.length>500)queue.shift();
+    if(syncState==="live"){syncState="wartet";nav();}
+    schreibenLokal(); return false;
   }
 }
 async function flush(){
-  const b=basis(); if(!b||!queue.length) return;
+  if(!basis()||!queue.length) return;
   const q=[...queue]; queue=[];
-  for(const {pfad,wert} of q) await senden(pfad,wert);
-  schreibenLokal();
+  for(const {pfad,wert} of q){ if(!await senden(pfad,wert)) return; }
+  schreibenLokal(); nav();
 }
-/* Jede Änderung geht über mut(): lokal setzen, lokal sichern, an Firebase schicken */
 function mut(pfad,wert,neuZeichnen=true){
   setPfad(S,pfad,wert); schreibenLokal(); senden(pfad,wert);
   if(neuZeichnen) render();
 }
-function verbinden(){
-  if(es){es.close();es=null;}
-  const b=basis(); if(!b){syncState="lokal";nav();return;}
-  syncState="verbindet"; nav();
-  try{
-    es=new EventSource(b+".json");
-    es.addEventListener("put",e=>{const d=JSON.parse(e.data);setPfad(S,d.path,d.data);schreibenLokal();render();});
-    es.addEventListener("patch",e=>{const d=JSON.parse(e.data);Object.entries(d.data||{}).forEach(([k,v])=>setPfad(S,(d.path==="/"?"":d.path)+"/"+k,v));schreibenLokal();render();});
-    es.onopen=()=>{syncState="live";flush();nav();};
-    es.onerror=()=>{syncState="getrennt";nav();};
-  }catch(e){syncState="getrennt";nav();}
+/* Zwei Stände treffen aufeinander: pro Eintrag gewinnt der jüngere,
+   Einzelstücke bleiben auf beiden Seiten erhalten. */
+const stempel=v=>{
+  if(!v||typeof v!=="object")return 0;
+  return v.geaendert||v.ts||v.erstellt||0;
+};
+function zusammenfuehren(fern){
+  const vorher=JSON.stringify(S);
+  const neu={...leer()};
+  ["sammlung","spaeter","archiv","geprueft","plan","liste","verlauf","vorrat","eigene"].forEach(f=>{
+    const lokal=S[f]||{}, entfernt=(fern&&fern[f])||{};
+    const raus={...entfernt};
+    Object.entries(lokal).forEach(([k,v])=>{
+      const r=entfernt[k];
+      if(r===undefined){raus[k]=v;return;}
+      if(typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
+    });
+    neu[f]=raus;
+  });
+  neu.route=(fern&&fern.route)||S.route;
+  neu.still=fern&&fern.still!==undefined?fern.still:S.still;
+  neu.portionStd=(fern&&fern.portionStd)||S.portionStd||2;
+  neu.angebote=(fern&&fern.angebote&&(fern.angebote.geholt||0)>=((S.angebote&&S.angebote.geholt)||0))?fern.angebote:(S.angebote||{items:[],bis:""});
+  S=neu; schreibenLokal();
+  const kern=x=>JSON.stringify(["sammlung","plan","liste","eigene","vorrat"].map(f=>(x&&x[f])||{}));
+  if(kern(fern)!==kern(neu)) senden("",S);
+  if(vorher!==JSON.stringify(S)) render();
 }
-addEventListener("online",()=>{flush();verbinden();});
+let erstesPut=true, wiederTimer=null, versuche=0;
+function verbinden(){
+  if(es){try{es.close();}catch(e){} es=null;}
+  clearTimeout(wiederTimer);
+  if(!basis()){syncState="lokal";nav();return;}
+  syncState="verbindet"; erstesPut=true; nav();
+  try{
+    es=new EventSource(adresse(""));
+    es.addEventListener("put",e=>{
+      const d=JSON.parse(e.data);
+      if(d.path==="/"||d.path===""){erstesPut=false;zusammenfuehren(d.data);return;}
+      setPfad(S,d.path,d.data);schreibenLokal();render();
+    });
+    es.addEventListener("patch",e=>{const d=JSON.parse(e.data);
+      Object.entries(d.data||{}).forEach(([k,v])=>setPfad(S,(d.path==="/"?"":d.path)+"/"+k,v));
+      schreibenLokal();render();});
+    es.addEventListener("keep-alive",()=>{if(syncState!=="live"){syncState="live";nav();}});
+    es.onopen=()=>{versuche=0;syncState="live";flush();nav();};
+    es.onerror=()=>{syncState="getrennt";nav();neuVerbinden();};
+  }catch(e){syncState="getrennt";nav();neuVerbinden();}
+}
+function neuVerbinden(){
+  clearTimeout(wiederTimer);
+  const wartezeit=Math.min(30000,1000*Math.pow(2,Math.min(versuche++,5)));
+  wiederTimer=setTimeout(()=>{if(basis()&&syncState!=="live")verbinden();},wartezeit);
+}
+function syncPruefen(){
+  if(!basis())return;
+  flush();
+  if(syncState!=="live"&&syncState!=="verbindet"){versuche=0;verbinden();}
+}
+addEventListener("online",()=>{versuche=0;syncPruefen();});
+addEventListener("offline",()=>{if(syncState==="live"){syncState="getrennt";nav();}});
+if(typeof document!=="undefined"&&document.addEventListener){
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")syncPruefen();});
+  setInterval(syncPruefen,30000);
+}
 
 /* ============ Gerüst ============ */
 const TABS=[
@@ -1916,7 +1971,8 @@ function vMehr(){
 
     <div class="sect"><h2>Sync zwischen euren Handys</h2></div>
     <div class="card">
-      <p class="note">Status: <b style="color:var(--ink)">${b?syncState:"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length} Änderungen warten`:""}</p>
+      <p class="note">Status: <b style="color:var(--ink)">${b?({lokal:"nur auf diesem Gerät",verbindet:"verbindet …",live:"live verbunden",wartet:"wartet auf Verbindung",getrennt:"getrennt, versucht erneut"}[syncState]||syncState):"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length} Änderungen warten`:""}</p>
+      ${b?`<div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="versuche=0;verbinden()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush()">Wartendes senden</button>`:""}</div>`:""}
       <label class="fl" for="db">Datenbank-URL aus Firebase</label>
       <input type="url" id="db" value="${esc(cfg.db)}" placeholder="https://name-default-rtdb.europe-west1.firebasedatabase.app">
       <label class="fl" for="hid">Haushalts-Code</label>
@@ -1926,7 +1982,8 @@ function vMehr(){
         <button class="btn btn-s btn-primary" onclick="cfgSpeichern()">Speichern und verbinden</button>
         ${b?`<button class="btn btn-s" onclick="hochladen()">Diesen Stand hochladen</button>`:""}
       </div>
-      <p class="note" style="margin-top:11px">Auf dem zweiten Handy dieselbe URL und denselben Code eintragen – danach sehen beide Geräte dieselbe Liste in Echtzeit. Ohne Eintrag läuft alles wie bisher nur lokal.</p>
+      <p class="note" style="margin-top:11px">Beim Verbinden werden beide Stände zusammengeführt statt überschrieben. „Diesen Stand hochladen“ brauchst du nur, wenn du bewusst überschreiben willst.</p>
+      <p class="note" style="margin-top:8px">Auf dem zweiten Handy dieselbe URL und denselben Code eintragen – danach sehen beide Geräte dieselbe Liste in Echtzeit. Ohne Eintrag läuft alles wie bisher nur lokal.</p>
     </div>
 
     <div class="sect"><h2>Vorrat</h2></div>
