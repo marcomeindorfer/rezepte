@@ -963,6 +963,7 @@ async function ausLinkHolen(){
     if(d.portionen>1) nf.port=d.portionen;
     if(d.rohtext&&!(d.zutaten||[]).length) nf.zText=d.rohtext;
     nf.status=d.hinweis||(d.zutaten.length?"Übernommen. Bitte einmal gegenlesen.":"Nichts Verwertbares gefunden.");
+    if(nf.port>1) nf.status="Übernommen – die Mengen gelten für "+nf.port+" Portionen. Vor dem Speichern umrechnen.";
   }catch(e){ nf.status="Der Rezept-Leser war nicht erreichbar."; }
   formZeigen(true);
 }
@@ -1103,8 +1104,12 @@ function shareAufnehmen(){
   /* Manche Apps packen die Adresse in den Text statt ins URL-Feld */
   const ausText=(text.match(/https?:\/\/\S+/)||[])[0]||"";
   history.replaceState({},"",location.pathname);
+  const adresse=url||ausText;
   neuesRezept({n:(titel||text.replace(/https?:\/\/\S+/,"")).trim().slice(0,80),
-               q:url||ausText, why:"Beim Surfen gefunden."});
+               q:adresse, why:"Beim Surfen gefunden.",
+               status:adresse?(cfg.leser?"Wird geholt …":"Kein Rezept-Leser hinterlegt – trag die Zutaten selbst ein oder nimm „Rezepttext einfügen“."):""});
+  /* Beim Teilen gleich losholen, damit sich das Formular von allein füllt */
+  if(adresse&&cfg.leser) setTimeout(ausLinkHolen,60);
   return true;
 }
 
@@ -1149,7 +1154,7 @@ function importAusfuehren(){
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.4";
+const VERSION="1.5";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
@@ -1334,24 +1339,26 @@ function wocheAbschliessen(){
 /* Auswahl für einen Slot */
 function waehle(k,mk){
   let q="";
-  const body=()=>{
-    const m=monat(), benutzt=new Set(slots().map(s=>S.plan[s]&&S.plan[s].r).filter(Boolean));
+  const treffer=()=>{
+    const m=monat(), benutzt=new Set(slots().map(x=>S.plan[x]&&S.plan[x].r).filter(Boolean));
     let pool=RZ().filter(r=>r.ma.includes(mk)&&(S.sammlung[r.id]||false));
     if(pool.length<4)pool=RZ().filter(r=>r.ma.includes(mk));
     if(q)pool=pool.filter(r=>r.n.toLowerCase().includes(q.toLowerCase()));
     pool=pool.slice().sort((a,b)=>(benutzt.has(a.id)-benutzt.has(b.id))||(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
-    return `<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[+k.split("-")[0]]}</h2>
-      <input type="search" placeholder="Suchen" value="${esc(q)}" oninput="wq(this.value)" style="margin:12px 0">
-      ${pool.map(r=>{const [lbl,tag,,kk]=KIND[r.k];
-        return `<div class="rec ${kk}" onclick="setSlot('${k}','${r.id}')"><div class="rec-b">
-          <div class="rec-t">${esc(r.n)}</div>
-          <div class="rec-m">${r.min} MIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
-          <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
-        </div><span class="add-b">+</span></div>`;}).join("")}
-      <button class="btn btn-wide btn-ghost" style="margin-top:10px" onclick="closeSheet()">Abbrechen</button>`;
+    if(!pool.length)return `<div class="empty"><b>Nichts gefunden</b>Andere Schreibweise probieren.</div>`;
+    return pool.map(r=>{const [lbl,tag,,kk]=KIND[r.k];
+      return `<div class="rec ${kk}" onclick="setSlot('${k}','${r.id}')"><div class="rec-b">
+        <div class="rec-t">${esc(r.n)}</div>
+        <div class="rec-m">${r.min} MIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
+        <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
+      </div><span class="add-b">+</span></div>`;}).join("");
   };
-  window.wq=v=>{q=v;openSheet(body(),true);};
-  openSheet(body());
+  /* Wie bei der Suche: nur die Trefferliste tauschen, damit die Tastatur offen bleibt */
+  window.wq=v=>{q=v;const el=document.getElementById("wtreffer");if(el)el.innerHTML=treffer();};
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[+k.split("-")[0]]}</h2>
+    <input type="search" placeholder="Suchen" oninput="wq(this.value)" style="margin:12px 0">
+    <div id="wtreffer">${treffer()}</div>
+    <button class="btn btn-wide btn-ghost" style="margin-top:10px" onclick="closeSheet()">Abbrechen</button>`);
 }
 function setSlot(k,rid){mut("plan/"+k,{r:rid,p:2});if(!S.sammlung[rid])mut("sammlung/"+rid,Date.now(),false);closeSheet();}
 
@@ -1397,7 +1404,7 @@ function autoWoche(){
 }
 
 /* ============ Rezepte ============ */
-function vRezepte(){
+function trefferHtml(){
   const m=monat();
   let list=RZ().filter(r=>S.sammlung[r.id]);
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
@@ -1409,20 +1416,35 @@ function vRezepte(){
   if(filter==="eigen")list=list.filter(r=>r.src==="eigen");
   if(suche)list=list.filter(r=>r.n.toLowerCase().includes(suche.toLowerCase()));
   list.sort((a,b)=>(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
-  const chips=[["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"]]
-    .concat(S.still?[["mild","Magenfreundlich"]]:[])
-    .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="filter='${v}';render()">${l}</button>`).join("");
-  const cards=list.length?list.map(r=>{
+  if(!list.length)return `<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
+  return list.map(r=>{
     const [lbl,tag,,kk]=KIND[r.k];
     const letzt=Object.values(S.verlauf||{}).filter(v=>v.r===r.id).pop();
     return `<div class="rec ${kk}" onclick="detail('${r.id}')"><div class="rec-b">
       <div class="rec-t">${esc(r.n)}</div>
       <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}<span class="pill">${r.p} g Protein</span>${r.nut.slice(0,2).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
-    </div></div>`;}).join(""):`<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
+    </div></div>`;}).join("");
+}
+function chipsHtml(){
+  return [["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
+          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"]]
+    .concat(S.still?[["mild","Magenfreundlich"]]:[])
+    .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="setFilter('${v}')">${l}</button>`).join("");
+}
+/* Nur Chips und Treffer austauschen – das Suchfeld bleibt stehen und behält den Fokus */
+function teilRender(){
+  const c=document.getElementById("chipzeile"), t=document.getElementById("trefferliste");
+  if(!c||!t){render();return;}
+  c.innerHTML=chipsHtml(); t.innerHTML=trefferHtml();
+}
+function sucheAendern(v){suche=v;teilRender();}
+function setFilter(v){filter=v;teilRender();}
+function vRezepte(){
   return `<div class="row-btns" style="margin-bottom:10px"><button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button></div>
-    <input type="search" placeholder="Rezept suchen" value="${esc(suche)}" oninput="suche=this.value;render()" style="margin-bottom:12px">
-    <div class="chips">${chips}</div>${cards}`;
+    <input type="search" id="sq" placeholder="Rezept suchen" value="${esc(suche)}" oninput="sucheAendern(this.value)" style="margin-bottom:12px">
+    <div class="chips" id="chipzeile">${chipsHtml()}</div>
+    <div id="trefferliste">${trefferHtml()}</div>`;
 }
 function detail(id,slotK){
   const r=R(id);if(!r)return;
