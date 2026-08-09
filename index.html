@@ -80,6 +80,10 @@ header h1{font-size:26px}
 /* Tagesplan */
 .day{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:9px}
 .day-h{display:flex;align-items:baseline;justify-content:space-between;padding:11px 13px 9px;border-bottom:1px solid var(--line);background:var(--card-2)}
+.day.heute{border-color:var(--herb);border-width:1.5px}
+.day.heute .day-h{background:var(--herb-bg)}
+.day.heute .day-h b{color:var(--herb)}
+.heutetag{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;background:var(--herb);color:#fff;padding:2px 6px;border-radius:99px;margin-left:7px;vertical-align:1px}
 .day-h b{font-size:15px}
 .day-h span{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em}
 .slot{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line);min-height:52px}
@@ -126,8 +130,11 @@ header h1{font-size:26px}
 .stop h3{font-size:15px;margin-bottom:7px}
 .stop.done h3{color:var(--ink-3)}
 .items{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.item{display:flex;align-items:center;gap:11px;padding:12px 13px;width:100%;text-align:left;background:transparent;border:0;border-top:1px solid var(--line)}
-.item:first-child{border-top:0}
+.itemrow{display:flex;align-items:stretch;border-top:1px solid var(--line)}
+.itemrow:first-child{border-top:0}
+.item{display:flex;align-items:center;gap:11px;padding:12px 13px;flex:1;min-width:0;text-align:left;background:transparent;border:0}
+.item-x{border:0;background:transparent;color:var(--ink-3);padding:0 13px;font-size:15px}
+
 .box{width:23px;height:23px;border-radius:7px;border:1.8px solid var(--line-2);flex:none;display:grid;place-items:center;font-size:14px;color:transparent}
 .item.on .box{background:var(--herb);border-color:var(--herb);color:#fff}
 @media (prefers-color-scheme:dark){.item.on .box{color:#12180F}}
@@ -155,6 +162,13 @@ header h1{font-size:26px}
 .det .steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:99px;background:var(--card-2);border:1px solid var(--line);font-family:var(--mono);font-size:11.5px;font-weight:700;display:grid;place-items:center;color:var(--ink-2)}
 .ingline{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px;align-items:center}
 .ingline:last-child{border-bottom:0}
+.ingline.ab span:first-child{text-decoration:line-through;color:var(--ink-3)}
+.steps li.ab{color:var(--ink-3);text-decoration:line-through}
+.steps li{cursor:pointer}
+.grid3{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px;align-items:center}
+.grid3 button{border:1px solid var(--line-2);background:var(--card);border-radius:8px;padding:9px 4px;font-size:13px}
+.grid3 button.voll{background:var(--card-2);color:var(--ink-3)}
+.grid3 span{font-size:13px;color:var(--ink-2)}
 .ingline .q{font-family:var(--mono);font-size:13.5px;color:var(--ink-2);white-space:nowrap}
 .stepper{display:flex;align-items:center;gap:2px;border:1px solid var(--line-2);border-radius:99px;padding:2px;flex:none}
 .stepper button{width:30px;height:30px;border:0;background:transparent;border-radius:99px;font-size:17px;line-height:1;display:grid;place-items:center}
@@ -1224,7 +1238,7 @@ function angeboteSpeichern(){
   /* Preise zuerst entfernen, sonst zerbricht "1,29 €" am Komma */
   const items=roh
     .replace(/\d+[.,]\d+[ \t]*(€|EUR)?/g," ")
-    .replace(/\b\d+[ \t]*(g|kg|ml|l|St(ü|ue)ck|Pack(ung)?)\b/gi," ")
+    .replace(/\b\d+[ \t]*(g|kg|ml|l|m|cm|x|er|St(ü|ue)ck|Pack(ung)?)\b/gi," ")
     .split(/[\n,;]/)
     .map(z=>z.trim().replace(/^[-–•*]\s*/,"").replace(/[-–:]\s*$/,"").trim())
     .filter(z=>z.length>2).slice(0,120);
@@ -1264,16 +1278,105 @@ async function angeboteHolen(){
   }
 }
 
+/* ===== Kleine Helfer für den Alltag ===== */
+
+/* Bildschirm wachhalten – beim Einkaufen und beim Kochen der größte Gewinn.
+   Nicht jedes Gerät kann das, deshalb still scheitern. */
+let wachSchloss=null, wachAn=false;
+async function wachHalten(an){
+  wachAn=an;
+  try{
+    if(an){ if(!wachSchloss&&navigator.wakeLock) wachSchloss=await navigator.wakeLock.request("screen"); }
+    else if(wachSchloss){ await wachSchloss.release(); wachSchloss=null; }
+  }catch(e){ wachSchloss=null; }
+}
+const wachMoeglich=()=>typeof navigator!=="undefined"&&!!navigator.wakeLock;
+/* Nach dem Wegschalten des Displays muss die Sperre neu angefordert werden */
+if(typeof document!=="undefined"&&document.addEventListener)
+  document.addEventListener("visibilitychange",()=>{if(wachAn&&document.visibilityState==="visible")wachHalten(true);});
+
+/* Heutiger Wochentag, Montag = 0 */
+const heuteIdx=()=>(new Date().getDay()+6)%7;
+
+/* ===== Einplanen direkt aus einem Rezept ===== */
+function einplanen(rid){
+  let w=planWoche;
+  const body=()=>{
+    const r=R(rid);
+    return `<div class="grab"></div><h2 style="font-size:20px">${esc(r?r.n:"")} einplanen</h2>
+      <div class="toggle" style="width:100%;margin:12px 0">
+        ${[0,1,2].map(x=>`<button style="flex:1" aria-pressed="${w===x}" onclick="epWoche(${x},'${rid}')">${["Diese","Nächste","Übernächste"][x]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(x)}</span></button>`).join("")}</div>
+      <div class="grid3">
+        <span></span><span style="text-align:center;font-size:11px">Früh</span><span style="text-align:center;font-size:11px">Mittag</span><span style="text-align:center;font-size:11px">Abend</span>
+        ${TAGE.map((tn,d)=>`<span>${tn.slice(0,2)}${w===0&&d===heuteIdx()?" ·":""}</span>${["f","m","a"].map(mk=>{
+          const k="w"+w+"-"+d+"-"+mk, e=S.plan[k], belegt=e&&R(e.r);
+          const passt=r&&r.ma.includes(mk);
+          return `<button class="${belegt?"voll":""}" onclick="epSetzen('${k}','${rid}')" title="${belegt?esc(belegt.n):""}">${belegt?"belegt":(passt?"frei":"·")}</button>`;
+        }).join("")}`).join("")}
+      </div>
+      <p class="note" style="margin-top:10px">„belegt“ bedeutet, dass dort schon etwas steht – Antippen ersetzt es.</p>
+      <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="closeSheet()">Abbrechen</button>`;
+  };
+  window.epWoche=(x,id)=>{w=x;openSheet(body(),true);};
+  window.epSetzen=(k,id)=>{mut("plan/"+k,{r:id,p:S.portionStd||2},false);if(!S.sammlung[id])mut("sammlung/"+id,Date.now(),false);closeSheet();planWoche=+k[1];go("woche");};
+  openSheet(body());
+}
+
+/* ===== Kochmodus ===== */
+let kochAb={z:{},s:{}};
+function kochModus(id,p){
+  const r=R(id); if(!r) return;
+  kochAb={z:{},s:{}};
+  const body=()=>`<div class="grab"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <h2 style="font-size:20px">${esc(r.n)}</h2>
+      <span class="pill">${p} Portion${p>1?"en":""}</span></div>
+    ${wachMoeglich()?`<div class="meal" style="margin-top:12px"><div class="meal-main"><div class="meal-name" style="font-size:14.5px">Bildschirm anlassen</div>
+      <div class="meal-sub">Verhindert, dass das Display beim Kochen ausgeht</div></div>
+      <div class="toggle"><button aria-pressed="${wachAn}" onclick="kochWach(true)">An</button><button aria-pressed="${!wachAn}" onclick="kochWach(false)">Aus</button></div></div>`:""}
+    <div class="sect"><h2>Zutaten</h2></div>
+    <div class="card">${r.z.map(([n,q,e],i)=>`<div class="ingline ${kochAb.z[i]?"ab":""}" onclick="kochTick('z',${i})"><span>${esc(n)}</span><span class="q">${q?fmt(q*p,e):"nach Bedarf"}</span></div>`).join("")}</div>
+    <div class="sect"><h2>Zubereitung</h2></div>
+    <ol class="steps">${(r.s||[]).map((x,i)=>`<li class="${kochAb.s[i]?"ab":""}" onclick="kochTick('s',${i})">${esc(x)}</li>`).join("")}</ol>
+    <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="wachHalten(false);closeSheet()">Fertig</button>`;
+  window.kochTick=(art,i)=>{kochAb[art][i]=!kochAb[art][i];openSheet(body(),true);};
+  window.kochWach=async an=>{await wachHalten(an);openSheet(body(),true);};
+  openSheet(body());
+}
+
+/* ===== Einkaufsliste teilen ===== */
+function listeText(){
+  const eintraege=Object.entries(S.liste||{});
+  const zeilen=[];
+  S.route.forEach(k=>{
+    const it=eintraege.filter(([,i])=>i.k===k&&!i.on);
+    if(!it.length) return;
+    zeilen.push(ABT[k]+":");
+    it.forEach(([,i])=>zeilen.push("  " + i.n + (i.nach||!i.q?"":" – "+fmt(i.q,i.e))));
+  });
+  return zeilen.length?("Einkaufsliste "+kwPlus(planWoche)+"\n\n"+zeilen.join("\n")):"Alles erledigt.";
+}
+async function listeTeilen(){
+  const t=listeText();
+  try{
+    if(navigator.share){ await navigator.share({title:"Einkaufsliste",text:t}); return; }
+  }catch(e){ if(e&&e.name==="AbortError") return; }
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Einkaufsliste als Text</h2>
+    <p class="note" style="margin:8px 0 12px">Antippen markiert alles, dann kopieren.</p>
+    <textarea rows="14" onclick="this.select()">${esc(t)}</textarea>
+    <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="closeSheet()">Schließen</button>`);
+}
+
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="1.7";
+const VERSION="1.9";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,"oe").replace(/[üÜ]/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{items:[],bis:""}, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{items:[],bis:""}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -1310,8 +1413,17 @@ function migrieren(){
   }
   /* Sammlung: aus true wird ein Zeitstempel. Bestand wird zurückdatiert,
      damit der Aufräum-Stapel nicht erst in zwei Monaten anspringt. */
-  Object.keys(S.plan||{}).forEach(k=>{
-    if(k.indexOf("/")===-1){S.plan["0/"+k]=S.plan[k];delete S.plan[k];neu=true;}
+  /* Drei Altformate: "2-a" (bis 1.5), "0/2-a" und die daraus verschachtelte
+     Form {"0":{"2-a":…}} (1.6). Alle werden zu "w0-2-a". */
+  Object.entries(S.plan||{}).forEach(([k,v])=>{
+    if(k.startsWith("w")&&k.split("-").length===3) return;
+    if(v&&typeof v==="object"&&!v.r){
+      Object.entries(v).forEach(([k2,v2])=>{if(v2&&v2.r)S.plan["w"+k+"-"+k2]=v2;});
+      delete S.plan[k]; neu=true; return;
+    }
+    const rein=k.replace("/","-");
+    S.plan[/^\d+-/.test(rein)&&rein.split("-").length===3?"w"+rein:"w0-"+rein]=v;
+    delete S.plan[k]; neu=true;
   });
   Object.entries(S.sammlung||{}).forEach(([id,v])=>{
     if(typeof v!=="number"){S.sammlung[id]=Date.now()-FRIST.alt*TAG;neu=true;}
@@ -1393,8 +1505,10 @@ function render(){
 }
 
 /* ============ Wochenplan ============ */
-let planWoche=0;   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
-const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push(w+"/"+d+"-"+mk);return a;};
+let planWoche=0, erledigtWeg=false;   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
+const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push("w"+w+"-"+d+"-"+mk);return a;};
+const slotTag=k=>+k.split("-")[1];
+const slotMahl=k=>k.split("-")[2];
 function kwPlus(n){const d=new Date();d.setDate(d.getDate()+n*7);return kw(d);}
 function planStat(w=planWoche){
   const z={fisch:0,fleisch:0,veg:0};
@@ -1419,11 +1533,12 @@ function vWoche(){
     </div>`;
 
   const tage_html=TAGE.map((tn,d)=>{
-    const eintraege=["f","m","a"].map(mk=>({mk,k:planWoche+"/"+d+"-"+mk,e:S.plan[planWoche+"/"+d+"-"+mk]}));
+    const eintraege=["f","m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
     const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
     const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
-    return `<div class="day">
-      <div class="day-h"><b>${tn}</b><span>${voll?voll+" VON 3":"OFFEN"}</span></div>
+    const istHeute=planWoche===0&&d===heuteIdx();
+    return `<div class="day${istHeute?" heute":""}">
+      <div class="day-h"><b>${tn}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b><span>${voll?voll+" VON 3":"OFFEN"}</span></div>
       ${eintraege.map(({mk,k,e})=>{
         const r=e&&R(e.r);
         if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
@@ -1433,8 +1548,8 @@ function vWoche(){
         return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
             <span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}<span class="pill">${r.p} g Protein</span><span class="pill">${KH[khVon(r)]}</span>${ang.length?'<span class="pill" style="background:var(--sun-bg);color:var(--sun);border-color:var(--sun)">Im Angebot</span>':""}</span></span></button>
-          <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p||2}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
+            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}<span class="pill">${KH[khVon(r)]}</span>${ang.length?'<span class="pill" style="background:var(--sun-bg);color:var(--sun);border-color:var(--sun)">Im Angebot</span>':""}</span></span></button>
+          <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
           <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">✕</button></div>`;
       }).join("")}
       ${S.still&&bl2>1?`<div class="warnrow">Zwei stark blähende Gerichte an einem Tag – in der Stillzeit gern auf zwei Tage verteilen.</div>`:""}
@@ -1442,7 +1557,7 @@ function vWoche(){
   }).join("");
 
   const hist=Object.entries(S.verlauf||{}).sort((a,b)=>b[0]-a[0]).slice(0,10)
-    .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw}</div></div></div>`:"";}).join("");
+    .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main" onclick="detail('${r.id}')"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw} · ${KH[khVon(r)]}</div></div><button class="btn btn-s" onclick="einplanen('${r.id}')">Nochmal</button></div>`:"";}).join("");
 
   return `${wahl}${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
     ${belegt?`<button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
@@ -1450,7 +1565,8 @@ function vWoche(){
     ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}`;
 }
 function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
-function port(k,d){const e=S.plan[k];if(!e)return;mut("plan/"+k,{...e,p:Math.max(1,(e.p||2)+d)});}
+/* 0 Portionen heißt: wird von Resten gegessen und taucht nicht auf der Einkaufsliste auf */
+function port(k,d){const e=S.plan[k];if(!e)return;mut("plan/"+k,{...e,p:Math.max(0,(e.p===0?0:(e.p||2))+d)});}
 function wocheAbschliessen(){
   if(!confirm("Alle Gerichte dieser Woche ins Archiv verschieben und den Plan leeren?"))return;
   const w=kwPlus(planWoche),v={...S.verlauf},p={...S.plan};
@@ -1480,12 +1596,12 @@ function waehle(k,mk){
   };
   /* Wie bei der Suche: nur die Trefferliste tauschen, damit die Tastatur offen bleibt */
   window.wq=v=>{q=v;const el=document.getElementById("wtreffer");if(el)el.innerHTML=treffer();};
-  openSheet(`<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[+k.split("-")[0]]}</h2>
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[slotTag(k)]}</h2>
     <input type="search" placeholder="Suchen" oninput="wq(this.value)" style="margin:12px 0">
     <div id="wtreffer">${treffer()}</div>
     <button class="btn btn-wide btn-ghost" style="margin-top:10px" onclick="closeSheet()">Abbrechen</button>`);
 }
-function setSlot(k,rid){mut("plan/"+k,{r:rid,p:2});if(!S.sammlung[rid])mut("sammlung/"+rid,Date.now(),false);closeSheet();}
+function setSlot(k,rid){mut("plan/"+k,{r:rid,p:S.portionStd||2});if(!S.sammlung[rid])mut("sammlung/"+rid,Date.now(),false);closeSheet();}
 
 /* Wochenvorschlag: genau 1× Fisch, 1× Fleisch, Rest vegetarisch */
 function autoWoche(){
@@ -1495,7 +1611,11 @@ function autoWoche(){
   const sam=r=>S.sammlung[r.id];
   const pool=mk=>{let p=RZ().filter(r=>r.ma.includes(mk)&&sam(r));if(p.length<3)p=RZ().filter(r=>r.ma.includes(mk));return p;};
   const khZahl={};
+  /* Was in den anderen geplanten Wochen schon steht, wird abgewertet */
+  const eigene=new Set(slots());
+  const andereWochen=new Set(Object.entries(S.plan||{}).filter(([k])=>!eigene.has(k)).map(([,e])=>e&&e.r));
   const punkte=r=>(r.m.includes(m)?3:0)
+    +(andereWochen.has(r.id)?-2.5:0)
     +(kürzlich.has(r.id)?-2:0)
     +(S.still&&r.bl===2?-2:S.still&&r.bl===1?-0.5:0)
     +(imAngebot(r).length?2.5:0)                  /* was gerade im Prospekt steht */
@@ -1503,7 +1623,7 @@ function autoWoche(){
     +Math.random()*2;
   const plan={},benutzt=new Set(),blTag=[0,0,0,0,0,0,0];
   const nimm=(k,mk,arten)=>{
-    const d=+k.split("/")[1].split("-")[0];
+    const d=slotTag(k);
     const p=pool(mk).filter(r=>arten.includes(r.k));
     const ok=r=>!S.still||!(r.bl===2&&blTag[d]>=1);
     /* Stufen: erst neu und verträglich, dann Wiederholung vor Verstoß gegen die Stillzeit-Regel */
@@ -1513,23 +1633,23 @@ function autoWoche(){
     if(!c.length)c=p;
     if(!c.length)return;
     const r=c.sort((a,b)=>punkte(b)-punkte(a))[0];
-    plan[k]={r:r.id,p:2};benutzt.add(r.id);if(r.bl===2)blTag[d]++;
+    plan[k]={r:r.id,p:S.portionStd||2};benutzt.add(r.id);if(r.bl===2)blTag[d]++;
     const b=khVon(r); khZahl[b]=(khZahl[b]||0)+1;
   };
-  const warm=[];for(let d=0;d<7;d++){warm.push(planWoche+"/"+d+"-m");warm.push(planWoche+"/"+d+"-a");}
+  const warm=[];for(let d=0;d<7;d++){warm.push("w"+planWoche+"-"+d+"-m");warm.push("w"+planWoche+"-"+d+"-a");}
   const fischSlot=warm[Math.floor(Math.random()*warm.length)];
   let fleischSlot;do{fleischSlot=warm[Math.floor(Math.random()*warm.length)];}while(fleischSlot===fischSlot);
-  nimm(fischSlot,fischSlot.split("-")[1],["fisch"]);
-  nimm(fleischSlot,fleischSlot.split("-")[1],["fleisch"]);
-  slots().forEach(k=>{if(plan[k])return;nimm(k,k.split("-")[1],["veg"]);});
+  nimm(fischSlot,slotMahl(fischSlot),["fisch"]);
+  nimm(fleischSlot,slotMahl(fleischSlot),["fleisch"]);
+  slots().forEach(k=>{if(plan[k])return;nimm(k,slotMahl(k),["veg"]);});
   /* Immer mindestens ein Gericht, das ihr noch nie gekocht habt */
   const gekocht=new Set(Object.values(S.verlauf||{}).map(v=>v.r));
   if(Object.values(plan).every(e=>gekocht.has(e.r))){
     const frei=warm.filter(k=>plan[k]&&R(plan[k].r)&&R(plan[k].r).k==="veg");
     const ziel=frei[Math.floor(Math.random()*frei.length)];
     if(ziel){
-      const kand=pool(ziel.split("-")[1]).filter(r=>r.k==="veg"&&!gekocht.has(r.id)&&!benutzt.has(r.id));
-      if(kand.length)plan[ziel]={r:kand.sort((a,b)=>punkte(b)-punkte(a))[0].id,p:2};
+      const kand=pool(slotMahl(ziel)).filter(r=>r.k==="veg"&&!gekocht.has(r.id)&&!benutzt.has(r.id));
+      if(kand.length)plan[ziel]={r:kand.sort((a,b)=>punkte(b)-punkte(a))[0].id,p:S.portionStd||2};
     }
   }
   const ganz={...S.plan}; slots().forEach(k=>delete ganz[k]);
@@ -1539,7 +1659,7 @@ function autoWoche(){
 /* ============ Rezepte ============ */
 function trefferHtml(){
   const m=monat();
-  let list=RZ().filter(r=>S.sammlung[r.id]);
+  let list=filter==="alles"?RZ().filter(r=>!S.archiv[r.id]):RZ().filter(r=>S.sammlung[r.id]);
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
   if(["f","m","a"].includes(filter))list=list.filter(r=>r.ma.includes(filter));
   if(filter==="saison")list=list.filter(r=>r.m.includes(m));
@@ -1553,15 +1673,16 @@ function trefferHtml(){
   return list.map(r=>{
     const [lbl,tag,,kk]=KIND[r.k];
     const letzt=Object.values(S.verlauf||{}).filter(v=>v.r===r.id).pop();
-    return `<div class="rec ${kk}" onclick="detail('${r.id}')"><div class="rec-b">
+    const drin=!!S.sammlung[r.id];
+    return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}</div>
       <div class="rec-m">${r.ma.map(x=>MAHL[x].toUpperCase()).join(" · ")} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}<span class="pill">${KH[khVon(r)]}</span><span class="pill">${r.p} g Protein</span>${r.nut.slice(0,1).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
-    </div></div>`;}).join("");
+    </div>${drin?"":`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">+</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
   return [["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
-          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"]]
+          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"],["alles","Alle Rezepte"]]
     .concat(S.still?[["mild","Magenfreundlich"]]:[])
     .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="setFilter('${v}')">${l}</button>`).join("");
 }
@@ -1591,7 +1712,9 @@ function detail(id,slotK){
     <div class="card">${r.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span class="q">${fmt(q*p,e)}</span></div>`).join("")}</div>
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${r.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
-    ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`:""}
+    ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`
+           :`<button class="btn btn-primary btn-wide" onclick="einplanen('${r.id}')">Einplanen</button>`}
+    <button class="btn btn-wide" style="margin-top:6px" onclick="kochModus('${r.id}',${p})">Kochmodus</button>
     ${r.src==="eigen"?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button></div>`;
   window.dp=d=>{p=Math.max(1,p+d);openSheet(body(),true);};
@@ -1687,6 +1810,7 @@ function imVorrat(name){
 function listeBauen(){
   const map=new Map();
   slots().forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;
+    if(e.p===0)return;   /* Restetag */
     r.z.forEach(([n,q,ein,kat])=>{
       const v=imVorrat(n); if(v&&v.da)return;          // liegt zuhause, muss nicht auf die Liste
       const id=slug(n+"_"+ein);
@@ -1704,9 +1828,12 @@ function vEinkauf(){
   const stops=S.route.map(k=>({k,items:eintraege.filter(([,i])=>i.k===k)})).filter(s=>s.items.length);
   const route=stops.map((s,n)=>{
     const done=s.items.every(([,i])=>i.on);
+    const sicht=erledigtWeg?s.items.filter(([,i])=>!i.on):s.items;
+    if(!sicht.length&&erledigtWeg) return "";
     return `<div class="stop ${done?"done":""}" data-n="${n+1}"><h3>${ABT[s.k]}</h3>
-      <div class="items">${s.items.map(([id,i])=>`<button class="item ${i.on?"on":""}" onclick="mut('liste/${id}/on',${!i.on})">
-        <span class="box">✓</span><span class="it-n">${esc(i.n)}</span><span class="it-q">${i.nach?"nachfüllen":fmt(i.q,i.e)}</span></button>`).join("")}</div></div>`;
+      <div class="items">${sicht.map(([id,i])=>`<div class="itemrow"><button class="item ${i.on?"on":""}" onclick="mut('liste/${id}/on',${!i.on})">
+        <span class="box">✓</span><span class="it-n">${esc(i.n)}</span><span class="it-q">${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span></button>
+        <button class="item-x" onclick="mut('liste/${id}',null)" aria-label="Posten entfernen">✕</button></div>`).join("")}</div></div>`;
   }).join("");
   const rEdit=routeOffen?`<div class="card" style="margin-top:8px">${S.route.map((k,i)=>`<div class="ingline"><span>${i+1}. ${ABT[k]}</span><span>
       <button class="btn btn-s" onclick="mv(${i},-1)" aria-label="hoch">↑</button>
@@ -1715,6 +1842,11 @@ function vEinkauf(){
   return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
       <b style="font-size:15px">${fertig} von ${ges} erledigt</b><span class="rec-m">${kw()}</span></div>
       <div class="progress"><i style="width:${ges?fertig/ges*100:0}%"></i></div></div>
+    <div class="row-btns" style="margin-top:10px">
+      <button class="btn btn-s" onclick="erledigtWeg=!erledigtWeg;render()">${erledigtWeg?"Erledigte zeigen":"Erledigte ausblenden"}</button>
+      <button class="btn btn-s" onclick="listeTeilen()">Teilen</button>
+      ${wachMoeglich()?`<button class="btn btn-s" onclick="wachHalten(!wachAn).then(render)">${wachAn?"Bildschirm aus":"Bildschirm anlassen"}</button>`:""}
+    </div>
     <div class="sect"><h2>Laufplan</h2><button class="btn btn-s" onclick="routeOffen=!routeOffen;render()">${routeOffen?"Fertig":"Reihenfolge"}</button></div>
     ${rEdit}<div class="route">${route}</div>
     <div class="card" style="margin-top:6px"><div style="display:flex;gap:8px">
@@ -1737,6 +1869,10 @@ function vMehr(){
   return `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div><b style="font-size:15px">Stillzeit-Modus</b><p class="note" style="margin-top:3px">Markiert stark blähende Gerichte, warnt bei zwei davon am selben Tag und hebt Jod-Quellen hervor.</p></div>
       <div class="toggle"><button aria-pressed="${!!S.still}" onclick="mut('still',true)">An</button><button aria-pressed="${!S.still}" onclick="mut('still',false)">Aus</button></div></div></div>
+
+    <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><b style="font-size:15px">Standardportionen</b><p class="note" style="margin-top:3px">Wird bei jedem neu eingeplanten Gericht voreingestellt.</p></div>
+      <div class="stepper"><button onclick="mut('portionStd',Math.max(1,(S.portionStd||2)-1))">−</button><b>${S.portionStd||2}</b><button onclick="mut('portionStd',Math.min(8,(S.portionStd||2)+1))">+</button></div></div></div>
 
     <div class="sect"><h2>Angebote bei Aldi Süd</h2></div>
     <div class="card">
