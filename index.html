@@ -212,6 +212,7 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 <input type="file" id="pdfwahl" accept="application/pdf,.pdf" multiple style="display:none">
 <!-- ohne capture, sonst öffnet das Handy sofort die Kamera statt der Dateiauswahl -->
 <input type="file" id="fotowahl" accept="image/*" style="display:none">
+<input type="file" id="fotokamera" accept="image/*" capture="environment" style="display:none">
 <script>
 const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
 const SOMMER=[5,6,7,8,9], WINTER=[10,11,12,1,2,3], HERBST=[9,10,11], KALT=[11,12,1,2];
@@ -1137,7 +1138,7 @@ function neuesRezept(vorgabe){
   formZeigen();
 }
 function rezeptBearbeiten(id){
-  const r=(S.eigene||{})[id]; if(!r) return;
+  const r=R(id); if(!r) return;
   nf={id,n:r.n,q:r.q||"",k:r.k,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
       zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
       sText:(r.s||[]).join("\n"),port:1,status:""};
@@ -1166,7 +1167,8 @@ function formZeigen(behalten){
     <div class="row-btns" style="margin-top:8px">
       <button class="btn btn-s${cfg.leser?" btn-primary":""}" onclick="ausLinkHolen()">Aus Link holen</button>
       <button class="btn btn-s" onclick="textEinfuegen()">Rezepttext einfügen</button>
-      <button class="btn btn-s" onclick="fotoWaehlen()">Aus Bild lesen</button>
+      <button class="btn btn-s" onclick="fotoAufnehmen()">Foto aufnehmen</button>
+      <button class="btn btn-s" onclick="fotoWaehlen()">Bild auswählen</button>
       ${nf.port>1?`<button class="btn btn-s" onclick="aufEinePortion()">Von ${nf.port} auf 1 Portion rechnen</button>`:""}
     </div>
     ${nf.status?`<p class="note" style="margin-top:8px;color:var(--sea)">${esc(nf.status)}</p>`:""}
@@ -1195,6 +1197,12 @@ function formZeigen(behalten){
       ${nf.id?`<button class="btn btn-wide" style="margin-top:6px" onclick="eigenesLoeschen('${nf.id}')">Rezept löschen</button>`:""}
       <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button></div>`, behalten);
 }
+/* Ein bearbeitetes Grundrezept liegt als eigene Fassung über dem Original.
+   Verwerfen holt das mitgelieferte Rezept unverändert zurück. */
+function rezeptUrsprung(id){
+  if(!REZEPTE.some(o=>o.id===id)) return;
+  mut("eigene/"+id,null,false); closeSheet(); detail(id);
+}
 function nfSpeichern(){
   nfLesen();
   if(!nf.n.trim()){alert("Das Rezept braucht einen Namen.");return;}
@@ -1203,7 +1211,11 @@ function nfSpeichern(){
   const r={id,n:nf.n.trim(),k:nf.k,typ,ma:["haupt","fruehstueck"].includes(typ)?nf.ma:[],m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
     why:nf.why||"Selbst angelegt.",z:parseZutaten(nf.zText),s:parseSchritte(nf.sText),src:"eigen"};
   if(nf.q.trim())r.q=nf.q.trim();
+  /* Bearbeitetes Grundrezept behält Saison, Blähfaktor und Nährstoffe des Originals */
+  const urspr=REZEPTE.find(o=>o.id===id);
+  if(urspr){ r.m=urspr.m; r.bl=urspr.bl; r.nut=urspr.nut; r.src=urspr.src||"asana"; if(!nf.why)r.why=urspr.why; }
   mut("eigene/"+id,r,false);
+  if(S.geloescht&&S.geloescht[id]) grabsteinLoesen(id);
   if(!S.sammlung[id])mut("sammlung/"+id,Date.now(),false);
   nf=null; closeSheet(); go("rezepte");
 }
@@ -1211,6 +1223,7 @@ function eigenesLoeschen(id){
   if(!confirm("Rezept endgültig löschen? Aus dem Wochenplan verschwindet es dann ebenfalls."))return;
   Object.keys(S.plan).forEach(k=>{if(S.plan[k]&&S.plan[k].r===id)mut("plan/"+k,null,false);});
   mut("sammlung/"+id,null,false); mut("archiv/"+id,null,false); mut("eigene/"+id,null,false);
+  grabsteinSetzen(id); schreibenLokal();
   nf=null; closeSheet(); render();
 }
 
@@ -1613,7 +1626,9 @@ function datumBauen(tag,monat){
 }
 
 async function prospektLesen(dateien){
-  const liste=[...(dateien||[])].filter(f=>/\.pdf$/i.test(f.name)||f.type==="application/pdf");
+  /* Robust gegen beides: FileList oder eine einzelne Datei */
+  const roh=!dateien?[]:(dateien.length!==undefined&&typeof dateien!=="string"?[...dateien]:[dateien]);
+  const liste=roh.filter(f=>/\.pdf$/i.test(f.name)||f.type==="application/pdf");
   const stand=document.getElementById("pdfstand");
   const melde=t=>{ if(stand)stand.textContent=t; };
   if(!liste.length){ melde("Darunter war keine PDF-Datei."); return; }
@@ -1856,7 +1871,34 @@ function tesseract(){
   });
   return tessLaden;
 }
-/* Ohne capture-Attribut bietet das Gerät Kamera, Galerie und Dateien zur Auswahl an */
+/* Diese Funktion fehlte – dadurch brach die Texterkennung immer mit einem Fehler ab.
+   Verkleinern beschleunigt tesseract erheblich und spart Arbeitsspeicher. */
+function bildVerkleinern(datei,maxKante,guete){
+  return new Promise((ok,fehler)=>{
+    const leser=new FileReader();
+    leser.onerror=()=>fehler(new Error("Datei nicht lesbar"));
+    leser.onload=()=>{
+      const bild=new Image();
+      bild.onerror=()=>fehler(new Error("Bildformat nicht lesbar"));
+      bild.onload=()=>{
+        const gr=Math.max(bild.width,bild.height)||1;
+        const f=Math.min(1,(maxKante||1800)/gr);
+        const c=document.createElement("canvas");
+        c.width=Math.round(bild.width*f); c.height=Math.round(bild.height*f);
+        const ktx=c.getContext("2d");
+        ktx.fillStyle="#fff"; ktx.fillRect(0,0,c.width,c.height);
+        ktx.drawImage(bild,0,0,c.width,c.height);
+        try{ ok(c.toDataURL("image/jpeg",guete||0.9)); }
+        catch(e){ ok(leser.result); }
+      };
+      bild.src=leser.result;
+    };
+    leser.readAsDataURL(datei);
+  });
+}
+/* Zwei Wege, weil capture="environment" die Dateiauswahl sperren würde:
+   ein Eingabefeld für die Kamera, eines für Galerie und Dateien. */
+function fotoAufnehmen(){ const f=document.getElementById("fotokamera"); if(f&&f.click){f.value="";f.click();} }
 function fotoWaehlen(){ const f=document.getElementById("fotowahl"); if(f&&f.click){f.value="";f.click();} }
 async function fotoLesen(datei){
   if(!datei) return;
@@ -1871,8 +1913,7 @@ async function fotoLesen(datei){
     const {data}=await T.recognize(bild,"deu");
     const text=(data&&data.text||"").replace(/\u00a0/g," ").trim();
     if(!text||text.length<25){ nf.status="Auf dem Bild war kaum Text zu erkennen. Bei Kochbuchseiten hilft gerades Halten, viel Licht und ein Ausschnitt, der nur den Text zeigt."; formZeigen(true); return; }
-    document.getElementById("roh")||0;
-    nf.rohtext=text;
+    nf.status=""; nf.rohtext=text;
     fotoUebernehmen(text);
   }catch(e){
     nf.status="Das Bild ließ sich nicht auswerten: "+(e&&e.message?e.message:"unbekannt");
@@ -1889,7 +1930,7 @@ function fotoUebernehmen(text){
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="2.7";
+const VERSION="2.8";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -1899,7 +1940,7 @@ const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, angebote:{}, quellen:{}, extra:{}, listen:{}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, geloescht:{}, angebote:{}, quellen:{}, extra:{}, listen:{}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -1932,7 +1973,26 @@ function rezeptNorm(r){
     s:arr(r.s,[]).map(String),
     why:r.why||"Selbst angelegt."};
 }
-const RZ=()=>REZEPTE.concat(Object.values(S.eigene||{}).map(rezeptNorm).filter(Boolean));
+/* Eigene Fassungen überschreiben mitgelieferte Rezepte derselben Kennung –
+   so lässt sich ein Grundrezept bearbeiten, ohne das Original zu verlieren.
+   Gelöschtes wird über die Grabsteine ausgeblendet, auch wenn ein Abgleich es zurückbringt. */
+const RZ=()=>{
+  const tot=S.geloescht||{};
+  const eig=Object.values(S.eigene||{}).map(rezeptNorm).filter(Boolean).filter(r=>!tot[r.id]);
+  const ueber=new Set(eig.map(r=>r.id));
+  return REZEPTE.filter(r=>!tot[r.id]&&!ueber.has(r.id)).concat(eig);
+};
+/* Grabsteine sind bewusst klein gehalten: nur Kennung und Zeitpunkt, nach einem
+   halben Jahr fallen sie weg. Ohne sie holt der Abgleich gelöschte Rezepte zurück,
+   sobald ein Gerät mit altem Stand wieder online geht. */
+const GRAB_FRIST=180;
+function grabsteinSetzen(id){ setPfad(S,"geloescht/"+id,Date.now()); senden("geloescht/"+id,S.geloescht[id]); }
+function grabsteinLoesen(id){ setPfad(S,"geloescht/"+id,null); senden("geloescht/"+id,null); }
+function grabsteineAufraeumen(){
+  const jetzt=Date.now(); let weg=0;
+  Object.entries(S.geloescht||{}).forEach(([id,t])=>{ if(jetzt-(+t||0)>GRAB_FRIST*TAG){ delete S.geloescht[id]; weg++; } });
+  return weg;
+}
 const R=id=>{
   if(S.eigene&&S.eigene[id]) return rezeptNorm(S.eigene[id]);
   return REZEPTE.find(r=>r.id===id);
@@ -1984,8 +2044,12 @@ function migrieren(){
     delete S.plan[k]; neu=true;
   });
   Object.entries(S.sammlung||{}).forEach(([id,v])=>{
+    if(v==null){delete S.sammlung[id];neu=true;return;}   /* nie wieder aus null einen Zeitstempel machen */
     if(typeof v!=="number"){S.sammlung[id]=Date.now()-FRIST.alt*TAG;neu=true;}
   });
+  if(!S.geloescht){S.geloescht={};neu=true;}
+  if(grabsteineAufraeumen())neu=true;
+  Object.keys(S.geloescht).forEach(id=>{ if(S.sammlung[id]){delete S.sammlung[id];neu=true;} });
   if(neu){schreibenLokal();if(basis()){senden("plan",S.plan);senden("sammlung",S.sammlung);senden("archiv",S.archiv);senden("spaeter",S.spaeter);senden("geprueft",S.geprueft);}}
 }
 function schreibenLokal(){
@@ -2048,6 +2112,16 @@ function zusammenfuehren(fern){
       if(v&&r&&typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
     });
     neu[f]=raus;
+  });
+  /* Ein Gerät mit altem Stand bringt Gelöschtes sonst zurück: Grabsteine räumen hinterher auf */
+  const tot=neu.geloescht||{};
+  Object.keys(tot).forEach(id=>{ delete neu.sammlung[id]; delete neu.eigene[id]; });
+  /* Sammlung und Archiv schließen einander aus. Nach dem Mischen kann ein Rezept in
+     beiden stehen – dann entscheidet der jüngere Eintrag, sonst taucht Entferntes wieder auf. */
+  Object.keys(neu.archiv||{}).forEach(id=>{
+    if(neu.sammlung[id]===undefined) return;
+    if((+neu.archiv[id]||0)>=(+neu.sammlung[id]||0)) delete neu.sammlung[id];
+    else delete neu.archiv[id];
   });
   neu.route=(fern&&fern.route)||S.route;
   neu.still=fern&&fern.still!==undefined?fern.still:S.still;
@@ -2348,15 +2422,46 @@ function proteinSchnitt(w){
   return tage.length?Math.round(tage.reduce((a,b)=>a+b,0)/tage.length):0;
 }
 /* Den proteinreichsten Snack als Zusatz einplanen */
+/* Auswahl statt Automatik: welcher Snack und wie viele Portionen. */
+let snackWahl={id:null,p:7};
 function proteinSnack(){
-  const s=RZ().filter(r=>typVon(r)==="snack").sort((a,b)=>b.p-a.p)[0];
-  if(!s){alert("Kein Snack in der Sammlung.");return;}
-  mut("extra/"+extraSchluessel(planWoche)+neueId("e"),{r:s.id,p:7});
-  hinweisSnack(s);
+  const snacks=RZ().filter(r=>typVon(r)==="snack").sort((a,b)=>b.p-a.p);
+  if(!snacks.length){
+    openSheet(`<div class="grab"></div><h2 style="font-size:20px">Kein Snack vorhanden</h2>
+      <p class="note" style="margin:8px 0 12px">In deinen Rezepten steckt kein Snack. Unter „Rezepte“ findest du welche über den Filter „Snacks“, oder du legst unter „Mehr“ einen eigenen an.</p>
+      <button class="btn btn-primary btn-wide" onclick="closeSheet();go('rezepte')">Zu den Rezepten</button>`);
+    return;
+  }
+  if(!snackWahl.id||!snacks.some(r=>r.id===snackWahl.id)) snackWahl={id:snacks[0].id,p:7};
+  snackBlatt();
 }
-function hinweisSnack(s){
+function snackBlatt(){
+  const snacks=RZ().filter(r=>typVon(r)==="snack").sort((a,b)=>b.p-a.p);
+  const s=snacks.find(r=>r.id===snackWahl.id)||snacks[0];
+  const luecke=Math.max(0,PROTEINZIEL-proteinSchnitt(planWoche));
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Protein-Snack ergänzen</h2>
+    <p class="note" style="margin:8px 0 12px">${luecke?`Aktuell fehlen im Schnitt ${Math.round(luecke)} g pro Tag. `:""}Wähl den Snack und die Zahl der Portionen – sieben bedeutet einen für jeden Tag.</p>
+    <label class="fl">Snack</label>
+    <div class="pickrow" style="flex-wrap:wrap">${snacks.map(r=>
+      `<button aria-pressed="${r.id===s.id}" onclick="snackWahl.id='${r.id}';snackBlatt()">${esc(r.n)} · ${r.p} g</button>`).join("")}</div>
+    <label class="fl">Portionen</label>
+    <div class="row-btns" style="align-items:center">
+      <div class="stepper"><button onclick="snackWahl.p=Math.max(1,snackWahl.p-1);snackBlatt()">−</button>
+        <b>${snackWahl.p}</b>
+        <button onclick="snackWahl.p=Math.min(21,snackWahl.p+1);snackBlatt()">+</button></div>
+      <span class="note" style="margin:0">macht ${s.p*snackWahl.p} g Protein, verteilt auf die Woche rund ${Math.round(s.p*snackWahl.p/7)} g pro Tag</span>
+    </div>
+    <button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="snackEinplanen()">Unter „Zusätzlich“ eintragen</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`, true);
+}
+function snackEinplanen(){
+  const s=R(snackWahl.id); if(!s) return;
+  mut("extra/"+extraSchluessel(planWoche)+neueId("e"),{r:s.id,p:snackWahl.p});
+  hinweisSnack(s,snackWahl.p);
+}
+function hinweisSnack(s,port){
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">Snack ergänzt</h2>
-    <p class="note" style="margin:8px 0 12px">„${esc(s.n)}“ liegt jetzt mit sieben Portionen unter „Zusätzlich“ – einer für jeden Tag, ${s.p} g Protein je Portion. Die Zutaten kommen auf die Einkaufsliste.</p>
+    <p class="note" style="margin:8px 0 12px">„${esc(s.n)}“ liegt jetzt mit ${port} Portion${port===1?"":"en"} unter „Zusätzlich“, ${s.p} g Protein je Portion. Die Zutaten kommen auf die Einkaufsliste.</p>
     <button class="btn btn-primary btn-wide" onclick="closeSheet()">Alles klar</button>`);
 }
 
@@ -2433,6 +2538,8 @@ function rezeptWegJetzt(id,eigen){
   mut("plan",S.plan,false); mut("extra",S.extra,false);
   mut("sammlung/"+id,null,false);
   if(eigen) mut("eigene/"+id,null,false);
+  if(eigen) grabsteinSetzen(id); else mut("archiv/"+id,Date.now(),false);
+  schreibenLokal();
   closeSheet();
   hinweisWeg(id,eigen,kopie);
 }
@@ -2444,6 +2551,7 @@ function hinweisWeg(id,eigen,kopie){
 function rezeptZurueck(){
   if(!letztesWeg) return;
   const {id,eigen,kopie}=letztesWeg; letztesWeg=null;
+  if(eigen) grabsteinLoesen(id); else mut("archiv/"+id,null,false);
   if(eigen&&kopie) mut("eigene/"+id,kopie,false);
   mut("sammlung/"+id,Date.now());
 }
@@ -2463,7 +2571,8 @@ function detail(id,slotK){
     ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`
            :`<button class="btn btn-primary btn-wide" onclick="einplanen('${r.id}')">Einplanen</button>`}
     <button class="btn btn-wide" style="margin-top:6px" onclick="kochModus('${r.id}',${p})">Kochmodus</button>
-    ${r.src==="eigen"?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>`:""}
+    <button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>
+    ${(S.eigene&&S.eigene[r.id]&&REZEPTE.some(o=>o.id===r.id))?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptUrsprung('${r.id}')">Änderungen verwerfen</button>`:""}
     ${S.sammlung[r.id]?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptWeg('${r.id}')">🗑 ${S.eigene&&S.eigene[r.id]?"Rezept löschen":"Aus der Sammlung nehmen"}</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button></div>`;
   window.dp=d=>{p=Math.max(1,p+d);openSheet(body(),true);};
@@ -2834,8 +2943,10 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch
 (function(){
   const p=document.getElementById("pdfwahl"); if(p) p.onchange=()=>prospektLesen(p.files);
   const f=document.getElementById("fotowahl"); if(f) f.onchange=()=>fotoLesen(f.files&&f.files[0]);
+  const k=document.getElementById("fotokamera"); if(k) k.onchange=()=>fotoLesen(k.files&&k.files[0]);
 })();
-(function(){ const f=document.getElementById("pdfwahl"); if(f) f.onchange=()=>prospektLesen(f.files&&f.files[0]); })();
+/* Der frühere zweite Block hat den richtigen Handler überschrieben und eine
+   einzelne Datei statt der Dateiliste übergeben – prospektLesen brach damit ab. */
 if(basis())verbinden();
 
 </script>
