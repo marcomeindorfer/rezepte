@@ -190,6 +190,15 @@ textarea{font-family:inherit;font-size:16px;width:100%;padding:12px 13px;border:
 .pickrow{display:flex;gap:6px;flex-wrap:wrap}
 .pickrow button{border:1px solid var(--line-2);background:var(--card);border-radius:99px;padding:8px 14px;font-size:14px}
 .pickrow button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pruefz{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.pruefz:last-child{border-bottom:0}
+.pruefz.aus .pt{color:var(--ink-3);text-decoration:line-through}
+.pruefz .pt{flex:1;font-size:14.5px;line-height:1.35;word-break:break-word}
+.pruefz .pt i{display:block;font-style:italic;font-size:12px;color:var(--ink-3);text-decoration:none;margin-top:2px}
+.pruefz .pw{display:flex;gap:4px;flex:none}
+.pz{width:30px;height:30px;border:1px solid var(--line-2);background:var(--card);border-radius:8px;
+  font-size:13px;font-weight:600;color:var(--ink-3);padding:0;line-height:1}
+.pz.an{background:var(--sea);border-color:var(--sea);color:#fff}
 .zline{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:6px 0;border-bottom:0.5px solid var(--line)}
 .zline:last-child{border-bottom:0}
 .zline em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
@@ -1055,7 +1064,7 @@ async function ausLinkHolen(){
     if(d.name&&!nf.n.trim()) nf.n=d.name;
     if(d.zutaten&&d.zutaten.length) nf.zText=d.zutaten.join("\n");
     if(d.schritte&&d.schritte.length) nf.sText=d.schritte.join("\n");
-    if(d.minuten) nf.min=Math.min(180,d.minuten);
+    if(d.minuten){ nf.min=Math.min(180,d.minuten); nf.minAuto=false; }   /* Angabe der Quelle schlägt die Schätzung */
     if(d.portionen>1) nf.port=d.portionen;
     if(d.rohtext&&!(d.zutaten||[]).length) nf.zText=d.rohtext;
     nf.status=d.hinweis||(d.zutaten.length?"Übernommen. Bitte einmal gegenlesen.":"Nichts Verwertbares gefunden.");
@@ -1097,12 +1106,17 @@ function aufEinePortion(){
 /* Ohne Worker: kompletten Rezepttext einfügen und automatisch aufteilen */
 function textEinfuegen(){
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">Rezepttext einfügen</h2>
-    <p class="note" style="margin:8px 0 12px">Kopier den Rezeptteil der Seite oder die Videobeschreibung hier hinein. Die App trennt Zutaten von der Zubereitung – Zeilen, die mit einer Menge beginnen, gelten als Zutat.</p>
+    <p class="note" style="margin:8px 0 12px">Kopier den Rezeptteil der Seite oder die Videobeschreibung hier hinein. Die App ordnet jede Zeile ein und zeigt dir das Ergebnis zur Kontrolle, bevor etwas übernommen wird.</p>
     <textarea id="roh" rows="12" placeholder="200 g Möhren&#10;1 Dose Kichererbsen&#10;&#10;Möhren würfeln und andünsten."></textarea>
     <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="textAufteilen()">Aufteilen und übernehmen</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="formZeigen()">Zurück</button>`);
 }
+/* Bleibt als Einstieg erhalten, führt jetzt aber über das Prüfblatt */
 function textAufteilen(){
+  const el=document.getElementById("roh");
+  pruefStart(el?el.value:"");
+}
+function textAufteilenAlt(){
   const roh=document.getElementById("roh").value;
   const zeilen=roh.split("\n").map(z=>z.trim().replace(/^[-–•*]\s*/,"")).filter(Boolean);
   const zut=[],schr=[];
@@ -1131,23 +1145,341 @@ function textAufteilen(){
   formZeigen();
 }
 
+
+/* ===== Rezepttext auswerten: säubern, einordnen, prüfen lassen =====
+   Texterkennung liefert nie sauberen Text. Deshalb wird hier zuerst repariert,
+   dann jede Zeile eingeordnet – und nichts ohne Kontrolle übernommen. */
+
+/* Zeilen, die in keinem Rezept etwas verloren haben. Reihenfolge zählt:
+   Der erste Treffer liefert die Begründung, die im Prüfblatt angezeigt wird. */
+const MUELL=[
+  [/^\s*(seite\s*)?\d{1,3}\s*$/i,                                   "Seitenzahl"],
+  [/^[^a-zA-ZÄÖÜäöüß]+$/,                                           "kein Text"],
+  [/(kcal|kj\b|n(ä|ae)hrwert|pro 100\s*g|brennwert|eiwei(ß|ss)\s*:|fett\s*:|kohlenhydrate\s*:|ballaststoffe\s*:)/i, "Nährwertangabe"],
+  [/(www\.|https?:\/\/|@[a-z0-9_.]+|instagram|facebook|pinterest|tiktok|youtube)/i, "Netzadresse oder Konto"],
+  [/(©|\ball rights\b|isbn|foto\s*:|fotos\s*:|bild\s*:|rezept von|abbildung)/i,     "Bildnachweis oder Impressum"],
+  [/^(guten appetit|viel spa(ß|ss)|lass es dir schmecken|bon app)/i, "Grußformel"],
+  [/^(werbung|anzeige|gesponsert)/i,                                 "Werbung"],
+  [/^(drucken|speichern|teilen|merken|kommentare?|bewertung|jetzt bewerten|zum rezept springen)\b/i, "Knopfbeschriftung der Webseite"]
+];
+/* Angaben, die wir auswerten und danach nicht mehr brauchen */
+const KOPFDATEN=[
+  [/(zubereitungs|arbeits|gesamt|koch|back|gar|ruhe|wart)zeit/i, "Zeitangabe"],
+  [/^\s*(schwierigkeit|niveau|level)\b/i,                        "Schwierigkeitsgrad"],
+  [/^\s*f(ü|ue)r\s+\d+\s*(personen|portionen|st(ü|ue)ck)/i,      "Portionsangabe"],
+  [/^\s*\d+\s*(personen|portionen)\b/i,                          "Portionsangabe"],
+  [/^\s*(zutaten\s+f(ü|ue)r|ergibt)\b/i,                         "Portionsangabe"]
+];
+/* Wortstämme plus höchstens vier Buchstaben Endung. Ohne diese Grenze hielte
+   die Erkennung „Kochkarussell“ oder „Backpapier“ für eine Handlungsanweisung. */
+const KOCHVERB=/\b(schneid|hack|w(ü|ue)rfel|raspel|reib|sch(ä|ae)l|wasch|putz|erhitz|anbrat|brat|koch|gar|d(ü|ue)nst|schmor|back|r(ü|ue)hr|verr(ü|ue)hr|vermeng|vermisch|misch|untermeng|zugeb|hinzuf(ü|ue)g|abgie(ß|ss)|abtropf|w(ü|ue)rz|abschmeck|servier|anricht|garnier|bestreu|betr(ä|ae)ufel|einweich|marinier|knet|ausroll|beleg|(ü|ue)berback|p(ü|ue)rier|karamellisier|abl(ö|oe)sch|k(ö|oe)chel|simmer|halbier|viertel|entkern|anschwitz|glasier|wend|verteil)[a-zäöüß]{0,4}\b/i;
+const EINHEIT_RE=/\b(g|gr|gramm|kg|ml|l|liter|el|essl(ö|oe)ffel|tl|teel(ö|oe)ffel|stk|st(ü|ue)ck|dose|dosen|bund|zehe|zehen|prise|prisen|blatt|bl(ä|ae)tter|packung|pck|scheibe|scheiben|tasse|glas|kopf|stange|stangen|becher|zweig|zweige|handvoll|msp|schale|w(ü|ue)rfel)\b/i;
+const MENGE_RE=/^\s*(\d+[.,]?\d*|½|¼|¾|⅓|⅔|einige|etwas|je|ca\.?\s*\d+)/i;
+
+/* Häufige Verwechslungen der Texterkennung, nur dort angewandt, wo sie eindeutig sind */
+function ocrReparieren(z){
+  return z
+    .replace(/[|¦]/g," ")
+    .replace(/(\d)\s*[9q]\b/g,"$1 g")            /* "250 9" ist fast immer "250 g" */
+    .replace(/\b([EJ])[lI1]\b/g,"EL").replace(/\bT[lI1]\b/g,"TL")
+    .replace(/\bm[lI1]\b/gi,"ml")
+    .replace(/(\d)[,.](\d)\s*kg\b/gi,"$1,$2 kg")
+    .replace(/\s{2,}/g," ")
+    .replace(/^[\s\-–—•*·°«»~>»]+/,"")
+    .replace(/[\s.,;]+$/,m=>/[.!?]$/.test(m)?".":"")
+    .trim();
+}
+/* Umbrüche mitten im Satz wieder zusammenziehen. Zwei Signale:
+   die Folgezeile beginnt klein, oder die Vorzeile endet auf einem Wort,
+   nach dem kein Satz aufhört – „… anbraten. Dann mit / Kokosmilch ablöschen“. */
+const HAENGT=/\s(mit|und|oder|in|im|am|auf|aus|bei|für|zu|zum|zur|von|vom|der|die|das|den|dem|des|einen|einem|eine|ein|etwas|dann|danach|bis|über|unter|nach|vor|ohne|je)$/i;
+function zeilenBinden(zeilen){
+  const raus=[];
+  zeilen.forEach(z=>{
+    const letzte=raus[raus.length-1];
+    const offen=letzte&&letzte.length>25&&!/[.!?:]$/.test(letzte);
+    const passt=offen&&(/^[a-zäöüß(]/.test(z)||HAENGT.test(letzte));
+    const neueZutat=MENGE_RE.test(z)||/^\d+[.)]\s/.test(z);
+    if(passt&&!neueZutat) raus[raus.length-1]=letzte+" "+z; else raus.push(z);
+  });
+  return raus;
+}
+/* Wie stark spricht die Zeile für Zutat, wie stark für Zubereitungsschritt */
+function zeilenUrteil(z){
+  const woerter=z.split(/\s+/).length;
+  const satzende=/[.!?]$/.test(z);
+  const bekannt=(()=>{ const idx=KAT_INDEX(); const t=slug(z);
+    return Object.keys(idx).some(k=>k.length>4&&t.includes(k)); })();
+  let zut=0, schr=0;
+  if(MENGE_RE.test(z)) zut+=3;
+  if(EINHEIT_RE.test(z.slice(0,18))) zut+=2;
+  if(woerter<=6) zut+=1;
+  if(!satzende) zut+=1;
+  if(bekannt) zut+=2;
+  if(/,\s*(gew(ü|ue)rfelt|gehackt|in scheiben|fein|klein|geschnitten|gerieben)/i.test(z)) zut+=1;
+  if(KOCHVERB.test(z)) schr+=3;
+  if(satzende) schr+=2;
+  if(woerter>=9) schr+=2;
+  if(/^\d+[.)]\s+\S/.test(z)) schr+=4;
+  if(z.length>90) schr+=2;
+  return {zut,schr};
+}
+/* Ergebnis: eine Liste aus {t, art, grund}. art ist "zutat", "schritt" oder "weg". */
+const UEBERSCHRIFT_RE=/^(zutaten|ingredients|einkaufsliste|du brauchst|man nehme|zubereitung|anleitung|schritte|so geht|so wird|und so|instructions|method)\b/i;
+function textEinordnen(roh){
+  let zeilen=String(roh||"").split(/\r?\n/).map(ocrReparieren).filter(Boolean);
+  zeilen=zeilenBinden(zeilen);
+  /* Zwei gleiche Zeilen hintereinander entstehen bei Spaltensatz regelmäßig */
+  zeilen=zeilen.filter((z,i)=>i===0||slug(z)!==slug(zeilen[i-1]));
+
+  const funde={portionen:0,minuten:0,titel:""};
+  /* Alles vor der ersten Überschrift ist Kopfbereich: Blogname, Titel, Zeitangaben.
+     Nur wenn später ein Zutaten- oder Zubereitungsteil folgt, darf er verworfen werden –
+     sonst stünden bei Texten ohne Überschriften die Zutaten dort drin. */
+  const kopfEnde=zeilen.findIndex(z=>UEBERSCHRIFT_RE.test(z));
+  const hatAbschnitte=kopfEnde>=0;
+  let titelIdx=-1;
+  if(hatAbschnitte){
+    let best=-1;
+    zeilen.slice(0,Math.min(kopfEnde,6)).forEach((z,i)=>{
+      if(MENGE_RE.test(z)||KOCHVERB.test(z)) return;
+      if(z.length<5||z.length>60) return;
+      if(MUELL.some(([re])=>re.test(z))||KOPFDATEN.some(([re])=>re.test(z))) return;
+      const wert=z.length+(/-/.test(z)?6:0);
+      if(wert>best){best=wert;titelIdx=i;}
+    });
+  }
+  const liste=[];
+  let modus=null;
+  zeilen.forEach((z,i)=>{
+    /* Abschnittsüberschriften sind das verlässlichste Signal im ganzen Text */
+    if(/^(zutaten|ingredients|einkaufsliste|du brauchst|man nehme)\b\s*:?\s*$/i.test(z)){modus="zutat";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
+    if(/^(zubereitung|anleitung|schritte|so geht|so wird|und so|instructions|method)\b/i.test(z)){modus="schritt";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
+    if(/^(tipp|hinweis|variante|notiz|quelle|aufbewahrung|meal prep|n(ä|ae)hrwerte)\b/i.test(z)){modus="weg";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
+    if(/^f(ü|ue)r (die|den|das)\b/i.test(z)&&z.length<45){modus="zutat";liste.push({t:z,art:"weg",grund:"Zwischenüberschrift"});return;}
+
+    for(const [re,grund] of KOPFDATEN){
+      if(re.test(z)){
+        const mp=z.match(/(\d+)\s*(personen|portionen|st(ü|ue)ck)/i); if(mp&&!funde.portionen) funde.portionen=+mp[1];
+        const mz=z.match(/(\d+)\s*(min|minuten)/i); if(mz&&!funde.minuten) funde.minuten=+mz[1];
+        const ms=z.match(/(\d+)\s*(std|stunden?|h)\b/i); if(ms&&!funde.minuten) funde.minuten=+ms[1]*60;
+        liste.push({t:z,art:"weg",grund}); return;
+      }
+    }
+    let raus=null;
+    for(const [re,grund] of MUELL) if(re.test(z)){raus=grund;break;}
+    /* Sehr kurze Bruchstücke ohne Menge sind fast immer Erkennungsfehler */
+    if(!raus&&z.length<3) raus="zu kurz";
+    if(!raus&&(z.replace(/[^a-zA-ZÄÖÜäöüß]/g,"").length/z.length)<0.45&&!MENGE_RE.test(z)) raus="unlesbar";
+    if(raus){liste.push({t:z,art:"weg",grund:raus});return;}
+
+    if(hatAbschnitte&&i<kopfEnde){
+      if(i===titelIdx){ funde.titel=z; liste.push({t:z,art:"weg",grund:"Titel"}); return; }
+      liste.push({t:z,art:"weg",grund:"Kopfzeile"}); return;
+    }
+    /* Ohne Überschriften: die erste Zeile ist der Titel, wenn direkt danach eine Menge folgt */
+    if(!hatAbschnitte&&i===0&&!MENGE_RE.test(z)&&!KOCHVERB.test(z)&&z.length<60&&MENGE_RE.test(zeilen[1]||"")){
+      funde.titel=z; liste.push({t:z,art:"weg",grund:"Titel"}); return;
+    }
+    if(modus==="weg"){liste.push({t:z,art:"weg",grund:"steht unter Tipps"});return;}
+    if(modus==="zutat"&&!/^\d+[.)]\s/.test(z)){liste.push({t:z,art:"zutat",grund:""});return;}
+    if(modus==="schritt"){liste.push({t:z,art:"schritt",grund:""});return;}
+
+    const u=zeilenUrteil(z);
+    liste.push({t:z,art:u.schr>u.zut?"schritt":"zutat",grund:""});
+  });
+  return {liste,funde};
+}
+
+/* ===== Prüfblatt: nichts wird ungesehen übernommen ===== */
+let pruef=null;
+function pruefStart(roh){
+  const {liste,funde}=textEinordnen(roh);
+  pruef={zeilen:liste,funde,zeigeWeg:false};
+  pruefBlatt();
+}
+function pruefSetzen(i,art){ if(!pruef)return; pruef.zeilen[i].art=art; pruef.zeilen[i].grund=""; pruefBlatt(); }
+function pruefAlle(art,von){ if(!pruef)return; pruef.zeilen.forEach(z=>{if(z.art===von)z.art=art;}); pruefBlatt(); }
+function pruefWegZeigen(){ if(!pruef)return; pruef.zeigeWeg=!pruef.zeigeWeg; pruefBlatt(); }
+function pruefBlatt(){
+  const z=pruef.zeilen;
+  const anzahl=a=>z.filter(x=>x.art===a).length;
+  const knopf=(i,art,zeichen,titel)=>`<button class="pz${z[i].art===art?" an":""}" onclick="pruefSetzen(${i},'${art}')" aria-label="${titel}" title="${titel}">${zeichen}</button>`;
+  const zeile=(x,i)=>`<div class="pruefz${x.art==="weg"?" aus":""}">
+      <span class="pt">${esc(x.t)}${x.grund?`<i>${esc(x.grund)}</i>`:""}</span>
+      <span class="pw">${knopf(i,"zutat","Z","Als Zutat")}${knopf(i,"schritt","S","Als Schritt")}${knopf(i,"weg","✕","Nicht übernehmen")}</span>
+    </div>`;
+  const teil=(art,titel,hinweis)=>{
+    const eintraege=z.map((x,i)=>[x,i]).filter(([x])=>x.art===art);
+    if(!eintraege.length) return `<div class="sect"><h2>${titel}</h2><span class="zahl">0</span></div>
+      <p class="note" style="margin-bottom:10px">${hinweis}</p>`;
+    return `<div class="sect"><h2>${titel}</h2><span class="zahl">${eintraege.length}</span></div>
+      <div class="card" style="padding:4px 0;margin-bottom:12px">${eintraege.map(([x,i])=>zeile(x,i)).join("")}</div>`;
+  };
+  const f=pruef.funde;
+  const gefunden=[f.titel?`Titel „${f.titel}“`:"",f.portionen?`${f.portionen} Portionen`:"",f.minuten?`${f.minuten} Minuten`:""].filter(Boolean);
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Erkannten Text prüfen</h2>
+    <p class="note" style="margin:8px 0 10px">Jede Zeile ist vorsortiert. Mit <b>Z</b>, <b>S</b> und <b>✕</b> änderst du die Einordnung, bevor etwas ins Rezept wandert.${gefunden.length?" Nebenbei erkannt: "+esc(gefunden.join(", "))+".":""}</p>
+    ${teil("zutat","Zutaten","Noch nichts als Zutat eingeordnet.")}
+    ${teil("schritt","Zubereitung","Noch nichts als Schritt eingeordnet.")}
+    <button class="btn btn-s" onclick="pruefWegZeigen()">${pruef.zeigeWeg?"Aussortiertes ausblenden":`Aussortiertes anzeigen (${anzahl("weg")})`}</button>
+    ${pruef.zeigeWeg?`<p class="note" style="margin:10px 0 6px">Diese Zeilen bleiben draußen. Kursiv steht der Grund.</p>
+      <div class="card" style="padding:4px 0;margin-bottom:12px">${z.map((x,i)=>[x,i]).filter(([x])=>x.art==="weg").map(([x,i])=>zeile(x,i)).join("")}</div>`:""}
+    <button class="btn btn-primary btn-wide" style="margin-top:12px" onclick="pruefUebernehmen()">${anzahl("zutat")} Zutaten und ${anzahl("schritt")} Schritte übernehmen</button>
+    <button class="btn btn-wide" style="margin-top:6px" onclick="pruefRohtext()">Text von Hand nachbessern</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="formZeigen()">Abbrechen</button>`, true);
+}
+function pruefRohtext(){
+  const t=pruef.zeilen.map(x=>x.t).join("\n");
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Text nachbessern</h2>
+    <p class="note" style="margin:8px 0 12px">Korrigier Erkennungsfehler hier. Danach wird der Text neu eingeordnet.</p>
+    <textarea id="roh" rows="14">${esc(t)}</textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="pruefStart(document.getElementById('roh').value)">Neu einordnen</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="pruefBlatt()">Zurück</button>`);
+}
+function pruefUebernehmen(){
+  if(!pruef) return;
+  if(!nf) neuesRezept();
+  const zut=pruef.zeilen.filter(x=>x.art==="zutat").map(x=>x.t);
+  const schr=pruef.zeilen.filter(x=>x.art==="schritt").map(x=>x.t);
+  const f=pruef.funde;
+  nf.zText=zut.join("\n"); nf.sText=schr.join("\n");
+  if(f.titel&&!nf.n) nf.n=f.titel;
+  /* Steht die Zeit in der Vorlage, gilt sie – die Schätzung darf sie nicht überschreiben */
+  if(f.minuten){ nf.min=f.minuten; nf.minAuto=false; }
+  if(f.portionen>1) nf.port=f.portionen;
+  const unklar=parseZutaten(nf.zText).filter(x=>x[3]==="so").length;
+  nf.status=zut.length+" Zutaten und "+schr.length+" Schritte übernommen."
+    +(f.portionen>1?" Die Mengen gelten laut Vorlage für "+f.portionen+" Portionen – der Knopf oben rechnet sie auf eine herunter.":"")
+    +(unklar?" "+unklar+" Zutat"+(unklar>1?"en":"")+" ohne Abteilung, bitte prüfen.":"");
+  pruef=null;
+  formZeigen();
+}
+
+
+/* ===== Grobe Schätzung von Protein und Aufwand =====
+   Nur ein Anhaltspunkt, damit ein neues Rezept nicht mit 20 g und 30 Minuten
+   dasteht und den Wochenschnitt verfälscht. Sobald du ein Feld anfasst,
+   bleibt dein Wert stehen. */
+
+/* Gramm Protein je 100 g. Reihenfolge zählt: der erste Treffer gewinnt,
+   deshalb stehen die genauen Begriffe vor den allgemeinen. */
+const PROT100=[
+  [/proteinpulver|eiwei(ß|ss)pulver/i,80],
+  [/parmesan|pecorino|bergk(ä|ae)se|grana/i,32],
+  [/k(ü|ue)rbiskern/i,30],
+  [/seitan/i,25],
+  [/erdnussmus|erdnussbutter|mandelmus/i,25],
+  [/sonnenblumenkern|sesam|leinsam|hanfsam|pinienkern/i,22],
+  [/thunfisch|garnele|shrimp/i,24],
+  [/h(ä|ae)hnchen|h(ü|ue)hner|puten|pute\b|geflügel/i,23],
+  [/rinder|rind\b|hackfleisch|steak|gulasch/i,21],
+  [/mandel|walnuss|hasel|cashew|pistazie|n(ü|ue)sse|nuss/i,20],
+  [/lachs|forelle|kabeljau|dorsch|seelachs|makrele|hering/i,20],
+  [/tempeh/i,19],
+  [/fisch/i,18],
+  [/chia|leinsaat/i,17],
+  [/feta|hirtenk(ä|ae)se|halloumi/i,17],
+  [/mozzarella|gouda|edamer|emmentaler|cheddar|k(ä|ae)se/i,25],
+  [/linsen|kichererbsen|bohnen|kidney|erbsen.*getrocknet/i,24],
+  [/quinoa/i,14],
+  [/haferflocken|hafer\b/i,13],
+  [/tofu/i,12],
+  [/magerquark|quark|skyr|h(ü|ue)ttenk(ä|ae)se/i,12],
+  [/nudel|pasta|spaghetti|penne|couscous|bulgur|dinkel|vollkornmehl/i,12],
+  [/\bei\b|\beier\b/i,13],
+  [/griechischer joghurt|sojajoghurt/i,9],
+  [/brot|br(ö|oe)tchen|toast|fladen|wrap|tortilla/i,8],
+  [/reis\b|hirse|polenta|mehl/i,7],
+  [/frischk(ä|ae)se|schmand|cr(è|e)me fra(î|i)che/i,7],
+  [/erbse|edamame/i,5],
+  [/joghurt|kefir|buttermilch/i,4],
+  [/milch|hafermilch|sojamilch|sahne|kokosmilch/i,3],
+  [/brokkoli|spinat|gr(ü|ue)nkohl|rosenkohl|pilz|champignon|mais/i,3],
+  [/kartoffel|s(ü|ue)(ß|ss)kartoffel/i,2],
+  [/(ö|oe)l|butter|essig|zucker|honig|sirup|salz|pfeffer|gew(ü|ue)rz|kr(ä|ae)uter/i,0]
+];
+/* Übliche Gewichte, damit „1 Zwiebel“ oder „1 Dose“ in Gramm umgerechnet werden kann */
+const STUECK={ei:60,eier:60,zwiebel:100,schalotte:40,knoblauch:5,zehe:5,paprika:150,tomate:80,
+  kartoffel:100,moehre:80,karotte:80,zucchini:250,aubergine:300,gurke:300,avocado:150,
+  zitrone:100,limette:60,apfel:150,banane:120,orange:180,mango:300,fenchel:250,
+  lauch:200,brokkoli:400,blumenkohl:700,kuerbis:1000,suesskartoffel:200,
+  brot:50,broetchen:60,scheibe:25,wrap:60,tortilla:60,huehnerbrust:150,filet:150};
+
+const STUECK_STD=100;
+const EINHEIT_G={g:1,kg:1000,ml:1,l:1000,EL:15,TL:5,Msp:1,Prise:1,Dose:250,Packung:250,
+  Bund:30,Blatt:4,Scheibe:25,Becher:200,Glas:200,Tasse:150,Handvoll:30,Kopf:400,
+  Stange:80,Zweig:4,Schale:250,"Würfel":10,Stk:0,Zehe:5};
+function zutatGramm(name,menge,einheit){
+  if(!menge) return 0;
+  if(einheit==="Stk"||!einheit){
+    const t=slug(name);
+    for(const [k,g] of Object.entries(STUECK)) if(t.includes(k)) return menge*g;
+    return menge*STUECK_STD;
+  }
+  const f=EINHEIT_G[einheit];
+  return f?menge*f:menge*STUECK_STD;
+}
+function proteinJe100(name){
+  for(const [re,g] of PROT100) if(re.test(name)) return g;
+  return 1.5;   /* Gemüse und alles Unbekannte: sehr wenig, aber nicht null */
+}
+/* Erwartet Zutaten für EINE Portion, so wie sie in der App überall stehen */
+function proteinSchaetzen(zut){
+  if(!zut||!zut.length) return 0;
+  let g=0;
+  zut.forEach(([n,m,e])=>{ g+=zutatGramm(n,m,e)*proteinJe100(n)/100; });
+  return Math.max(0,Math.round(g));
+}
+/* Aufwand aus Zutatenzahl und den Garverfahren, die im Text vorkommen */
+const AUFWAND=[
+  [/(ü|ue)ber nacht|(ü|ue)ber ?nacht|quellen lassen|einweichen|marinieren|gehen lassen|ruhen lassen/i,20],
+  [/backofen|backen|(ü|ue)berbacken|auflauf|gratin|r(ö|oe)sten im ofen/i,25],
+  [/schmoren|k(ö|oe)cheln|simmern|einkochen/i,18],
+  [/kochen|garen|d(ü|ue)nsten/i,10],
+  [/braten|anbraten|scharf anbraten/i,8],
+  [/p(ü|ue)rieren|mixen|kneten|ausrollen/i,6]
+];
+function dauerSchaetzen(zut,schritte){
+  const n=(zut||[]).length;
+  if(!n&&!(schritte||[]).length) return 0;
+  let min=6+Math.min(18,n*1.5);                 /* Vorbereitung wächst mit der Zutatenzahl */
+  const text=(schritte||[]).join(" ");
+  AUFWAND.forEach(([re,z])=>{ if(re.test(text)) min+=z; });
+  min+=Math.min(10,(schritte||[]).length*1.5);
+  return Math.max(5,Math.min(120,Math.round(min/5)*5));
+}
+/* Setzt die geschätzten Werte, solange die Felder nicht von Hand geändert wurden */
+function schaetzungAuffrischen(){
+  if(!nf) return;
+  const zut=parseZutaten(nf.zText), schr=parseSchritte(nf.sText);
+  if(nf.pAuto!==false){ const p=proteinSchaetzen(zut); if(p) nf.p=p; }
+  if(nf.minAuto!==false){ const m=dauerSchaetzen(zut,schr); if(m) nf.min=m; }
+}
+
 /* ===== Formular ===== */
 let nf=null;
 function neuesRezept(vorgabe){
-  nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",...(vorgabe||{})};
+  nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",
+      pAuto:true,minAuto:true,...(vorgabe||{})};
   formZeigen();
 }
 function rezeptBearbeiten(id){
   const r=R(id); if(!r) return;
   nf={id,n:r.n,q:r.q||"",k:r.k,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
       zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
-      sText:(r.s||[]).join("\n"),port:1,status:""};
+      sText:(r.s||[]).join("\n"),port:1,status:"",pAuto:false,minAuto:false};
   formZeigen();
 }
 function nfLesen(){
   const g=id=>{const el=document.getElementById(id);return el?el.value:"";};
-  nf.n=g("nfn"); nf.q=g("nfq"); nf.min=+g("nfmin")||30; nf.p=+g("nfp")||20;
+  const feld=id=>!!document.getElementById(id);
+  nf.n=g("nfn"); nf.q=g("nfq");
+  /* Weicht der Wert von der Schätzung ab, hat jemand ihn getippt – ab dann gilt er */
+  if(feld("nfmin")){ const m=+g("nfmin")||0; if(m&&m!==nf.min) nf.minAuto=false; if(m) nf.min=m; }
+  if(feld("nfp")){ const p=+g("nfp"); if(p!==nf.p&&g("nfp")!=="") nf.pAuto=false; if(g("nfp")!=="") nf.p=p; }
   nf.zText=g("nfz"); nf.sText=g("nfs");
+  schaetzungAuffrischen();
 }
 function nfSet(feld,wert){
   nfLesen();
@@ -1157,6 +1489,7 @@ function nfSet(feld,wert){
 }
 function nfPruefen(){nfLesen();formZeigen(true);}
 function formZeigen(behalten){
+  schaetzungAuffrischen();
   const zut=parseZutaten(nf.zText), unklar=zut.filter(z=>z[3]==="so").length;
   openSheet(`<div class="grab"></div>
     <h2 style="font-size:20px">${nf.id?"Rezept bearbeiten":"Eigenes Rezept"}</h2>
@@ -1180,12 +1513,13 @@ function formZeigen(behalten){
     ${["haupt","fruehstueck"].includes(nf.typ||"haupt")?`<label class="fl">Passt zu</label>
     <div class="pickrow">${["f","m","a"].map(v=>`<button aria-pressed="${nf.ma.includes(v)}" onclick="nfSet('ma','${v}')">${MAHL[v]}</button>`).join("")}</div>`:""}
     <div style="display:flex;gap:10px">
-      <div style="flex:1"><label class="fl" for="nfmin">Dauer in Minuten</label><input type="text" inputmode="numeric" id="nfmin" value="${nf.min}"></div>
-      <div style="flex:1"><label class="fl" for="nfp">Protein je Portion</label><input type="text" inputmode="numeric" id="nfp" value="${nf.p}"></div>
+      <div style="flex:1"><label class="fl" for="nfmin">Dauer in Minuten${nf.minAuto!==false?' <em style="font-weight:400;font-style:normal;color:var(--ink-3)">geschätzt</em>':""}</label><input type="text" inputmode="numeric" id="nfmin" value="${nf.min}"></div>
+      <div style="flex:1"><label class="fl" for="nfp">Protein je Portion${nf.pAuto!==false?' <em style="font-weight:400;font-style:normal;color:var(--ink-3)">geschätzt</em>':""}</label><input type="text" inputmode="numeric" id="nfp" value="${nf.p}"></div>
     </div>
     <label class="fl" for="nfz">Zutaten für eine Portion, eine je Zeile</label>
     <textarea id="nfz" rows="7" placeholder="200 g Möhren&#10;1 Dose Kichererbsen&#10;1,5 EL Olivenöl&#10;Salz">${esc(nf.zText)}</textarea>
     <div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="nfPruefen()">Zutaten prüfen</button></div>
+    ${(nf.pAuto!==false||nf.minAuto!==false)&&zut.length?`<p class="note" style="margin-top:6px">${nf.pAuto!==false?"Protein":""}${nf.pAuto!==false&&nf.minAuto!==false?" und ":""}${nf.minAuto!==false?"Dauer":""} ${nf.pAuto!==false&&nf.minAuto!==false?"sind":"ist"} aus den Zutaten geschätzt und ${nf.pAuto!==false&&nf.minAuto!==false?"aktualisieren":"aktualisiert"} sich beim Tippen. Ein eigener Wert überschreibt die Schätzung dauerhaft.</p>`:""}
     ${zut.length?`<div class="card" style="margin-top:8px">
       ${zut.map(([n,q,e,k])=>`<div class="zline"><span>${esc(n)}</span><span><em>${q?fmt(q,e):"nach Bedarf"} · ${ABT[k]}</em></span></div>`).join("")}
       ${unklar?`<p class="note" style="margin-top:9px">${unklar} Zutat${unklar>1?"en konnten":" konnte"} keiner Abteilung zugeordnet werden und landet unter Sonstiges. Andere Schreibweise hilft oft, etwa „Möhren“ statt „Karotten“.</p>`:""}
@@ -1206,6 +1540,7 @@ function rezeptUrsprung(id){
 function nfSpeichern(){
   nfLesen();
   if(!nf.n.trim()){alert("Das Rezept braucht einen Namen.");return;}
+  schaetzungAuffrischen();
   const id=nf.id||neueId("u");
   const typ=nf.typ||"haupt";
   const r={id,n:nf.n.trim(),k:nf.k,typ,ma:["haupt","fruehstueck"].includes(typ)?nf.ma:[],m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
@@ -1902,7 +2237,8 @@ function fotoAufnehmen(){ const f=document.getElementById("fotokamera"); if(f&&f
 function fotoWaehlen(){ const f=document.getElementById("fotowahl"); if(f&&f.click){f.value="";f.click();} }
 async function fotoLesen(datei){
   if(!datei) return;
-  nf=nf||{}; nf.status="Texterkennung wird geladen …"; formZeigen(true);
+  if(!nf||!nf.ma) nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",pAuto:true,minAuto:true};
+  nf.status="Texterkennung wird geladen …"; formZeigen(true);
   let T;
   try{ T=await tesseract(); }
   catch(e){ nf.status="Die Texterkennung ließ sich nicht laden. Dafür braucht es eine Internetverbindung."; formZeigen(true); return; }
@@ -1920,17 +2256,11 @@ async function fotoLesen(datei){
     formZeigen(true);
   }
 }
-function fotoUebernehmen(text){
-  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Erkannter Text</h2>
-    <p class="note" style="margin:8px 0 12px">Texterkennung aus Fotos ist nie perfekt. Korrigier grobe Fehler hier, dann teilt die App den Text in Zutaten und Zubereitung auf.</p>
-    <textarea id="roh" rows="14">${esc(text)}</textarea>
-    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="textAufteilen()">Aufteilen und übernehmen</button>
-    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="formZeigen()">Zurück zum Formular</button>`);
-}
+function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="2.8";
+const VERSION="3.0";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2485,7 +2815,7 @@ function trefferHtml(){
     const drin=!!S.sammlung[r.id];
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}</div>
-      <div class="rec-m">${TYP[typVon(r)].toUpperCase()}${r.ma.length?" · "+r.ma.map(x=>MAHL[x].toUpperCase()).join(" · "):""} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
+      <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span></div>
     </div>${drin
       ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">🗑</button>`
@@ -2616,7 +2946,7 @@ function vEntdecken(){
   return kopf+`<p class="note" style="margin-bottom:12px">${hinweis}</p>
     <div class="deck"><div class="swipe" id="sw">
       <div class="stamp stamp-y" id="sy">Merken</div><div class="stamp stamp-n" id="sn">Nein</div>
-      <div class="rec-tags" style="margin-bottom:12px"><span class="tag ${tag}">${lbl}</span><span class="tag t-neutral">${r.ma.map(x=>MAHL[x]).join(" · ")}</span><span class="tag t-neutral">${r.min} Min</span>${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.m.includes(monat())?'<span class="tag t-sun">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
+      <div class="rec-tags" style="margin-bottom:12px"><span class="tag ${tag}">${lbl}</span><span class="tag t-neutral">${TYP[typVon(r)]}</span><span class="tag t-neutral">${r.min} Min</span>${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.m.includes(monat())?'<span class="tag t-sun">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
       <h3>${esc(r.n)}</h3><p class="why">${esc(r.why)}</p>
       ${r.q?`<p style="margin-top:8px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13.5px">Originalrezept öffnen</a></p>`:""}
       <div class="ing"><b>Zutaten</b><br>${r.z.map(z=>esc(z[0])).join(" · ")}</div>
