@@ -210,7 +210,8 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 <nav id="nav"></nav>
 <div id="sheet"></div>
 <input type="file" id="pdfwahl" accept="application/pdf,.pdf" multiple style="display:none">
-<input type="file" id="fotowahl" accept="image/*" capture="environment" style="display:none">
+<!-- ohne capture, sonst öffnet das Handy sofort die Kamera statt der Dateiauswahl -->
+<input type="file" id="fotowahl" accept="image/*" style="display:none">
 <script>
 const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
 const SOMMER=[5,6,7,8,9], WINTER=[10,11,12,1,2,3], HERBST=[9,10,11], KALT=[11,12,1,2];
@@ -1165,7 +1166,7 @@ function formZeigen(behalten){
     <div class="row-btns" style="margin-top:8px">
       <button class="btn btn-s${cfg.leser?" btn-primary":""}" onclick="ausLinkHolen()">Aus Link holen</button>
       <button class="btn btn-s" onclick="textEinfuegen()">Rezepttext einfügen</button>
-      <button class="btn btn-s" onclick="fotoWaehlen()">Aus Foto lesen</button>
+      <button class="btn btn-s" onclick="fotoWaehlen()">Aus Bild lesen</button>
       ${nf.port>1?`<button class="btn btn-s" onclick="aufEinePortion()">Von ${nf.port} auf 1 Portion rechnen</button>`:""}
     </div>
     ${nf.status?`<p class="note" style="margin-top:8px;color:var(--sea)">${esc(nf.status)}</p>`:""}
@@ -1341,11 +1342,15 @@ const wocheHatAngebote=w=>angeboteFuerWoche(w).length>0;
 
 /* Produktnamen bei Aldi tragen Marken und Größen mit sich. Deshalb wird
    wortweise verglichen: "Meine Metzgerei Puten-Geschnetzeltes" trifft "Putenschnitzel". */
+/* Vier Buchstaben genügen, sonst fielen Feta, Reis und Eier durchs Raster.
+   Damit dabei keine Markennamen treffen, ist die Sperrliste entsprechend länger. */
 const ANG_STOPP=new Set(["meine","aldi","aktion","gramm","packung","frisch","deutscher","deutsche","marken",
  "artikel","produkt","stueck","sorten","verschiedene","classic","original","family","gutbio","bio","tiefgekuehlt",
- "gekuehlt","angebot","kracher","aktionspreis","preis","stueckpreis","ursprung","klasse","preise"]);
+ "gekuehlt","angebot","kracher","aktionspreis","preis","stueckpreis","ursprung","klasse","preise",
+ "gold","neue","gute","fein","feine","natur","haus","land","alpen","best","beste","extra","pack","stk",
+ "gross","klein","mini","maxi","hell","dunkel","zart","mild","edel","pure","plus","auch","ohne","voll"]);
 function angebotWorte(o){
-  return slug(o).split("_").filter(t=>t.length>=5&&!ANG_STOPP.has(t));
+  return slug(o).split("_").filter(t=>t.length>=4&&!ANG_STOPP.has(t));
 }
 /* Nur eine Richtung: die Zutat darf das Angebotswort enthalten, nicht umgekehrt.
    Sonst trifft "Gartenschlauch" die Zutat "Lauch". Dazu ein Wortstamm-Vergleich
@@ -1539,7 +1544,16 @@ function pdfBibliothek(){
   pdfLaden=new Promise((ok,fehler)=>{
     const s=document.createElement("script");
     s.src=PDFJS_URL;
-    s.onload=()=>{ if(window.pdfjsLib){window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER; ok(window.pdfjsLib);} else fehler(new Error("nicht geladen")); };
+    s.onload=()=>{
+      if(!window.pdfjsLib){ fehler(new Error("nicht geladen")); return; }
+      /* Ein Arbeiter von fremder Herkunft wird vom Browser abgelehnt. Der Umweg über
+         eine kleine lokale Datei, die den fremden Code nachlädt, ist erlaubt. */
+      try{
+        const brueckenCode='importScripts("'+PDFJS_WORKER+'");';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([brueckenCode],{type:"application/javascript"}));
+      }catch(e){ window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER; }
+      ok(window.pdfjsLib);
+    };
     s.onerror=()=>fehler(new Error("nicht erreichbar"));
     document.head.appendChild(s);
   });
@@ -1606,13 +1620,16 @@ async function prospektLesen(dateien){
   melde("Programmteil zum Lesen von PDFs wird geladen …");
   let pdfjs;
   try{ pdfjs=await pdfBibliothek(); }
-  catch(e){ melde("Der PDF-Leser konnte nicht geladen werden. Dafür braucht es einmalig eine Internetverbindung."); return; }
+  catch(e){ melde("Der PDF-Leser ließ sich nicht laden ("+((e&&e.message)||"unbekannt")+"). Dafür braucht es einmalig eine Internetverbindung."); return; }
 
   const bericht=[];
   for(let n=0;n<liste.length;n++){
     const datei=liste[n];
     try{
-      const dok=await pdfjs.getDocument({data:await datei.arrayBuffer()}).promise;
+      const puffer=await datei.arrayBuffer();
+      /* Auf dem Handy ist Arbeitsspeicher knapp: Schriften und Bilder werden nicht gebraucht */
+      const dok=await pdfjs.getDocument({data:new Uint8Array(puffer),disableFontFace:true,
+        isEvalSupported:false,useSystemFonts:false}).promise;
       let zeilen=[], roh="";
       for(let s=1;s<=dok.numPages;s++){
         melde("Datei "+(n+1)+" von "+liste.length+", Seite "+s+" von "+dok.numPages+" …");
@@ -1626,7 +1643,7 @@ async function prospektLesen(dateien){
       const id="p"+(bis||von||("x"+n));
       mut("angebote/"+id,{von,bis,items:produkte,quelle:datei.name.slice(0,60),geholt:Date.now()},false);
       bericht.push((von&&bis?new Date(von).toLocaleDateString("de-DE")+"–"+new Date(bis).toLocaleDateString("de-DE"):"ohne Zeitraum")+": "+produkte.length+" Einträge");
-    }catch(e){ bericht.push(datei.name+": nicht lesbar"); }
+    }catch(e){ bericht.push(datei.name.slice(0,28)+": nicht lesbar ("+((e&&e.message)||"unbekannt").slice(0,60)+")"); }
   }
   melde(bericht.join(" · "));
   render();
@@ -1839,6 +1856,7 @@ function tesseract(){
   });
   return tessLaden;
 }
+/* Ohne capture-Attribut bietet das Gerät Kamera, Galerie und Dateien zur Auswahl an */
 function fotoWaehlen(){ const f=document.getElementById("fotowahl"); if(f&&f.click){f.value="";f.click();} }
 async function fotoLesen(datei){
   if(!datei) return;
@@ -1852,7 +1870,7 @@ async function fotoLesen(datei){
     const bild=await bildVerkleinern(datei,1800,0.9);
     const {data}=await T.recognize(bild,"deu");
     const text=(data&&data.text||"").replace(/\u00a0/g," ").trim();
-    if(!text||text.length<25){ nf.status="Auf dem Bild war kaum Text zu erkennen. Bei Kochbuchseiten hilft gerades Halten und viel Licht."; formZeigen(true); return; }
+    if(!text||text.length<25){ nf.status="Auf dem Bild war kaum Text zu erkennen. Bei Kochbuchseiten hilft gerades Halten, viel Licht und ein Ausschnitt, der nur den Text zeigt."; formZeigen(true); return; }
     document.getElementById("roh")||0;
     nf.rohtext=text;
     fotoUebernehmen(text);
@@ -1871,7 +1889,7 @@ function fotoUebernehmen(text){
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="2.5";
+const VERSION="2.7";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -1891,12 +1909,21 @@ let tab="woche", filter="alle", suche="", routeOffen=false, es=null, syncState="
 
 /* Firebase speichert leere Listen nicht – nach einem Sync fehlen dann Felder wie
    z, s oder nut. Deshalb wird jedes eigene Rezept beim Lesen vervollständigt. */
+const ZUT_FLEISCH=/h(ä|ae)hnchen|pute|huhn|rind|hack|schnitzel|geschnetzeltes|schenkel|leberk|salami|speck|schinken|w(ü|ue)rst|chorizo|gyros|steak|lamm|kalb|ente|bacon/i;
+const ZUT_FISCH=/lachs|kabeljau|forelle|seelachs|thunfisch|garnele|fischst(ä|ae)bchen|backfisch|hering|makrele|scholle|dorsch|sardell|anchovi/i;
+/* Wer Hackfleisch einträgt, meint kein vegetarisches Gericht – das wird automatisch berichtigt */
+function artAusZutaten(z,jetzt){
+  const text=(z||[]).map(x=>Array.isArray(x)?x[0]:"").join(" | ");
+  if(ZUT_FISCH.test(text)) return "fisch";
+  if(ZUT_FLEISCH.test(text)) return "fleisch";
+  return jetzt||"veg";
+}
 function rezeptNorm(r){
   if(!r||typeof r!=="object"||!r.n) return null;
   const arr=(x,f)=>Array.isArray(x)?x:(x&&typeof x==="object"?Object.values(x):f);
   return {...r,
     id:r.id, n:String(r.n),
-    k:["veg","fisch","fleisch"].includes(r.k)?r.k:"veg",
+    k:artAusZutaten(arr(r.z,[]),["veg","fisch","fleisch"].includes(r.k)?r.k:"veg"),
     ma:(arr(r.ma,[]).filter(x=>MAHL[x])).length?arr(r.ma,[]).filter(x=>MAHL[x]):["a"],
     m:arr(r.m,[]).length?arr(r.m,[]):ALL,
     min:+r.min||30, p:+r.p||20, bl:[0,1,2].includes(r.bl)?r.bl:0,
@@ -2004,25 +2031,29 @@ const stempel=v=>{
   if(!v||typeof v!=="object")return 0;
   return v.geaendert||v.ts||v.erstellt||0;
 };
+/* Alle Sammlungen werden eintragsweise gemischt. Die Liste wird aus leer()
+   abgeleitet, damit ein neues Feld nie wieder vergessen wird. */
+const SAMMELFELDER=()=>Object.entries(leer())
+  .filter(([k,v])=>v&&typeof v==="object"&&!Array.isArray(v))
+  .map(([k])=>k);
 function zusammenfuehren(fern){
   const vorher=JSON.stringify(S);
   const neu={...leer()};
-  ["sammlung","spaeter","archiv","geprueft","plan","liste","verlauf","vorrat","eigene"].forEach(f=>{
+  SAMMELFELDER().forEach(f=>{
     const lokal=S[f]||{}, entfernt=(fern&&fern[f])||{};
     const raus={...entfernt};
     Object.entries(lokal).forEach(([k,v])=>{
       const r=entfernt[k];
       if(r===undefined){raus[k]=v;return;}
-      if(typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
+      if(v&&r&&typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
     });
     neu[f]=raus;
   });
   neu.route=(fern&&fern.route)||S.route;
   neu.still=fern&&fern.still!==undefined?fern.still:S.still;
   neu.portionStd=(fern&&fern.portionStd)||S.portionStd||2;
-  neu.angebote=(fern&&fern.angebote&&(fern.angebote.geholt||0)>=((S.angebote&&S.angebote.geholt)||0))?fern.angebote:(S.angebote||{items:[],bis:""});
   S=neu; schreibenLokal();
-  const kern=x=>JSON.stringify(["sammlung","plan","liste","eigene","vorrat"].map(f=>(x&&x[f])||{}));
+  const kern=x=>JSON.stringify(SAMMELFELDER().map(f=>(x&&x[f])||{}));
   if(kern(fern)!==kern(neu)) senden("",S);
   if(vorher!==JSON.stringify(S)) render();
 }
@@ -2117,7 +2148,7 @@ function vWoche(){
       return `<p class="note" style="margin-top:9px${knapp?";color:var(--gold)":""}">Im Schnitt ${sch} g Protein pro Tag${knapp?` – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen; ein Snack schließt die Lücke.`:", Ziel erreicht."}</p>
         ${knapp?`<button class="btn btn-s" style="margin-top:6px" onclick="proteinSnack()">Protein-Snack für die Woche ergänzen</button>`:""}`;})()}
     <p class="note" style="margin-top:9px">${wocheHatAngebote(planWoche)?`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`:`Für ${kwPlus(planWoche)} ist kein Prospekt hinterlegt.`}</p>
-    ${belegt?`<p class="note" style="margin-top:4px">${offen.length?"Noch ohne Beilage in dieser Woche: "+offen.map(k=>KH[k]).join(", ")+".":"Alle Beilagen sind in dieser Woche vertreten."}</p>`:""}
+    ${belegt&&offen.length?`<p class="note" style="margin-top:4px">Beilagen noch nicht vertreten: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""}
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="autoWoche()">Woche vorschlagen</button>
       <button class="btn btn-s" onclick="if(confirm('Plan dieser Woche leeren?'))leereWoche()">Plan leeren</button>
@@ -2136,11 +2167,10 @@ function vWoche(){
         if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-e">+ Gericht wählen</span></button></div>`;
         const [lbl,,dot]=KIND[r.k];
-        const ang=imAngebot(r);
         return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
           <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
             <span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${S.still&&r.bl===2?" · blähend":""}${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}<span class="pill">${KH[khVon(r)]}</span>${ang.length?'<span class="pill" style="background:var(--sun-bg);color:var(--sun);border-color:var(--sun)">Im Angebot</span>':""}</span></span></button>
+            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}</span></span></button>
           <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
           <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">✕</button></div>`;
       }).join("")}
@@ -2194,7 +2224,7 @@ function waehle(k,mk){
       return `<div class="rec ${kk}" onclick="setSlot('${k}','${r.id}')"><div class="rec-b">
         <div class="rec-t">${esc(r.n)}</div>
         <div class="rec-m">${r.min} MIN${benutzt.has(r.id)?" · SCHON GEPLANT":""}</div>
-        <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${KH[khVon(r)]}${fehlt.has(khVon(r))?" · fehlt noch":""}</span>${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}<span class="pill">${r.p} g Protein</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${r.nut.includes("jod")?'<span class="tag t-neutral">Jod</span>':""}</div>
+        <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span></div>
       </div><span class="add-b">+</span></div>`;}).join("");
   };
   /* Wie bei der Suche: nur die Trefferliste tauschen, damit die Tastatur offen bleibt */
@@ -2208,7 +2238,7 @@ function setSlot(k,rid){mut("plan/"+k,{r:rid,p:S.portionStd||2});if(!S.sammlung[
 
 /* Wochenvorschlag: genau 1× Fisch, 1× Fleisch, Rest vegetarisch */
 function autoWoche(){
-  if(planStat().belegt&&!confirm("Plan dieser Woche überschreiben?"))return;
+
   const m=monat();
   const kürzlich=new Set(Object.values(S.verlauf||{}).slice(-25).map(v=>v.r));
   const sam=r=>S.sammlung[r.id];
@@ -2225,7 +2255,14 @@ function autoWoche(){
     +(imAngebot(r).length?4:0)                    /* was gerade im Prospekt steht */
     -1.8*(khZahl[khVon(r)]||0)                    /* je öfter eine Beilage schon vorkommt, desto unattraktiver */
     +Math.random()*2;
-  const plan={},benutzt=new Set(),blTag=[0,0,0,0,0,0,0];
+  /* Bereits Eingetragenes bleibt stehen – vorgeschlagen wird nur für freie Felder */
+  const plan={}; slots().forEach(k=>{ if(S.plan[k]&&R(S.plan[k].r)) plan[k]=S.plan[k]; });
+  const benutzt=new Set(Object.values(plan).map(e=>e.r));
+  const blTag=[0,0,0,0,0,0,0];
+  slots().forEach(k=>{const e=plan[k];const r=e&&R(e.r);if(r&&r.bl===2)blTag[slotTag(k)]++;});
+  Object.values(plan).forEach(e=>{const r=R(e.r);if(r){const b=khVon(r);khZahl[b]=(khZahl[b]||0)+1;}});
+  const schonFisch=Object.values(plan).filter(e=>(R(e.r)||{}).k==="fisch").length;
+  const schonFleisch=Object.values(plan).filter(e=>(R(e.r)||{}).k==="fleisch").length;
   const nimm=(k,mk,arten)=>{
     const d=slotTag(k);
     const p=pool(mk).filter(r=>arten.includes(r.k));
@@ -2242,10 +2279,11 @@ function autoWoche(){
     const b=khVon(r); khZahl[b]=(khZahl[b]||0)+1;
   };
   const warm=[];for(let d=0;d<7;d++){warm.push("w"+planWoche+"-"+d+"-m");warm.push("w"+planWoche+"-"+d+"-a");}
-  const fischSlot=warm[Math.floor(Math.random()*warm.length)];
-  let fleischSlot;do{fleischSlot=warm[Math.floor(Math.random()*warm.length)];}while(fleischSlot===fischSlot);
-  nimm(fischSlot,slotMahl(fischSlot),["fisch"]);
-  nimm(fleischSlot,slotMahl(fleischSlot),["fleisch"]);
+  const freieWarm=warm.filter(k=>!plan[k]);
+  const zufaellig=a=>a[Math.floor(Math.random()*a.length)];
+  if(schonFisch<1&&freieWarm.length){ const k=zufaellig(freieWarm); nimm(k,slotMahl(k),["fisch"]); }
+  const freieWarm2=warm.filter(k=>!plan[k]);
+  if(schonFleisch<1&&freieWarm2.length){ const k=zufaellig(freieWarm2); nimm(k,slotMahl(k),["fleisch"]); }
   slots().forEach(k=>{if(plan[k])return;nimm(k,slotMahl(k),["veg"]);});
   /* Immer mindestens ein Gericht, das ihr noch nie gekocht habt */
   const gekocht=new Set(Object.values(S.verlauf||{}).map(v=>v.r));
@@ -2328,7 +2366,7 @@ function trefferHtml(){
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
   if(["f","m","a"].includes(filter))list=list.filter(r=>r.ma.includes(filter));
   if(filter==="saison")list=list.filter(r=>r.m.includes(m));
-  if(filter==="mild")list=list.filter(r=>r.bl===0);
+  if(filter==="darm")list=list.filter(r=>r.bl===0);
   if(filter==="kurz")list=list.filter(r=>r.min<=25);
   if(filter==="asana")list=list.filter(r=>r.src==="asana");
   if(filter==="eigen")list=list.filter(r=>r.src==="eigen");
@@ -2343,13 +2381,14 @@ function trefferHtml(){
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}</div>
       <div class="rec-m">${TYP[typVon(r)].toUpperCase()}${r.ma.length?" · "+r.ma.map(x=>MAHL[x].toUpperCase()).join(" · "):""} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
-      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span>${r.m.includes(m)?'<span class="tag t-veg">Saison</span>':""}${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.src==="eigen"?'<span class="tag t-veg">Eigenes</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}<span class="pill">${KH[khVon(r)]}</span><span class="pill">${r.p} g Protein</span>${r.nut.slice(0,1).map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}</div>
-    </div>${drin?"":`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">+</button>`}</div>`;}).join("");
+      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span></div>
+    </div>${drin
+      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">🗑</button>`
+      :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">+</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
-  return [["alle","Alle"],["saison","Saison"],["kurz","Unter 25 Min"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
+  return [["alle","Alle"],["kurz","Unter 25 Min"],["darm","Darmfreundlich"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
           ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["snack","Snacks"],["dessert","Desserts"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"],["alles","Alle Rezepte"]]
-    .concat(S.still?[["mild","Magenfreundlich"]]:[])
     .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="setFilter('${v}')">${l}</button>`).join("");
 }
 /* Nur Chips und Treffer austauschen – das Suchfeld bleibt stehen und behält den Fokus */
@@ -2361,11 +2400,54 @@ function teilRender(){
 function sucheAendern(v){suche=v;teilRender();}
 function setFilter(v){filter=v;teilRender();}
 function vRezepte(){
-  return `<div class="row-btns" style="margin-bottom:10px"><button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button></div>
+  return `${letztesWeg?`<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
+      <span style="flex:1">Rezept entfernt.</span>
+      <button class="btn btn-s" onclick="rezeptZurueck()">Rückgängig</button>
+      <button class="btn btn-ghost btn-s" onclick="letztesWeg=null;render()">✕</button></div>`:""}
+    <div class="row-btns" style="margin-bottom:10px"><button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button></div>
     <input type="search" id="sq" placeholder="Rezept suchen" value="${esc(suche)}" oninput="sucheAendern(this.value)" style="margin-bottom:12px">
     <div class="chips" id="chipzeile">${chipsHtml()}</div>
     <div id="trefferliste">${trefferHtml()}</div>`;
 }
+/* Eigene Rezepte werden gelöscht, mitgelieferte nur aus der Sammlung genommen */
+function rezeptWeg(id){
+  const r=R(id); if(!r) return;
+  const eigen=!!(S.eigene&&S.eigene[id]);
+  const geplant=Object.entries(S.plan||{}).filter(([,e])=>e&&e.r===id).length
+              + Object.entries(S.extra||{}).filter(([,e])=>e&&e.r===id).length;
+  const frage=eigen?"Rezept löschen?":"Aus der Sammlung nehmen?";
+  const text=eigen
+    ? "„"+r.n+"“ wird endgültig gelöscht."+(geplant?" Es steht noch "+geplant+"× im Plan und verschwindet dort ebenfalls.":"")
+    : "„"+r.n+"“ verschwindet aus deinen Rezepten. Über den Filter „Alle Rezepte“ kannst du es jederzeit zurückholen.";
+  openSheet(`<div class="grab"></div><h2 style="font-size:19px">${esc(frage)}</h2>
+    <p class="note" style="margin:8px 0 14px">${esc(text)}</p>
+    <div class="row-btns">
+      <button class="btn" style="flex:1" onclick="closeSheet()">Abbrechen</button>
+      <button class="btn btn-primary" style="flex:1;background:var(--beet);border-color:var(--beet)" onclick="rezeptWegJetzt('${id}',${eigen})">🗑 ${eigen?"Löschen":"Entfernen"}</button>
+    </div>`);
+}
+function rezeptWegJetzt(id,eigen){
+  const kopie=S.eigene&&S.eigene[id]?{...S.eigene[id]}:null;
+  Object.keys(S.plan||{}).forEach(k=>{ if(S.plan[k]&&S.plan[k].r===id) setPfad(S,"plan/"+k,null); });
+  Object.keys(S.extra||{}).forEach(k=>{ if(S.extra[k]&&S.extra[k].r===id) setPfad(S,"extra/"+k,null); });
+  mut("plan",S.plan,false); mut("extra",S.extra,false);
+  mut("sammlung/"+id,null,false);
+  if(eigen) mut("eigene/"+id,null,false);
+  closeSheet();
+  hinweisWeg(id,eigen,kopie);
+}
+let letztesWeg=null;
+function hinweisWeg(id,eigen,kopie){
+  letztesWeg={id,eigen,kopie};
+  render();
+}
+function rezeptZurueck(){
+  if(!letztesWeg) return;
+  const {id,eigen,kopie}=letztesWeg; letztesWeg=null;
+  if(eigen&&kopie) mut("eigene/"+id,kopie,false);
+  mut("sammlung/"+id,Date.now());
+}
+
 function detail(id,slotK){
   const r=R(id);if(!r)return;
   let p=slotK&&S.plan[slotK]?(S.plan[slotK].p||2):2;
@@ -2382,6 +2464,7 @@ function detail(id,slotK){
            :`<button class="btn btn-primary btn-wide" onclick="einplanen('${r.id}')">Einplanen</button>`}
     <button class="btn btn-wide" style="margin-top:6px" onclick="kochModus('${r.id}',${p})">Kochmodus</button>
     ${r.src==="eigen"?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>`:""}
+    ${S.sammlung[r.id]?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptWeg('${r.id}')">🗑 ${S.eigene&&S.eigene[r.id]?"Rezept löschen":"Aus der Sammlung nehmen"}</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button></div>`;
   window.dp=d=>{p=Math.max(1,p+d);openSheet(body(),true);};
   openSheet(body());
@@ -2521,6 +2604,8 @@ function listeBauen(){
   });
   /* Beim zweiten Einkauf der Woche zählt nur, was noch fehlt */
   const liste={};
+  /* Von Hand ergänzte Posten bleiben immer erhalten */
+  Object.entries(S.liste||{}).forEach(([id,i])=>{ if(i&&i.manuell) liste[id]=i; });
   map.forEach((v,id)=>{
     const alt=S.liste[id];
     const schon=alt?(alt.gekauft||(alt.on?(alt.q||0):0)):0;
@@ -2541,7 +2626,12 @@ function vEinkauf(){
     <button class="chip" onclick="zusatzAnlegen()">+ Liste</button></div>`;
   if(einkaufAnsicht!=="woche") return wahl+vZusatz(einkaufAnsicht);
   const eintraege=Object.entries(S.liste||{});
-  if(!eintraege.length)return wahl+`<div class="empty"><b>Liste ist leer</b>Plane zuerst die Woche, dann baut die App die Liste und sortiert sie nach dem Weg durch den Markt.<div style="margin-top:14px"><button class="btn btn-primary" onclick="go('woche')">Zur Woche</button></div></div>`;
+  if(!eintraege.length)return wahl+`<div class="empty"><b>Noch nichts auf der Liste</b>
+      Plane die Woche, dann baut die App die Liste und sortiert sie nach dem Weg durch den Markt. Was dir jetzt schon einfällt, kannst du direkt eintragen – es bleibt erhalten.</div>
+    <div class="card"><div style="display:flex;gap:8px">
+      <input type="text" id="mi" placeholder="Etwas ergänzen" onkeydown="if(event.key==='Enter')manuell()">
+      <button class="btn" onclick="manuell()">Hinzufügen</button></div></div>
+    <button class="btn btn-wide" style="margin-top:10px" onclick="go('woche')">Zur Wochenplanung</button>`;
   const fertig=eintraege.filter(([,i])=>i.on).length,ges=eintraege.length;
   const stops=S.route.map(k=>({k,items:eintraege.filter(([,i])=>i.k===k)})).filter(s=>s.items.length);
   const route=stops.map((s,n)=>{
@@ -2582,8 +2672,16 @@ function posten(id,an){
   mut("liste/"+id,{...i,on:an,gekauft:an?((i.gekauft||0)+(i.q||0)):Math.max(0,(i.gekauft||0)-(i.q||0))});
 }
 function mv(i,d){const j=i+d;if(j<0||j>=S.route.length)return;const a=[...S.route];[a[i],a[j]]=[a[j],a[i]];mut("route",a);}
-function manuell(){const el=document.getElementById("mi"),n=el.value.trim();if(!n)return;
-  mut("liste/"+slug(n+"_manuell"),{n,q:0,e:"",k:"so",on:false,nach:true});el.value="";}
+function manuell(){
+  const el=document.getElementById("mi"); if(!el) return;
+  const n=el.value.trim(); if(!n) return;
+  el.value="";
+  mut("liste/"+slug(n+"_manuell"),{n,q:0,e:"",k:zutatAbteilung(n),on:false,nach:true,manuell:true,
+    ang:zutatImAngebot(n,planWoche)||""});
+  const neu=document.getElementById("mi"); if(neu&&neu.focus)neu.focus();
+}
+/* Für von Hand ergänzte Posten die passende Abteilung raten */
+function zutatAbteilung(n){ try{ return katFuer(n); }catch(e){ return "so"; } }
 
 /* ============ Mehr ============ */
 function vMehr(){
