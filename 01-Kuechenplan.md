@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 3.2**, Stand 11. August 2026. Datei rund 265 KB, 3663 Zeilen, 134 Rezepte.
-Die Testreihen unter `tests/` prüfen 261 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 3.3**, Stand 11. August 2026. Datei rund 272 KB, 3814 Zeilen, 134 Rezepte.
+Die Testreihen unter `tests/` prüfen 294 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -71,7 +71,7 @@ S = {
   spaeter:   { rezeptId: zeitstempel },              // einmal weggewischt, kommt nach 30 Tagen wieder
   archiv:    { rezeptId: zeitstempel },              // zweimal weggewischt oder aussortiert
   geprueft:  { rezeptId: zeitstempel },              // im Aufräum-Stapel behalten, 90 Tage Ruhe
-  eigene:    { rezeptId: rezeptObjekt },             // selbst angelegt oder importiert
+  eigene:    { rezeptId: rezeptObjekt },             // selbst angelegt, importiert oder Schnellgericht
   angebote:  { "p<datum>": {von,bis,items[],quelle,geholt} },   // ein Eintrag je Prospekt
   quellen:   { id: {n,u,an} },                       // Rezeptblogs für die Feed-Ansicht
   extra:     { "w<woche>_<id>": {r,p} },             // Gerichte außerhalb des Wochenplans
@@ -104,7 +104,7 @@ S = {
   z: [[name, mengeProPortion, einheit, abteilung], ...],
   s: ["Schritt 1", ...],
   q: "https://…",             // optional: Originalquelle
-  src: "asana"|"eigen"        // optional: Herkunft
+  src: "asana"|"eigen"|"schnell"  // "schnell" = ohne Rezept eingetragen, nicht in RZ()
 }
 ```
 
@@ -299,6 +299,41 @@ Der Zeitraum eines Prospekts wird gegen die Kalenderwoche der Planwoche geprüft
 
 **Das Label „Angebot" erscheint ausschließlich in der Einkaufsliste**, nicht auf
 Rezeptkarten oder im Plan.
+
+---
+
+## 10a. Schnellgerichte – ohne Rezept einplanen
+
+Nicht alles verdient ein Rezept. „Brot mit Käse und Tomaten" oder „Reste von gestern"
+lassen sich direkt dort eintragen, wo geplant wird: im Fenster „Gericht wählen" und bei
+den Zusatzgerichten steht oben **„✎ Eigenes Gericht eintragen"**. Name genügt, Zutaten
+sind freiwillig (eine je Zeile, wie im Rezeptformular).
+
+Alles Weitere leitet die App ab und fragt nicht nach:
+
+| Feld | Woher |
+|---|---|
+| Zutaten mit Menge, Einheit, Abteilung | `parseZutaten()`, wie beim Import |
+| Art (veg/fisch/fleisch) | `artAusZutaten()` |
+| Protein | `proteinSchaetzen()` |
+| Zubereitungszeit | `dauerSchaetzen()`, ohne Zutaten pauschal 10 Min |
+| Mahlzeit | der Platz, in den eingetragen wird |
+
+**Technisch ein Rezept, aber nicht in der Sammlung.** Ein Schnellgericht liegt in
+`S.eigene` mit `src:"schnell"`. Dadurch funktionieren Einkaufsliste, Kochmodus,
+Wochenabschluss und die Herkunftsanzeige unverändert. Aus `RZ()` ist es ausgeschlossen –
+es taucht also **nicht** auf in Rezeptliste, Wochenvorschlag, Entdecken-Stapel und
+Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
+
+- **Wiederfinden:** eigener Filter „Schnellgerichte" in der Rezeptansicht, dort auch löschen
+  (mit Rücknahme über die Meldungsleiste).
+- **Ohne Zutaten:** steht nur im Plan, erzeugt keine Einkäufe – für „Reste" oder „bestellt".
+- **Aufräumen:** Was seit `SCHNELL_FRIST` (60 Tage) in keinem Plan, keinem Zusatzgericht
+  und keinem Verlauf mehr vorkommt, verschwindet beim Wochenabschluss von selbst –
+  mit Grabstein, damit der Abgleich es nicht zurückholt.
+- **Beförderung:** Ab `SCHNELL_SCHWELLE` (3× gekocht) bietet die App nach dem
+  Wochenabschluss an, daraus ein richtiges Rezept zu machen; `schnellAufnehmen()` öffnet
+  das Formular mit Name und Zutaten vorbefüllt. Derselbe Knopf steht auf der Karte.
 
 ---
 

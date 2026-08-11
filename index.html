@@ -232,6 +232,15 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 .woher{display:flex;flex-direction:column;gap:2px;background:transparent;border:0;padding:12px 13px;
   font-family:var(--mono);font-size:13px;color:var(--ink-2);white-space:nowrap;flex:none;align-items:flex-end;justify-content:center}
 .woher .fuerwen{font-family:var(--sans);font-size:10.5px;color:var(--ink-3);text-transform:none}
+/* SCHNELLGERICHT */
+.schnellbox { border: 1.5px dashed var(--line-2); border-radius: var(--r-s); margin-bottom: 12px; background: var(--card); }
+.schnellbox > summary { list-style: none; cursor: pointer; padding: 11px 13px; font-size: 14px; font-weight: 600; }
+.schnellbox > summary::-webkit-details-marker { display: none; }
+.schnellbox .leise { font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-left: 6px; }
+.schnellbox[open] > summary { border-bottom: 1px solid var(--line); }
+.schnellinhalt { padding: 4px 13px 13px; }
+.schnellinhalt input, .schnellinhalt textarea { width: 100%; }
+
 </style>
 </head>
 <body>
@@ -2164,6 +2173,7 @@ function extraWaehlen(){
   window.ext=t=>{typF=t;openSheet(body(),true);};
   const body=()=>`<div class="grab"></div><h2 style="font-size:20px">Zusätzlich einplanen</h2>
     <p class="note" style="margin:8px 0 10px">Für alles, was nicht zum Wochenplan gehört – zum Grillen mitbringen, Snacks für unterwegs, ein Kuchen. Die Zutaten landen trotzdem auf der Einkaufsliste von ${kwPlus(planWoche)}.</p>
+    ${schnellFormular("schnellAlsExtra()","Ohne Zutaten steht es nur in der Liste und erzeugt keine Einkäufe.")}
     <div class="chips">${[["alle","Alles"],["haupt","Hauptspeise"],["snack","Snack"],["dessert","Dessert"],["fruehstueck","Frühstück"]]
       .map(([v,l])=>`<button class="chip" aria-pressed="${typF===v}" onclick="ext('${v}')">${l}</button>`).join("")}</div>
     <input type="search" placeholder="Suchen" oninput="exq(this.value)" style="margin-bottom:10px">
@@ -2321,7 +2331,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.2";
+const VERSION="3.3";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2367,12 +2377,20 @@ function rezeptNorm(r){
 /* Eigene Fassungen überschreiben mitgelieferte Rezepte derselben Kennung –
    so lässt sich ein Grundrezept bearbeiten, ohne das Original zu verlieren.
    Gelöschtes wird über die Grabsteine ausgeblendet, auch wenn ein Abgleich es zurückbringt. */
-const RZ=()=>{
+/* Schnellgerichte sind technisch Rezepte – damit funktionieren Einkaufsliste,
+   Kochmodus und Wochenabschluss unverändert. Aus der Sammlung bleiben sie aber
+   heraus: sie sollen weder in der Rezeptliste noch im Vorschlag oder im
+   Entdecken-Stapel auftauchen. */
+const istSchnell=r=>!!r&&r.src==="schnell";
+const RZ_ALLE=()=>{
   const tot=S.geloescht||{};
   const eig=Object.values(S.eigene||{}).map(rezeptNorm).filter(Boolean).filter(r=>!tot[r.id]);
   const ueber=new Set(eig.map(r=>r.id));
   return REZEPTE.filter(r=>!tot[r.id]&&!ueber.has(r.id)).concat(eig);
 };
+const RZ=()=>RZ_ALLE().filter(r=>!istSchnell(r));
+const SCHNELL=()=>RZ_ALLE().filter(istSchnell)
+  .sort((a,b)=>(b.erstellt||0)-(a.erstellt||0));
 /* Grabsteine sind bewusst klein gehalten: nur Kennung und Zeitpunkt, nach einem
    halben Jahr fallen sie weg. Ohne sie holt der Abgleich gelöschte Rezepte zurück,
    sobald ein Gerät mit altem Stand wieder online geht. */
@@ -2820,8 +2838,54 @@ function wocheAbschliessenJetzt(){
   mut("verlauf",Object.fromEntries(keys.map(k=>[k,v[k]])),false);
   mut("plan",p);
   closeSheet();
-  meldung(n?n+" Gericht"+(n===1?"":"e")+" im Verlauf vermerkt.":"Nichts vermerkt – der Plan ist geleert.");
+  schnellAufraeumen();
+  const kandidat=schnellVorschlag();
+  if(kandidat){
+    meldung(`„${kandidat.n}" habt ihr schon ${malGekocht(kandidat.id)}× gekocht.`,
+      "Als Rezept aufnehmen",()=>schnellAufnehmen(kandidat.id));
+  } else {
+    meldung(n?n+" Gericht"+(n===1?"":"e")+" im Verlauf vermerkt.":"Nichts vermerkt – der Plan ist geleert.");
+  }
 }
+/* Der Eingabeblock für ein Schnellgericht – gleich im Platz-Wähler und bei
+   den Zusatzgerichten. „aufKlick" bekommt die neue Kennung. */
+function schnellFormular(aufKlick,hinweis){
+  return `<details class="schnellbox" id="schnellbox">
+    <summary>✎ Eigenes Gericht eintragen <span class="leise">ohne Rezept anzulegen</span></summary>
+    <div class="schnellinhalt">
+      <label class="fl" for="sgn">Name</label>
+      <input type="text" id="sgn" placeholder="z. B. Brot mit Käse und Tomaten"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();${aufKlick}}">
+      <label class="fl" for="sgz">Zutaten <span class="leise">optional, eine je Zeile</span></label>
+      <textarea id="sgz" rows="4" placeholder="4 Scheiben Vollkornbrot&#10;80 g Gouda&#10;2 Tomaten"></textarea>
+      <p class="note" style="margin:6px 0 10px">${hinweis}</p>
+      <button class="btn btn-primary btn-wide" onclick="${aufKlick}">Eintragen</button>
+    </div></details>`;
+}
+function schnellFelder(){
+  const n=document.getElementById("sgn"), z=document.getElementById("sgz");
+  return { name:n?n.value:"", zutaten:z?z.value:"" };
+}
+/* Aus dem Platz-Wähler heraus: anlegen und gleich in den Platz setzen */
+function schnellInPlatz(k,mk){
+  const f=schnellFelder();
+  const id=schnellAnlegen(f.name,f.zutaten,mk);
+  if(!id){ meldung("Trag zuerst einen Namen ein."); return; }
+  setSlot(k,id);
+  const r=R(id);
+  meldung(r.z.length
+    ? `„${r.n}" eingetragen · ${r.z.length} Zutat${r.z.length===1?"":"en"} kommen auf die Einkaufsliste`
+    : `„${r.n}" eingetragen · ohne Zutaten, erzeugt keine Einkäufe`);
+}
+/* Aus den Zusatzgerichten heraus */
+function schnellAlsExtra(){
+  const f=schnellFelder();
+  const id=schnellAnlegen(f.name,f.zutaten,"a");
+  if(!id){ meldung("Trag zuerst einen Namen ein."); return; }
+  extraSetzen(id);
+  meldung(`„${R(id).n}" als Zusatzgericht eingetragen`);
+}
+
 function waehle(k,mk){
   let q="";
   const treffer=()=>{
@@ -2844,12 +2908,92 @@ function waehle(k,mk){
   };
   /* Wie bei der Suche: nur die Trefferliste tauschen, damit die Tastatur offen bleibt */
   window.wq=v=>{q=v;const el=document.getElementById("wtreffer");if(el)el.innerHTML=treffer();};
+  window.__schnellHier=()=>schnellInPlatz(k,mk);
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[slotTag(k)]}</h2>
+    ${schnellFormular("__schnellHier()","Ohne Zutaten steht das Gericht nur im Plan und erzeugt keine Einkäufe.")}
     <input type="search" placeholder="Suchen" oninput="wq(this.value)" style="margin:12px 0">
     <div id="wtreffer">${treffer()}</div>
     <button class="btn btn-wide btn-ghost" style="margin-top:10px" onclick="closeSheet()">Abbrechen</button>`);
 }
-function setSlot(k,rid){mut("plan/"+k,{r:rid,p:S.portionStd||2});if(!S.sammlung[rid])mut("sammlung/"+rid,Date.now(),false);closeSheet();}
+function setSlot(k,rid){
+  mut("plan/"+k,{r:rid,p:S.portionStd||2});
+  /* Schnellgerichte gehören nicht in die Sammlung – sonst stünden sie doch wieder
+     unter „Aus eurer Liste". */
+  if(!S.sammlung[rid]&&!istSchnell(R(rid))) mut("sammlung/"+rid,Date.now(),false);
+  closeSheet();
+}
+
+/* ---------- Schnellgerichte ----------
+   Für alles, wofür sich ein Rezept nicht lohnt: Name eintippen, Zutaten optional.
+   Alles Weitere leitet die App ab – Art aus den Zutaten, Protein und Dauer aus
+   den vorhandenen Schätzern. */
+const SCHNELL_FRIST=60;   /* Tage, nach denen ein ungenutztes Schnellgericht verschwindet */
+function schnellAnlegen(name,zutatenText,mahlzeit){
+  const n=String(name||"").trim();
+  if(!n) return null;
+  const z=parseZutaten(zutatenText||"");
+  const id="s"+neueId("");
+  const rezept={
+    id, n,
+    k:artAusZutaten(z,"veg"),
+    typ:"haupt",
+    ma:[mahlzeit&&MAHL[mahlzeit]?mahlzeit:"a"],
+    m:[...ALL],
+    min:z.length?dauerSchaetzen(z,[]):10,
+    p:proteinSchaetzen(z),
+    bl:0, nut:[],
+    why:"Schnell eingetragen, ohne vollständiges Rezept.",
+    z, s:[],
+    src:"schnell", erstellt:Date.now()
+  };
+  mut("eigene/"+id,rezept,false);
+  return id;
+}
+/* Wie oft wurde ein Gericht laut Verlauf schon gekocht? */
+function malGekocht(id){ return Object.values(S.verlauf||{}).filter(v=>v&&v.r===id).length; }
+/* Steht es gerade irgendwo? Dann wird es nicht aufgeräumt. */
+function schnellInBenutzung(id){
+  if(Object.values(S.plan||{}).some(e=>e&&e.r===id)) return true;
+  if(Object.values(S.extra||{}).some(e=>e&&e.r===id)) return true;
+  if(malGekocht(id)) return true;
+  return false;
+}
+function schnellAufraeumen(){
+  const jetzt=Date.now(); let weg=0;
+  SCHNELL().forEach(r=>{
+    if(jetzt-(r.erstellt||0)<SCHNELL_FRIST*TAG) return;
+    if(schnellInBenutzung(r.id)) return;
+    grabsteinSetzen(r.id);
+    mut("eigene/"+r.id,null,false);
+    weg++;
+  });
+  return weg;
+}
+/* Was dreimal auf dem Tisch stand, ist offenbar keine Eintagsfliege */
+const SCHNELL_SCHWELLE=3;
+function schnellWeg(id){
+  const r=S.eigene&&S.eigene[id]; if(!r) return;
+  const geplant=Object.values(S.plan||{}).filter(e=>e&&e.r===id).length
+              + Object.values(S.extra||{}).filter(e=>e&&e.r===id).length;
+  const kopie={...r};
+  grabsteinSetzen(id);
+  mut("eigene/"+id,null);
+  meldung(geplant?`„${kopie.n}" gelöscht – steht noch in ${geplant} Feld${geplant===1?"":"ern"}`:`„${kopie.n}" gelöscht`,
+    "Rückgängig",()=>{ grabsteinLoesen(id); mut("eigene/"+id,kopie); });
+}
+function schnellVorschlag(){
+  return SCHNELL().find(r=>malGekocht(r.id)>=SCHNELL_SCHWELLE)||null;
+}
+/* Aus einem Schnellgericht ein richtiges Rezept machen: Formular vorbefüllen */
+function schnellAufnehmen(id){
+  const r=R(id); if(!r) return;
+  neuesRezept({
+    n:r.n, k:r.k, typ:"haupt", ma:[...(r.ma||["a"])], min:r.min, p:r.p,
+    zText:(r.z||[]).map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
+    sText:"", why:"", pAuto:false, minAuto:false,
+    status:"Aus einem Schnellgericht übernommen – ergänze Zubereitung und Kennzeichen."
+  });
+}
 
 /* Wochenvorschlag: genau 1× Fisch, 1× Fleisch, Rest vegetarisch */
 function autoWoche(){
@@ -3026,7 +3170,10 @@ function hinweisSnack(s,port){
 
 function trefferHtml(){
   const m=monat();
-  let list=filter==="alles"?RZ().filter(r=>!S.archiv[r.id]):RZ().filter(r=>S.sammlung[r.id]);
+  /* Schnellgerichte haben ihren eigenen Filter – sonst bleiben sie außen vor */
+  let list=filter==="schnell"?SCHNELL()
+    :filter==="alles"?RZ().filter(r=>!S.archiv[r.id])
+    :RZ().filter(r=>S.sammlung[r.id]);
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
   if(["f","m","a"].includes(filter))list=list.filter(r=>r.ma.includes(filter));
   if(filter==="saison")list=list.filter(r=>r.m.includes(m));
@@ -3050,18 +3197,22 @@ function trefferHtml(){
     /* Wenn nur eine Zutat den Treffer gebracht hat, zeigen welche */
     const treffZutat=q&&!imNamen(r)?(r.z||[]).find(z=>String(z[0]).toLowerCase().includes(q)):null;
     const drin=!!S.sammlung[r.id];
+    const schnell=istSchnell(r), gekocht=schnell?malGekocht(r.id):0;
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
-      <div class="rec-t">${esc(r.n)}</div>
+      <div class="rec-t">${esc(r.n)}${schnell?'<span class="pill" style="margin-left:7px">Schnell</span>':""}</div>
       <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN${herTage?" · ZULETZT VOR "+herTage+" TAG"+(herTage===1?"":"EN"):""}</div>
       ${treffZutat?`<div class="rec-m" style="color:var(--herb)">mit ${esc(treffZutat[0])}</div>`:""}
-      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span></div>
-    </div>${drin
+      <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${
+        schnell&&gekocht>=SCHNELL_SCHWELLE?`<button class="tag t-sun" style="border:0;cursor:pointer" onclick="event.stopPropagation();schnellAufnehmen('${r.id}')">${gekocht}× gekocht · als Rezept aufnehmen</button>`:""}</div>
+    </div>${schnell
+      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="event.stopPropagation();schnellWeg('${r.id}')" aria-label="Löschen">🗑</button>`
+      :drin
       ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">🗑</button>`
       :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">+</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
   return [["alle","Alle"],["kurz","Unter 25 Min"],["darm","Darmfreundlich"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
-          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["snack","Snacks"],["dessert","Desserts"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"],["alles","Alle Rezepte"]]
+          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["snack","Snacks"],["dessert","Desserts"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"],["schnell","Schnellgerichte"],["alles","Alle Rezepte"]]
     .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="setFilter('${v}')">${l}</button>`).join("");
 }
 /* Nur Chips und Treffer austauschen – das Suchfeld bleibt stehen und behält den Fokus */
