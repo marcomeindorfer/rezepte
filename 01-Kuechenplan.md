@@ -1,8 +1,9 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 2.7**, Stand 10. August 2026. Datei rund 217 KB, davon 201 KB Skript,
-2626 Zeilen, 126 Funktionen, 134 Rezepte.
+**Version 3.1**, Stand 11. August 2026. Datei rund 252 KB, 3375 Zeilen,
+165 Funktionen, 134 Rezepte. Die Testreihen unter `tests/` prüfen 214 Punkte,
+Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -169,9 +170,13 @@ Import/Export, Rezept-Leser, Vorrat, Sync, Rückblick, Zurücksetzen, Versionsnu
 
 1. **Vorhandenes bleibt stehen.** Vorgeschlagen wird nur für freie Felder, bereits
    eingetragene Gerichte zählen bei allen Regeln mit.
-2. Fehlt Fisch oder Fleisch, wird je ein zufälliges freies Mittag- oder Abendfeld belegt.
-3. Alle übrigen freien Felder bekommen vegetarische Gerichte.
-4. `proteinAuffuellen()` tauscht schwache Tage auf.
+2. **Gewählt wird zuerst aus eurer Sammlung.** Reicht sie für eine Mahlzeit nicht –
+   eine Woche hat sieben Plätze je Mahlzeit –, wird aus dem Gesamtbestand aufgefüllt,
+   bevor ein Gericht wiederholt wird.
+3. Fehlt Fisch oder Fleisch, wird je ein zufälliges freies Mittag- oder Abendfeld belegt.
+4. Alle übrigen freien Felder bekommen vegetarische Gerichte.
+5. `proteinAuffuellen()` tauscht schwache Tage auf – aber nur eigene Vorschläge,
+   nie von Hand gesetzte Felder, und nie unter Bruch der Stillzeit-Regel.
 
 ### Bewertungsfunktion `punkte(r)`
 
@@ -187,10 +192,17 @@ Import/Export, Rezept-Leser, Vorrat, Sync, Rückblick, Zurücksetzen, Versionsnu
 
 ### Harte Regeln
 
-- **Innerhalb einer Woche wird nie wiederholt.** In 60 Testläufen null Dubletten.
+- **Innerhalb einer Woche wird nie wiederholt.** In 120 Testläufen null Dubletten.
 - Snacks und Desserts erscheinen nie im Tagesplan (`istTagesgericht()`).
 - Nie zwei stark blähende Gerichte am selben Tag im Stillzeit-Modus.
 - Mindestens ein Gericht, das noch nie gekocht wurde.
+- **Von Hand Eingetragenes bleibt unangetastet** – auch beim Protein-Auffüllen.
+
+Die letzten beiden Punkte galten bis Version 3.0 nur auf dem Papier:
+`proteinAuffuellen()` tauschte Gerichte ein, ohne Blähfaktor und Stillzeit-Regel
+zu prüfen, und fasste dabei auch selbst gesetzte Felder an. Beides ist seit 3.1
+behoben und per Test abgesichert; `nimm()` zieht außerdem eine Wiederholung einem
+Verstoß gegen die Stillzeit-Regel vor, wie es der Kommentar dort immer schon sagte.
 
 ---
 
@@ -310,6 +322,13 @@ Aktuell: `https://rezeptleser.marco-meindorfer.workers.dev`
 | `/?url=…` | Rezept auslesen: schema.org/Recipe aus der Seite, sonst YouTube-Beschreibung, sonst nur Titel |
 | `/angebote?tage=14` | Aldi-Süd-Angebotsseiten der nächsten Tage |
 | `/feed?url=…` | RSS oder Atom eines Blogs; sucht selbstständig unter `/feed` |
+
+**Achtung beim Einspielen:** In `worker.js` waren `/angebote` und `/feed` bis
+Version 3.0 gar nicht enthalten – der Worker wertete jede Anfrage als Rezeptabruf.
+„Von der Website holen“ und „Aus dem Netz“ konnten damit nicht funktionieren.
+Beide Routen sind jetzt umgesetzt; der Worker muss also **neu ins Cloudflare-Dashboard
+kopiert werden**, sonst bleiben die beiden Funktionen tot. Dazu holt er nur noch
+öffentliche Adressen, damit er nicht als Zugang in fremde interne Netze taugt.
 
 Nötig, weil der Browser fremde Seiten nicht direkt abrufen darf (CORS). Kostenloser Tarif:
 100.000 Abrufe pro Tag.

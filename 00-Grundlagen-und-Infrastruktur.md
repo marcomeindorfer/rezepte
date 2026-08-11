@@ -180,14 +180,30 @@ Die Liste der gemischten Felder wird **automatisch aus `leer()` abgeleitet**
 Eine handgepflegte Liste hatte `listen`, `extra`, `quellen` und `angebote` vergessen, die
 dadurch bei jedem Abgleich auf leer zurückgesetzt wurden.
 
+### Die Warteschlange (seit Küchenplan 3.1 überarbeitet)
+
+Jede Änderung geht durch `einreihen()` in die Warteschlange und von dort der Reihe
+nach über `flush()` zur Datenbank. Drei Eigenschaften, die vorher fehlten und je
+einen echten Datenverlust verursacht haben:
+
+- **Ein Eintrag verlässt die Schlange erst nach bestätigtem Erfolg.** Vorher nahm
+  `flush()` die ganze Schlange heraus und arbeitete sie ab; brach die Verbindung
+  beim zweiten Eintrag ab, waren alle folgenden ersatzlos weg.
+- **Je Pfad wartet nur der jüngste Stand.** Vorher stauten sich beim Abhaken
+  hunderte überholte Fassungen desselben Pfades, bis der Deckel bei 500 die
+  ältesten – und damit womöglich noch ungesendete andere Pfade – verwarf.
+- **Dauerhafte Fehler werden erkannt und gemeldet.** Antwortet die Datenbank mit
+  401/403 (Regeln) oder 404 (falsche URL), hört die App auf zu senden und schreibt
+  den Grund im Klartext unter „Mehr“. Vorher lief sie stumm weiter.
+
 ### Selbstheilung
 
 - Bricht die Verbindung ab, wird mit wachsendem Abstand neu versucht, gedeckelt bei
-  30 Sekunden.
+  30 Sekunden – außer bei einem dauerhaften Fehler, da hilft Wiederholen nicht.
 - Alle 30 Sekunden und beim Zurückkehren aus dem Hintergrund prüft `syncPruefen()`.
-- Fehlgeschlagene Schreibvorgänge landen in einer Warteschlange (`queue`) und werden
-  nachgeliefert.
-- Statuswerte: `lokal`, `verbindet`, `live`, `wartet`, `getrennt`.
+- Ereignisse aus der Leitung werden abgesichert gelesen: ein einzelnes kaputtes
+  `put` darf die Verbindung nicht lahmlegen.
+- Statuswerte: `lokal`, `verbindet`, `live`, `wartet`, `getrennt`, `verweigert`, `fehlt`.
 
 ### Bekannte Grenze
 
@@ -256,6 +272,26 @@ Das Attribut zwingt das Gerät, sofort die Kamera zu öffnen. Wer aus der Galeri
 kommt nicht heran. **Lösung:** Attribut weglassen, dann bietet das System Kamera, Galerie
 und Dateien an.
 
+### Bruchzeichen in Rezeptmengen
+
+`½ TL Zimt` lief durch den Zutatenparser, ohne dass eine Zahl erkannt wurde – die
+ganze Zeile landete als Zutatenname auf der Einkaufsliste. Dasselbe bei `1 ½`,
+`1/2` und `1-2`. **Lösung:** `mengeLesen()` versteht Bruchzeichen, Bruchschreibweise
+mit Schrägstrich, gemischte Brüche und Bereichsangaben (davon den unteren Wert).
+
+### CSS-Variablen, die es nicht gibt, fallen lautlos aus
+
+`var(--gold)` war an zwei Stellen im Einsatz, aber nirgends definiert – die
+„Angebot"-Pille in der Einkaufsliste verlor dadurch ihre Farbe, ohne dass etwas
+kaputt aussah. **Lösung:** korrekt auf `--sun` gezeigt, plus eine Prüfung, die
+jede benutzte Variable gegen die definierten abgleicht.
+
+### Deutsche Beugung in Wortlisten
+
+Die Sperrliste für Angebotswörter pflegte Paare von Hand: „fein"/„feine",
+„deutscher"/„deutsche" – und übersah „frische". **Lösung:** Vor dem Vergleich die
+Adjektivendung abschneiden (`angebotStamm()`), statt jede Form aufzuzählen.
+
 ### Die Suche nach oben durch `parentNode` endet im Nichts
 
 Beim Ziehen und Ablegen lief die Suche nach der Zeile bis zum `document`, das kein
@@ -265,9 +301,30 @@ Beim Ziehen und Ablegen lief die Suche nach der Zeile bis zum `document`, das ke
 
 ## 7. Wie getestet wird
 
-Es gibt keinen Browser in der Entwicklungsumgebung. Getestet wird mit **Node.js und einem
-nachgebauten Browser**: `localStorage`, `document.getElementById`, `EventSource` und `fetch`
-werden durch Attrappen ersetzt, dann wird der Skriptteil der `index.html` ausgewertet.
+Es gibt keinen Browser in der Entwicklungsumgebung. Getestet wird mit einem
+**nachgebauten Browser**: `localStorage`, `document.getElementById`, `EventSource` und
+`fetch` werden durch Attrappen ersetzt, dann wird der Skriptteil der `index.html`
+ausgewertet.
+
+Ausgeführt wird das mit **JavaScriptCore**, das auf jedem Mac unter
+`/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc` liegt –
+es muss nichts installiert werden, Node ist nicht nötig. Im Küchenplan liegen die
+Reihen unter `tests/`:
+
+```sh
+./tests/run.sh              # alle Reihen, aktuell 214 Prüfungen
+./tests/run.sh 02           # nur eine Reihe
+LAEUFE=500 ./tests/run.sh   # mehr Durchläufe für den Wochenvorschlag
+```
+
+Zwei Dinge, die sich in der Testumgebung selbst gerächt haben und dort jetzt
+laut scheitern statt still falsch zu messen:
+
+- `let a=1, b=2` deklariert **zwei** Namen. Wer beim Einsammeln der Bezeichner nur
+  den ersten nimmt, misst später an einer Attrappe statt an der echten Variablen –
+  die Warteschlange sah dadurch scheinbar leer aus, obwohl sie volllief.
+- Heißt eine Hilfsvariable des Tests wie eine Funktion der App (`quellen`),
+  überschreibt die App sie beim Laden. Die Testumgebung prüft das jetzt und bricht ab.
 
 Bewährt haben sich vier Arten von Prüfungen:
 

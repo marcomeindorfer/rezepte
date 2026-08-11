@@ -1030,13 +1030,43 @@ function katFuer(name){
   for(const [re,k] of KAT_WORT) if(re.test(name)) return k;
   return "so";
 }
-/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "Salz" */
+/* Rezeptseiten schreiben Mengen sehr unterschiedlich. Ohne eigene Behandlung
+   landet „½ TL Zimt“ ungeteilt als Zutatenname auf der Einkaufsliste. */
+const BRUCH={"½":.5,"⅓":1/3,"⅔":2/3,"¼":.25,"¾":.75,"⅕":.2,"⅖":.4,"⅗":.6,"⅘":.8,"⅙":1/6,"⅚":5/6,"⅛":.125,"⅜":.375,"⅝":.625,"⅞":.875};
+/* Liest „200“, „1,5“, „½“, „1 ½“, „1/2“, „1 1/2“ und „1-2“ (davon den unteren Wert) */
+function mengeLesen(text){
+  let rest=text, menge=0, gefunden=false;
+  const weg=n=>{rest=rest.slice(n).replace(/^\s*/,"");};
+  const m=rest.match(/^(\d+(?:[.,]\d+)?)/);
+  if(m){
+    const nach=rest.slice(m[0].length);
+    const echterBruch=nach.match(/^\s*\/\s*(\d+)/);          /* 1/2 */
+    if(echterBruch&&+echterBruch[1]){
+      menge=parseFloat(m[1].replace(",","."))/(+echterBruch[1]);
+      rest=nach.slice(echterBruch[0].length).replace(/^\s*/,"");
+    }else{
+      menge=parseFloat(m[1].replace(",","."));
+      rest=nach.replace(/^\s*/,"");
+      const gemischt=rest.match(/^(\d+)\s*\/\s*(\d+)/);      /* 1 1/2 */
+      if(gemischt&&+gemischt[2]){ menge+=(+gemischt[1])/(+gemischt[2]); weg(gemischt[0].length); }
+      else if(BRUCH[rest[0]]){ menge+=BRUCH[rest[0]]; weg(1); }   /* 1 ½ */
+      const bereich=rest.match(/^[–—-]\s*\d+(?:[.,]\d+)?\s*/); /* 1-2: der untere Wert reicht */
+      if(bereich) weg(bereich[0].length);
+    }
+    gefunden=true;
+  }else if(BRUCH[rest[0]]){                                   /* ½ */
+    menge=BRUCH[rest[0]]; weg(1); gefunden=true;
+  }
+  if(gefunden) menge=Math.round(menge*1000)/1000;
+  return {menge,rest,gefunden};
+}
+/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "½ TL Zimt" · "Salz" */
 function parseZutat(zeile){
   let t=zeile.trim().replace(/^[-–•*]\s*/,"");
   if(!t) return null;
-  let menge=0, einheit="";
-  const mZahl=t.match(/^(\d+(?:[.,]\d+)?)\s*/);
-  if(mZahl){menge=parseFloat(mZahl[1].replace(",","."));t=t.slice(mZahl[0].length);}
+  let einheit="";
+  const gelesen=mengeLesen(t);
+  let menge=gelesen.menge; t=gelesen.rest;
   const mEinh=t.match(/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
   if(mEinh){const k=mEinh[1].toLowerCase().replace(".","");if(EINH[k]){einheit=EINH[k];t=t.slice(mEinh[0].length);}}
   const name=t.trim().replace(/\s*,\s*$/,"");
@@ -1697,8 +1727,12 @@ const ANG_STOPP=new Set(["meine","aldi","aktion","gramm","packung","frisch","deu
  "gekuehlt","angebot","kracher","aktionspreis","preis","stueckpreis","ursprung","klasse","preise",
  "gold","neue","gute","fein","feine","natur","haus","land","alpen","best","beste","extra","pack","stk",
  "gross","klein","mini","maxi","hell","dunkel","zart","mild","edel","pure","plus","auch","ohne","voll"]);
+/* Im Prospekt steht „frische Möhren“, in der Sperrliste steht „frisch“. Jede
+   Beugungsform von Hand nachzupflegen geht auf Dauer schief – deshalb wird die
+   Adjektivendung vor dem Vergleich abgeschnitten. */
+const angebotStamm=w=>w.replace(/(e|em|en|er|es)$/,"");
 function angebotWorte(o){
-  return slug(o).split("_").filter(t=>t.length>=4&&!ANG_STOPP.has(t));
+  return slug(o).split("_").filter(t=>t.length>=4&&!ANG_STOPP.has(t)&&!ANG_STOPP.has(angebotStamm(t)));
 }
 /* Nur eine Richtung: die Zutat darf das Angebotswort enthalten, nicht umgekehrt.
    Sonst trifft "Gartenschlauch" die Zutat "Lauch". Dazu ein Wortstamm-Vergleich
@@ -2260,7 +2294,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.0";
+const VERSION="3.1";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2395,25 +2429,58 @@ function setPfad(o,pfad,daten){
   for(let i=0;i<p.length-1;i++){if(typeof z[p[i]]!=="object"||z[p[i]]===null)z[p[i]]={};z=z[p[i]];}
   if(daten===null)delete z[p[p.length-1]]; else z[p[p.length-1]]=daten;
 }
-async function senden(pfad,wert){
-  if(!basis()) return false;
-  try{
-    const res=await fetch(adresse(pfad),{method:wert===null?"DELETE":"PUT",
-      headers:{"Content-Type":"application/json"},body:wert===null?undefined:JSON.stringify(wert)});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    if(syncState!=="live"){syncState="live";nav();}
-    return true;
-  }catch(e){
-    queue.push({pfad,wert}); if(queue.length>500)queue.shift();
-    if(syncState==="live"){syncState="wartet";nav();}
-    schreibenLokal(); return false;
-  }
+const SYNCTEXT={lokal:"nur auf diesem Gerät",verbindet:"verbindet …",live:"live verbunden",
+  wartet:"wartet auf Verbindung",getrennt:"getrennt, versucht erneut",
+  verweigert:"Zugriff verweigert",fehlt:"Datenbank nicht gefunden"};
+const SYNC_FEHLER={
+  verweigert:"Die Datenbank verweigert den Zugriff. Prüft die Sicherheitsregeln in Firebase und ob der Haushalts-Code mindestens 20 Zeichen hat.",
+  fehlt:"Unter dieser Datenbank-URL antwortet niemand. Prüft die URL aus der Firebase-Konsole."};
+/* Bei diesen beiden Zuständen hilft kein erneuter Versuch – weiterzusenden würde
+   den Fehler nur verschleiern, statt ihn zu zeigen. */
+const dauerfehler=()=>syncState==="verweigert"||syncState==="fehlt";
+function zustandSetzen(neu){ if(syncState===neu)return; syncState=neu; nav(); }
+/* Jede Änderung geht durch die Warteschlange. Dadurch bleibt die Reihenfolge
+   erhalten, ein Abbruch mittendrin verliert nichts, und je Pfad wartet nur der
+   jüngste Stand – sonst stauen sich beim Abhaken hunderte überholte Fassungen. */
+function einreihen(pfad,wert){
+  if(!pfad){ queue=[{pfad:"",wert}]; return; }   /* Gesamtstand ersetzt alles Wartende */
+  const i=queue.findIndex(q=>q.pfad===pfad);
+  if(i>=0)queue.splice(i,1);
+  queue.push({pfad,wert});
+  if(queue.length>800)queue.splice(0,queue.length-800);
 }
+async function schicken(pfad,wert){
+  const res=await fetch(adresse(pfad),{method:wert===null?"DELETE":"PUT",
+    headers:{"Content-Type":"application/json"},body:wert===null?undefined:JSON.stringify(wert)});
+  if(res.status===401||res.status===403){const e=new Error("verweigert");e.dauerhaft="verweigert";throw e;}
+  if(res.status===404){const e=new Error("fehlt");e.dauerhaft="fehlt";throw e;}
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return true;
+}
+let flussLaeuft=false;
 async function flush(){
-  if(!basis()||!queue.length) return;
-  const q=[...queue]; queue=[];
-  for(const {pfad,wert} of q){ if(!await senden(pfad,wert)) return; }
-  schreibenLokal(); nav();
+  if(!basis()||flussLaeuft||!queue.length||dauerfehler()) return;
+  flussLaeuft=true;
+  try{
+    while(queue.length){
+      const eintrag=queue[0];
+      try{
+        await schicken(eintrag.pfad,eintrag.wert);
+      }catch(e){
+        if(e&&e.dauerhaft){ zustandSetzen(e.dauerhaft); break; }
+        if(syncState==="live") zustandSetzen("wartet");
+        break;                                   /* Eintrag bleibt vorn liegen */
+      }
+      queue.shift();                             /* erst nach bestätigtem Erfolg entfernen */
+      schreibenLokal();
+      if(syncState!=="live"&&syncState!=="verbindet") zustandSetzen("live");
+    }
+  } finally { flussLaeuft=false; schreibenLokal(); nav(); }
+}
+function senden(pfad,wert){
+  if(!basis()) return false;
+  einreihen(pfad,wert); schreibenLokal(); flush();
+  return true;
 }
 function mut(pfad,wert,neuZeichnen=true){
   setPfad(S,pfad,wert); schreibenLokal(); senden(pfad,wert);
@@ -2465,30 +2532,39 @@ let erstesPut=true, wiederTimer=null, versuche=0;
 function verbinden(){
   if(es){try{es.close();}catch(e){} es=null;}
   clearTimeout(wiederTimer);
-  if(!basis()){syncState="lokal";nav();return;}
-  syncState="verbindet"; erstesPut=true; nav();
+  if(!basis()){zustandSetzen("lokal");return;}
+  zustandSetzen("verbindet"); erstesPut=true;
   try{
     es=new EventSource(adresse(""));
+    /* Was aus der Leitung kommt, ist nicht garantiert wohlgeformt – ein einziges
+       kaputtes Ereignis darf die Verbindung nicht lahmlegen. */
     es.addEventListener("put",e=>{
-      const d=JSON.parse(e.data);
+      let d; try{ d=JSON.parse(e.data); }catch(err){ return; }
+      if(!d||typeof d!=="object") return;
       if(d.path==="/"||d.path===""){erstesPut=false;zusammenfuehren(d.data);return;}
       setPfad(S,d.path,d.data);schreibenLokal();render();
     });
-    es.addEventListener("patch",e=>{const d=JSON.parse(e.data);
+    es.addEventListener("patch",e=>{
+      let d; try{ d=JSON.parse(e.data); }catch(err){ return; }
+      if(!d||typeof d!=="object") return;
       Object.entries(d.data||{}).forEach(([k,v])=>setPfad(S,(d.path==="/"?"":d.path)+"/"+k,v));
       schreibenLokal();render();});
-    es.addEventListener("keep-alive",()=>{if(syncState!=="live"){syncState="live";nav();}});
-    es.onopen=()=>{versuche=0;syncState="live";flush();nav();};
-    es.onerror=()=>{syncState="getrennt";nav();neuVerbinden();};
-  }catch(e){syncState="getrennt";nav();neuVerbinden();}
+    es.addEventListener("keep-alive",()=>zustandSetzen("live"));
+    /* Firebase meldet abgelehnte Regeln über eigene Ereignisse, nicht über einen Fehler */
+    es.addEventListener("cancel",()=>{zustandSetzen("verweigert");try{es.close();}catch(err){}es=null;});
+    es.addEventListener("auth_revoked",()=>{zustandSetzen("verweigert");try{es.close();}catch(err){}es=null;});
+    es.onopen=()=>{versuche=0;zustandSetzen("live");flush();};
+    es.onerror=()=>{if(dauerfehler())return;zustandSetzen("getrennt");neuVerbinden();};
+  }catch(e){zustandSetzen("getrennt");neuVerbinden();}
 }
 function neuVerbinden(){
   clearTimeout(wiederTimer);
+  if(dauerfehler())return;
   const wartezeit=Math.min(30000,1000*Math.pow(2,Math.min(versuche++,5)));
   wiederTimer=setTimeout(()=>{if(basis()&&syncState!=="live")verbinden();},wartezeit);
 }
 function syncPruefen(){
-  if(!basis())return;
+  if(!basis()||dauerfehler())return;
   flush();
   if(syncState!=="live"&&syncState!=="verbindet"){versuche=0;verbinden();}
 }
@@ -2549,7 +2625,7 @@ function vWoche(){
     ${(()=>{const sch=proteinSchnitt(planWoche);
       if(!sch) return "";
       const knapp=sch<PROTEINZIEL;
-      return `<p class="note" style="margin-top:9px${knapp?";color:var(--gold)":""}">Im Schnitt ${sch} g Protein pro Tag${knapp?` – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen; ein Snack schließt die Lücke.`:", Ziel erreicht."}</p>
+      return `<p class="note" style="margin-top:9px${knapp?";color:var(--sun)":""}">Im Schnitt ${sch} g Protein pro Tag${knapp?` – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen; ein Snack schließt die Lücke.`:", Ziel erreicht."}</p>
         ${knapp?`<button class="btn btn-s" style="margin-top:6px" onclick="proteinSnack()">Protein-Snack für die Woche ergänzen</button>`:""}`;})()}
     <p class="note" style="margin-top:9px">${wocheHatAngebote(planWoche)?`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`:`Für ${kwPlus(planWoche)} ist kein Prospekt hinterlegt.`}</p>
     ${belegt&&offen.length?`<p class="note" style="margin-top:4px">Beilagen noch nicht vertreten: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""}
@@ -2646,8 +2722,11 @@ function autoWoche(){
   const m=monat();
   const kürzlich=new Set(Object.values(S.verlauf||{}).slice(-25).map(v=>v.r));
   const sam=r=>S.sammlung[r.id];
-  const pool=mk=>{const tag=r=>istTagesgericht(r)&&r.ma.includes(mk);
-    let p=RZ().filter(r=>tag(r)&&sam(r));if(p.length<3)p=RZ().filter(tag);return p;};
+  const passt=(r,mk)=>istTagesgericht(r)&&r.ma.includes(mk);
+  const poolVoll=mk=>RZ().filter(r=>passt(r,mk));
+  /* Bevorzugt eure Sammlung. Sieben Plätze je Mahlzeit wollen aber gefüllt werden –
+     reicht die Sammlung dafür nicht, wird aus dem Gesamtbestand aufgefüllt. */
+  const pool=mk=>{const p=RZ().filter(r=>passt(r,mk)&&sam(r));return p.length>=7?p:poolVoll(mk);};
   const khZahl={};
   /* Was in den anderen geplanten Wochen schon steht, wird abgewertet */
   const eigene=new Set(slots());
@@ -2659,8 +2738,11 @@ function autoWoche(){
     +(imAngebot(r).length?4:0)                    /* was gerade im Prospekt steht */
     -1.8*(khZahl[khVon(r)]||0)                    /* je öfter eine Beilage schon vorkommt, desto unattraktiver */
     +Math.random()*2;
-  /* Bereits Eingetragenes bleibt stehen – vorgeschlagen wird nur für freie Felder */
-  const plan={}; slots().forEach(k=>{ if(S.plan[k]&&R(S.plan[k].r)) plan[k]=S.plan[k]; });
+  /* Bereits Eingetragenes bleibt stehen – vorgeschlagen wird nur für freie Felder.
+     Was von Hand geplant wurde, merken wir uns: auch das Protein-Auffüllen darf
+     es später nicht austauschen, sonst verschwindet ein bewusst gesetztes Gericht. */
+  const plan={}, festeFelder=new Set();
+  slots().forEach(k=>{ if(S.plan[k]&&R(S.plan[k].r)){ plan[k]=S.plan[k]; festeFelder.add(k); } });
   const benutzt=new Set(Object.values(plan).map(e=>e.r));
   const blTag=[0,0,0,0,0,0,0];
   slots().forEach(k=>{const e=plan[k];const r=e&&R(e.r);if(r&&r.bl===2)blTag[slotTag(k)]++;});
@@ -2669,14 +2751,18 @@ function autoWoche(){
   const schonFleisch=Object.values(plan).filter(e=>(R(e.r)||{}).k==="fleisch").length;
   const nimm=(k,mk,arten)=>{
     const d=slotTag(k);
-    const p=pool(mk).filter(r=>arten.includes(r.k));
+    const eigen=pool(mk).filter(r=>arten.includes(r.k));
+    const alle=poolVoll(mk).filter(r=>arten.includes(r.k));
     const ok=r=>!S.still||!(r.bl===2&&blTag[d]>=1);
-    /* Stufen: erst neu und verträglich, dann Wiederholung vor Verstoß gegen die Stillzeit-Regel */
-    /* Innerhalb einer Woche wird nie wiederholt – erst wenn gar nichts übrig ist */
-    let c=p.filter(r=>!benutzt.has(r.id)&&ok(r));
-    if(!c.length)c=p.filter(r=>!benutzt.has(r.id));
-    if(!c.length)c=p.filter(ok);
-    if(!c.length)c=p;
+    /* Stufen: erst etwas Neues aus eurer Sammlung, dann etwas Neues aus dem
+       Gesamtbestand – ein unbekanntes Gericht ist besser als dasselbe zweimal in
+       einer Woche. Und erst wenn gar nichts übrig ist, lieber eine Wiederholung
+       als ein Verstoß gegen die Stillzeit-Regel. */
+    let c=eigen.filter(r=>!benutzt.has(r.id)&&ok(r));
+    if(!c.length)c=alle.filter(r=>!benutzt.has(r.id)&&ok(r));
+    if(!c.length)c=alle.filter(ok);
+    if(!c.length)c=alle.filter(r=>!benutzt.has(r.id));
+    if(!c.length)c=alle;
     if(!c.length)return;
     const r=c.sort((a,b)=>punkte(b)-punkte(a))[0];
     plan[k]={r:r.id,p:S.portionStd||2};benutzt.add(r.id);if(r.bl===2)blTag[d]++;
@@ -2699,7 +2785,7 @@ function autoWoche(){
       if(kand.length)plan[ziel]={r:kand.sort((a,b)=>punkte(b)-punkte(a))[0].id,p:S.portionStd||2};
     }
   }
-  proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen);
+  proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen,festeFelder,blTag);
   const ganz={...S.plan}; slots().forEach(k=>delete ganz[k]);
   mut("plan",{...ganz,...plan});   /* andere Wochen bleiben stehen */
 }
@@ -2712,20 +2798,26 @@ const PROTEINZIEL=80;
    jede Woche zu denselben proteinreichsten Gerichten führen – die Vielfalt wiegt schwerer,
    die Lücke schließt ein Snack. */
 const PROTEIN_MINDEST=70;
-function proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen){
+function proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen,festeFelder,blTag){
+  const fest=festeFelder||new Set();
+  const bl=blTag||[0,0,0,0,0,0,0];
   for(let d=0;d<7;d++){
     for(let runde=0;runde<4;runde++){
       const felder=["f","m","a"].map(mk=>"w"+planWoche+"-"+d+"-"+mk).filter(k=>plan[k]);
       if(!felder.length) break;
       const summe=felder.reduce((s,k)=>s+((R(plan[k].r)||{p:0}).p||0),0);
       if(summe>=PROTEIN_MINDEST) break;
-      /* Fisch- und Fleischtage bleiben unangetastet, damit die Wochenregel hält */
-      const tauschbar=felder.filter(k=>(R(plan[k].r)||{}).k==="veg")
+      /* Fisch- und Fleischtage bleiben unangetastet, damit die Wochenregel hält.
+         Von Hand gesetzte Felder ebenfalls – die sind eine Entscheidung, kein Vorschlag. */
+      const tauschbar=felder.filter(k=>!fest.has(k)&&(R(plan[k].r)||{}).k==="veg")
         .sort((a,b)=>((R(plan[a].r)||{p:0}).p)-((R(plan[b].r)||{p:0}).p));
       let getauscht=false;
       for(const feld of tauschbar){
         const alt=R(plan[feld].r); if(!alt) continue;
-        const frei=pool(slotMahl(feld)).filter(r=>r.k==="veg"&&!benutzt.has(r.id)&&r.p>alt.p);
+        /* Auch beim Auffüllen gilt die Stillzeit-Regel: nie ein zweites stark
+           blähendes Gericht an denselben Tag holen. */
+        const starkFrei=r=>!S.still||r.bl!==2||(bl[d]-(alt.bl===2?1:0))<1;
+        const frei=pool(slotMahl(feld)).filter(r=>r.k==="veg"&&!benutzt.has(r.id)&&r.p>alt.p&&starkFrei(r));
         /* Erst Gerichte, die in keiner anderen geplanten Woche stehen */
         const eigen=frei.filter(r=>!andereWochen||!andereWochen.has(r.id));
         const wahl=eigen.length?eigen:frei;
@@ -2736,7 +2828,9 @@ function proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen){
         const besser=wahl.sort((x,y)=>(Math.round(y.p/5)-Math.round(x.p/5))||(punkte(y)-punkte(x)))[Math.floor(Math.random()*Math.min(2,wahl.length))];
         if(!besser) continue;
         benutzt.delete(alt.id); benutzt.add(besser.id);
-        plan[feld]={r:besser.id,p:S.portionStd||2};
+        if(alt.bl===2) bl[d]--;
+        if(besser.bl===2) bl[d]++;
+        plan[feld]={r:besser.id,p:plan[feld].p};   /* eingestellte Portionen bleiben erhalten */
         getauscht=true; break;
       }
       if(!getauscht) break;
@@ -3043,10 +3137,13 @@ function listeBauen(){
   });
   /* Beim zweiten Einkauf der Woche zählt nur, was noch fehlt */
   const liste={};
-  /* Von Hand ergänzte Posten bleiben immer erhalten */
-  Object.entries(S.liste||{}).forEach(([id,i])=>{ if(i&&i.manuell) liste[id]=i; });
+  const bisher=S.liste||{};   /* Firebase liefert eine leere Liste gar nicht erst zurück */
+  /* Von Hand ergänzte Posten bleiben immer erhalten – außer der Plan bringt
+     dieselbe Sache ohnehin mit, sonst stünde sie zweimal im Laufplan. */
+  const ausRezepten=new Set([...map.values()].map(v=>slug(v.n)));
+  Object.entries(bisher).forEach(([id,i])=>{ if(i&&i.manuell&&!ausRezepten.has(slug(i.n))) liste[id]=i; });
   map.forEach((v,id)=>{
-    const alt=S.liste[id];
+    const alt=bisher[id];
     const schon=alt?(alt.gekauft||(alt.on?(alt.q||0):0)):0;
     const rest=Math.max(0,(v.q||0)-schon);
     const erledigt=schon>0&&rest<=0.001;
@@ -3079,7 +3176,7 @@ function vEinkauf(){
     if(!sicht.length&&erledigtWeg) return "";
     return `<div class="stop ${done?"done":""}" data-n="${n+1}"><h3>${ABT[s.k]}</h3>
       <div class="items">${sicht.map(([id,i])=>`<button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
-        <span class="box">✓</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--gold-bg);color:var(--gold);border-color:var(--gold)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span>
+        <span class="box">✓</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span>
         <span class="it-q">${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span></button>`).join("")}</div></div>`;
   }).join("");
   const rEdit=routeOffen?`<div class="card" style="margin-top:8px">${S.route.map((k,i)=>`<div class="ingline"><span>${i+1}. ${ABT[k]}</span><span>
@@ -3107,7 +3204,7 @@ function vEinkauf(){
 function alleAb(v){const l={...S.liste};Object.keys(l).forEach(k=>l[k]={...l[k],on:v,gekauft:v?((l[k].gekauft||0)+(l[k].q||0)):0});mut("liste",l);}
 /* Beim Abhaken wird festgehalten, wie viel schon im Wagen liegt */
 function posten(id,an){
-  const i=S.liste[id]; if(!i) return;
+  const i=(S.liste||{})[id]; if(!i) return;
   mut("liste/"+id,{...i,on:an,gekauft:an?((i.gekauft||0)+(i.q||0)):Math.max(0,(i.gekauft||0)-(i.q||0))});
 }
 function mv(i,d){const j=i+d;if(j<0||j>=S.route.length)return;const a=[...S.route];[a[i],a[j]]=[a[j],a[i]];mut("route",a);}
@@ -3186,8 +3283,9 @@ function vMehr(){
 
     <div class="sect"><h2>Sync zwischen euren Handys</h2></div>
     <div class="card">
-      <p class="note">Status: <b style="color:var(--ink)">${b?({lokal:"nur auf diesem Gerät",verbindet:"verbindet …",live:"live verbunden",wartet:"wartet auf Verbindung",getrennt:"getrennt, versucht erneut"}[syncState]||syncState):"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length} Änderungen warten`:""}</p>
-      ${b?`<div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="versuche=0;verbinden()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush()">Wartendes senden</button>`:""}</div>`:""}
+      <p class="note">Status: <b style="color:var(--ink)">${b?(SYNCTEXT[syncState]||syncState):"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length===1?"1 Änderung wartet":queue.length+" Änderungen warten"}`:""}</p>
+      ${b&&dauerfehler()?`<p class="note" style="color:var(--beet);font-weight:550;margin-top:6px">${SYNC_FEHLER[syncState]}</p>`:""}
+      ${b?`<div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="versuche=0;verbinden();flush()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush()">Wartendes senden</button>`:""}</div>`:""}
       <label class="fl" for="db">Datenbank-URL aus Firebase</label>
       <input type="url" id="db" value="${esc(cfg.db)}" placeholder="https://name-default-rtdb.europe-west1.firebasedatabase.app">
       <label class="fl" for="hid">Haushalts-Code</label>

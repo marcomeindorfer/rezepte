@@ -20,8 +20,12 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        const kopie = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, kopie));
+        /* Nur geglückte Antworten in den Zwischenspeicher. Sonst liegt dort
+           irgendwann eine Fehlerseite und wird im Supermarkt ausgeliefert. */
+        if (res && res.ok && res.type === "basic") {
+          const kopie = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, kopie)).catch(() => {});
+        }
         return res;
       })
       .catch(() => caches.match(e.request).then(r => r || caches.match("./index.html")))
