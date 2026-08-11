@@ -141,27 +141,52 @@ SHEETS.forEach(([name, oeffnen]) => {
 });
 
 gruppe("Woche abschließen");
-t("Abschließen räumt den Plan und schreibt den Verlauf fort", () => {
+t("Abschließen fragt erst, was wirklich gekocht wurde", () => {
   zurueckSetzen();
   const vorher = Object.keys(A.S.plan).filter(k => k.startsWith("w0-")).length;
   wahr(vorher > 0, "Woche war gefüllt");
   A.wocheAbschliessen();
+  wahr(elemente.sheet.innerHTML.includes("wirklich gekocht"), "Rückfrage erscheint");
+  gleich(Object.keys(A.S.plan).filter(k => k.startsWith("w0-")).length, vorher, "noch nichts geleert");
+});
+t("Nur das Angehakte landet im Verlauf, der Plan wird geleert", () => {
+  zurueckSetzen();
+  A.S.verlauf = {};
+  const vorher = Object.keys(A.S.plan).filter(k => k.startsWith("w0-")).length;
+  A.wocheAbschliessen();
+  A.wocheAbschliessenJetzt();
   gleich(Object.keys(A.S.plan).filter(k => k.startsWith("w0-")).length, 0, "Plan geleert");
-  wahr(Object.keys(A.S.verlauf).length >= vorher, "Gerichte im Verlauf");
+  wahr(Object.keys(A.S.verlauf).length > 0, "Gekochtes im Verlauf");
+});
+t("Abgewählte Gerichte kommen nicht in den Verlauf", () => {
+  zurueckSetzen();
+  A.S.verlauf = {};
+  A.wocheAbschliessen();
+  A.abschlussAlle(false);
+  A.wocheAbschliessenJetzt();
+  gleich(Object.keys(A.S.verlauf).length, 0, "nichts vermerkt");
+  gleich(Object.keys(A.S.plan).filter(k => k.startsWith("w0-")).length, 0, "Plan trotzdem geleert");
+});
+t("Restetage sind nicht vorangehakt", () => {
+  zurueckSetzen();
+  const k = Object.keys(A.S.plan).find(x => x.startsWith("w0-"));
+  A.S.plan[k] = { ...A.S.plan[k], p: 0 };
+  A.wocheAbschliessen();
+  wahr(A.abschlussAus[k] === true, "Restetag abgewählt");
 });
 t("Der Verlauf wächst nicht über 80 Einträge", () => {
   zurueckSetzen();
   A.S.verlauf = {};
   for (let i = 0; i < 120; i++) A.S.verlauf[1000 + i] = { r: "b1", kw: "KW 1" };
   A.wocheAbschliessen();
+  A.wocheAbschliessenJetzt();
   wahr(Object.keys(A.S.verlauf).length <= 80, "jetzt " + Object.keys(A.S.verlauf).length);
 });
-t("Abschließen ohne Bestätigung ändert nichts", () => {
+t("Abbrechen ändert nichts", () => {
   zurueckSetzen();
-  confirmAntwort = false;
   const vorher = JSON.stringify(A.S.plan);
   A.wocheAbschliessen();
-  confirmAntwort = true;
+  A.closeSheet();
   gleich(JSON.stringify(A.S.plan), vorher);
 });
 
@@ -172,6 +197,7 @@ const gesehen = new Set();
 gesammelt.forEach(h => { const s = h.code + "|" + h.herkunft; if (!gesehen.has(s)) { gesehen.add(s); einzeln.push(h); } });
 
 const kaputt = [];
+globalThis.__klickZiel = neuesElement("input");   /* muss vor der Schleife stehen */
 einzeln.forEach(h => {
   zurueckSetzen();
   globalThis.event = { key: "Enter", preventDefault() {}, stopPropagation() {}, target: neuesElement("input"), currentTarget: neuesElement("div") };
@@ -181,7 +207,6 @@ einzeln.forEach(h => {
     kaputt.push({ code: h.code.slice(0, 90), herkunft: h.herkunft, fehler: e && e.message });
   }
 });
-globalThis.__klickZiel = neuesElement("input");
 
 t(einzeln.length + " Bedienelemente laufen ohne Ausnahme", () => {
   if (kaputt.length) {

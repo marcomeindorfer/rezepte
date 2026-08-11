@@ -1,9 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 3.1**, Stand 11. August 2026. Datei rund 252 KB, 3375 Zeilen,
-165 Funktionen, 134 Rezepte. Die Testreihen unter `tests/` prüfen 214 Punkte,
-Aufruf mit `./tests/run.sh`.
+**Version 3.2**, Stand 11. August 2026. Datei rund 265 KB, 3663 Zeilen, 134 Rezepte.
+Die Testreihen unter `tests/` prüfen 261 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -78,7 +77,8 @@ S = {
   extra:     { "w<woche>_<id>": {r,p} },             // Gerichte außerhalb des Wochenplans
   listen:    { id: {n, items:{id:{n,on}}} },         // zusätzliche Einkaufslisten
   plan:      { "w<0|1|2>-<0..6>-<f|m|a>": {r,p} },   // Wochenplan; p=0 bedeutet Restetag
-  liste:     { id: {n,q,e,k,on,gekauft,ang,nach,manuell} },     // aktuelle Einkaufsliste
+  liste:     { id: {n,q,e,k,on,gekauft,ang,nach,manuell,fuer[]} }, // fuer = Rezept-Kennungen
+  listeInfo: { ausVorrat, gebaut, woche },           // was der Vorrat gedeckt hat
   verlauf:   { zeitstempel: {r,kw} },                // abgeschlossene Wochen, max. 80
   vorrat:    { slug: {n,k,da} },                     // Dinge, die immer da sein sollen
   route:     [Abteilungskürzel...],                  // Laufweg durch den Markt
@@ -125,7 +125,12 @@ unter „Einkauf → Reihenfolge" anpassbar, weil Filialen sich unterscheiden.
 ## 5. Die fünf Ansichten
 
 ### Woche
-Umschalter für drei Wochen mit Kalenderwochen. Darüber vier Kennzahlen: Fisch, Fleisch,
+Ganz oben – nur für die laufende Woche – die **Heute-Karte**: die drei Mahlzeiten des
+heutigen Tages, jede mit einem Knopf direkt in den Kochmodus. Die Frage um 17 Uhr lautet
+nicht „wie sieht die Woche aus", sondern „was koche ich jetzt"; der Kochmodus lag dafür
+vorher drei Ebenen tief.
+
+Darunter der Umschalter für drei Wochen mit Kalenderwochen. Darüber vier Kennzahlen: Fisch, Fleisch,
 Vegetarisch, belegte Felder. Darunter Hinweise zu Protein und zum Prospekt der Woche.
 Sieben Tageskarten mit je drei Feldern, der heutige Tag hervorgehoben. Portionen pro
 Gericht einstellbar, **0 Portionen bedeutet Restetag** und erzeugt keine Einkäufe.
@@ -151,6 +156,11 @@ Drei Modi:
 Fristen: `FRIST = {spaeter:30, alt:60, ungekocht:120, geprueft:90}` (Tage).
 
 ### Einkauf
+Jede Zeile hat zwei Ziele: links abhaken, rechts auf die **Menge** tippen zeigt, aus
+welchen Gerichten der Posten stammt und wie viel davon auf welches Gericht entfällt.
+Unter dem Fortschritt steht, wie viele Zutaten der Vorrat gedeckt hat – sonst wundert
+man sich, warum das Olivenöl fehlt, und kauft es sicherheitshalber doch.
+
 Reiter für den Wocheneinkauf und beliebig viele eigene Listen. Kopf mit Fortschritt.
 Laufplan: nummerierte Stationen entlang der Abteilungsreihenfolge. Jede Zeile mit
 Lebensmittelsymbol, bei Treffer im Prospekt zusätzlich die Pille „Angebot".
@@ -353,7 +363,33 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
 
 ---
 
-## 13. Offene Ideen
+## 13. Was in Version 3.2 dazugekommen ist
+
+Elf Verbesserungen an der Bedienung, alle per Test abgesichert (`tests/08-neuerungen.js`):
+
+1. **Heute-Karte** über dem Wochenplan – siehe Abschnitt 5.
+2. **Suche über Zutaten.** `trefferHtml()` filterte nur über `r.n`; „Zucchini" fand
+   deshalb nur Titel mit Zucchini, nicht die Gerichte, in denen sie steckt. Treffer im
+   Namen stehen weiterhin vorn, bei einem reinen Zutatentreffer nennt die Karte die Zutat.
+3. **Vorratsabfrage auf das Nötige eingedampft.** Gefragt wird nur nach dem, was in den
+   Gerichten dieser Woche vorkommt (`vorratGebraucht()`); der Rest ist einen Tipp entfernt.
+4. **„Wofür ist das?"** in der Einkaufsliste – jeder Posten merkt sich beim Bauen in
+   `fuer` die Gerichte, aus denen er stammt.
+5. **Frühstück für alle Tage** übernehmen, mit Rücknahme. Bei 21 Frühstücken für 21 Plätze
+   in drei Wochen ist die Wiederholung ohnehin unvermeidlich.
+6. **Nur Gekochtes kommt in den Verlauf.** Bis 3.1 schob `wocheAbschliessen()` alle 21
+   Gerichte hinein – auch die Tage, an denen es dann Pizza gab. Da der Verlauf die
+   Bewertung steuert („kürzlich gekocht": −2), rechnete der Vorschlag mit Gerichten, die
+   nie auf dem Tisch standen. Jetzt wird vorher abgehakt, Restetage sind vorangewählt ab.
+7. **Saison sichtbar.** `punkte()` gibt +3 für Saison; im Rezept stand davon nichts.
+8. **„Zuletzt vor N Tagen"** auf der Rezeptkarte statt der Kalenderwoche.
+9. **Was der Vorrat gespart hat** – Anzahl verschiedener Zutaten, nicht ihrer Vorkommen.
+10. **Resteküche** (`resteKueche()`): Zutaten antippen, die weg müssen, und Gerichte
+    sehen, die sie verwenden – sortiert nach Zahl der Treffer, dann nach Zeit.
+11. **Einkaufen zu zweit.** Hakt die Gegenseite etwas ab, erscheint eine kurze Meldung;
+    mehrere kurz hintereinander werden zu einer zusammengefasst.
+
+## 14. Offene Ideen
 
 - Proteinreiche Hauptgerichte ergänzen, um den Schnitt über 72 g zu heben.
 - Mehr Frühstücksrezepte – aktuell 21 bei 21 Frühstücksplätzen in drei Wochen, dadurch

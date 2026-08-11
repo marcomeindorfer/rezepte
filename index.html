@@ -206,6 +206,32 @@ code{font-family:var(--mono);font-size:12.5px;background:var(--card-2);padding:2
 pre{font-family:var(--mono);font-size:12px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-s);padding:11px;overflow-x:auto;line-height:1.5}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Kurze Rückmeldung am unteren Rand, unabhängig vom Seiteninhalt */
+#meldung{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  z-index:45;display:flex;justify-content:center;padding:0 12px 10px;pointer-events:none}
+.meldung{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);
+  border-radius:var(--r-s);padding:11px 13px;font-size:14px;max-width:576px;width:100%;
+  pointer-events:auto;box-shadow:0 8px 24px rgba(20,24,18,.25);animation:hochrein .2s ease}
+.meldung span{flex:1}
+.meldung button{border:0;background:transparent;color:var(--paper);font-weight:650;
+  text-decoration:underline;padding:2px 4px}
+@keyframes hochrein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Heute-Karte über dem Wochenplan */
+.heutekarte{background:var(--card);border:1px solid var(--herb);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.heutekarte .hk-kopf{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.hk-zeile{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.hk-zeile:first-of-type{border-top:0}
+.hk-zeile .hk-m{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);width:52px;flex:none;text-transform:uppercase}
+.hk-zeile .hk-n{flex:1;min-width:0;font-size:15px;font-weight:600;text-align:left;background:transparent;border:0;color:inherit;padding:0}
+.hk-zeile .hk-leer{flex:1;color:var(--ink-3);font-size:14px;text-align:left;background:transparent;border:0;padding:0}
+
+/* Herkunft eines Einkaufspostens */
+.it-q{cursor:pointer}
+.woher{display:flex;flex-direction:column;gap:2px;background:transparent;border:0;padding:12px 13px;
+  font-family:var(--mono);font-size:13px;color:var(--ink-2);white-space:nowrap;flex:none;align-items:flex-end;justify-content:center}
+.woher .fuerwen{font-family:var(--sans);font-size:10.5px;color:var(--ink-3);text-transform:none}
 </style>
 </head>
 <body>
@@ -217,6 +243,7 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
   <main id="view"></main>
 </div>
 <nav id="nav"></nav>
+<div id="meldung" role="status" aria-live="polite"></div>
 <div id="sheet"></div>
 <input type="file" id="pdfwahl" accept="application/pdf,.pdf" multiple style="display:none">
 <!-- ohne capture, sonst öffnet das Handy sofort die Kamera statt der Dateiauswahl -->
@@ -2294,7 +2321,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.1";
+const VERSION="3.2";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2542,7 +2569,11 @@ function verbinden(){
       let d; try{ d=JSON.parse(e.data); }catch(err){ return; }
       if(!d||typeof d!=="object") return;
       if(d.path==="/"||d.path===""){erstesPut=false;zusammenfuehren(d.data);return;}
-      setPfad(S,d.path,d.data);schreibenLokal();render();
+      setPfad(S,d.path,d.data);schreibenLokal();
+      /* Einkauf zu zweit: hakt die andere Person etwas ab, soll man das merken,
+         statt zweimal zum selben Regal zu laufen. */
+      if(!erstesPut&&tab==="einkauf"&&/^\/?liste\//.test(d.path)&&d.data&&d.data.on) fremdAbgehakt(d.data.n);
+      render();
     });
     es.addEventListener("patch",e=>{
       let d; try{ d=JSON.parse(e.data); }catch(err){ return; }
@@ -2573,6 +2604,36 @@ addEventListener("offline",()=>{if(syncState==="live"){syncState="getrennt";nav(
 if(typeof document!=="undefined"&&document.addEventListener){
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")syncPruefen();});
   setInterval(syncPruefen,30000);
+}
+
+/* Mehrere Meldungen kurz hintereinander werden zu einer zusammengefasst */
+let fremdZaehler=0, fremdTimer=null, fremdZuletzt="";
+function fremdAbgehakt(name){
+  fremdZaehler++; fremdZuletzt=name||"";
+  clearTimeout(fremdTimer);
+  fremdTimer=setTimeout(()=>{
+    meldung(fremdZaehler===1
+      ? (fremdZuletzt?"„"+fremdZuletzt+"“ wurde gerade abgehakt.":"Ein Posten wurde gerade abgehakt.")
+      : fremdZaehler+" Posten wurden gerade abgehakt.");
+    fremdZaehler=0;
+  },900);
+}
+
+/* ---------- Kurze Rückmeldung, ohne die Ansicht neu zu zeichnen ---------- */
+let meldungTimer=null, meldungAktion=null;
+function meldung(text,knopfText,aktion){
+  clearTimeout(meldungTimer);
+  meldungAktion=aktion||null;
+  const el=document.getElementById("meldung"); if(!el) return;
+  el.innerHTML=`<div class="meldung"><span>${esc(text)}</span>
+    ${knopfText?`<button onclick="meldungAusfuehren()">${esc(knopfText)}</button>`:""}
+    <button onclick="meldungWeg()" aria-label="Schließen">✕</button></div>`;
+  meldungTimer=setTimeout(meldungWeg,7000);
+}
+function meldungAusfuehren(){ const f=meldungAktion; meldungWeg(); if(f)f(); }
+function meldungWeg(){
+  clearTimeout(meldungTimer); meldungAktion=null;
+  const el=document.getElementById("meldung"); if(el)el.innerHTML="";
 }
 
 /* ============ Gerüst ============ */
@@ -2612,6 +2673,38 @@ function planStat(w=planWoche){
   slots(w).forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;});
   return {z,belegt:slots(w).filter(k=>S.plan[k]).length};
 }
+/* ---------- Was koche ich jetzt? ----------
+   Die Frage um 17 Uhr lautet nicht „wie sieht die Woche aus", sondern
+   „was steht heute an". Der Kochmodus war dafür drei Ebenen tief. */
+function heuteKarte(){
+  if(planWoche!==0) return "";
+  const d=heuteIdx();
+  const zeilen=["f","m","a"].map(mk=>{
+    const k="w0-"+d+"-"+mk, e=S.plan[k], r=e&&R(e.r);
+    if(!r) return `<div class="hk-zeile"><span class="hk-m">${MAHL[mk].slice(0,6)}</span>
+      <button class="hk-leer" onclick="waehle('${k}','${mk}')">+ Noch nichts geplant</button></div>`;
+    return `<div class="hk-zeile"><span class="hk-m">${MAHL[mk].slice(0,6)}</span>
+      <button class="hk-n" onclick="detail('${r.id}','${k}')">${esc(r.n)}</button>
+      <button class="btn btn-s" onclick="kochModus('${r.id}',${e.p===0?2:(e.p||2)})">Kochen</button></div>`;
+  }).join("");
+  const geplant=["f","m","a"].filter(mk=>{const e=S.plan["w0-"+d+"-"+mk];return e&&R(e.r);}).length;
+  return `<div class="heutekarte">
+    <div class="hk-kopf"><b style="font-size:15px">Heute · ${TAGE[d]}</b>
+      <span class="rec-m">${geplant?proteinTag(0,d)+" G PROTEIN":"NICHTS GEPLANT"}</span></div>
+    ${zeilen}</div>`;
+}
+/* Viele essen morgens ohnehin dasselbe – und bei 21 Frühstücken für 21 Plätze
+   in drei Wochen ist die Wiederholung ohnehin unvermeidlich. */
+function fruehstueckUebernehmen(){
+  const quelle=[...Array(7)].map((_,d)=>S.plan["w"+planWoche+"-"+d+"-f"]).find(e=>e&&R(e.r));
+  if(!quelle){ meldung("Trag zuerst an einem Tag ein Frühstück ein."); return; }
+  const vorher={...S.plan};
+  const neu={...S.plan};
+  for(let d=0;d<7;d++) neu["w"+planWoche+"-"+d+"-f"]={r:quelle.r,p:quelle.p||S.portionStd||2};
+  mut("plan",neu);
+  meldung("„"+R(quelle.r).n+"“ steht jetzt an allen sieben Tagen.","Rückgängig",()=>mut("plan",vorher));
+}
+
 function vWoche(){
   const {z,belegt}=planStat();
   const offen=khOffen(planWoche);
@@ -2632,6 +2725,8 @@ function vWoche(){
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="autoWoche()">Woche vorschlagen</button>
       <button class="btn btn-s" onclick="if(confirm('Plan dieser Woche leeren?'))leereWoche()">Plan leeren</button>
+      ${[...Array(7)].some((_,d)=>{const e=S.plan["w"+planWoche+"-"+d+"-f"];return e&&R(e.r);})
+        ?`<button class="btn btn-s" onclick="fruehstueckUebernehmen()">Frühstück für alle Tage</button>`:""}
       ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Woche abschließen</button>`:""}
     </div>`;
 
@@ -2661,7 +2756,7 @@ function vWoche(){
   const hist=Object.entries(S.verlauf||{}).sort((a,b)=>b[0]-a[0]).slice(0,10)
     .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main" onclick="detail('${r.id}')"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw} · ${KH[khVon(r)]}</div></div><button class="btn btn-s" onclick="einplanen('${r.id}')">Nochmal</button></div>`:"";}).join("");
 
-  return `${wahl}${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
+  return `${wahl}${heuteKarte()}${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
     ${(()=>{const ex=extraListe(planWoche);
       return `<div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="extraWaehlen()">Hinzufügen</button></div>
       ${ex.length?ex.map(e=>{const r=R(e.r);if(!r)return "";
@@ -2679,13 +2774,53 @@ function vWoche(){
 function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
 /* 0 Portionen heißt: wird von Resten gegessen und taucht nicht auf der Einkaufsliste auf */
 function port(k,d){const e=S.plan[k];if(!e)return;mut("plan/"+k,{...e,p:Math.max(0,(e.p===0?0:(e.p||2))+d)});}
+/* Bis Version 3.1 wanderten beim Abschließen alle 21 Gerichte in den Verlauf –
+   auch die Tage, an denen es dann doch Pizza gab. Der Verlauf steuert aber die
+   Bewertung („kürzlich gekocht": −2) und die Liste „Zuletzt gekocht". Damit
+   rechnete der Vorschlag mit Gerichten, die nie auf dem Tisch standen. */
+let abschlussAus={};
 function wocheAbschliessen(){
-  if(!confirm("Alle Gerichte dieser Woche ins Archiv verschieben und den Plan leeren?"))return;
+  abschlussAus={};
+  /* Restetage sind keine Kochtage – die sind schon vorher abgehakt worden */
+  slots().forEach(k=>{ const e=S.plan[k]; if(e&&e.p===0) abschlussAus[k]=true; });
+  openSheet(abschlussKoerper());
+}
+function abschlussKoerper(){
+  const eintraege=slots().map(k=>({k,e:S.plan[k],r:S.plan[k]&&R(S.plan[k].r)})).filter(x=>x.r);
+  const an=eintraege.filter(x=>!abschlussAus[x.k]).length;
+  return `<div class="grab"></div><h2 style="font-size:20px">Woche abschließen</h2>
+    <p class="note" style="margin:7px 0 14px">Was habt ihr wirklich gekocht? Nur das Angehakte kommt in den Verlauf und beeinflusst künftige Vorschläge. Der Plan wird danach geleert.</p>
+    <div class="items">${eintraege.map(({k,e,r})=>{
+      const d=slotTag(k), mk=slotMahl(k);
+      return `<div class="itemrow"><button class="item ${abschlussAus[k]?"":"on"}" onclick="abschlussTick('${k}')">
+        <span class="box">✓</span>
+        <span class="it-n"><b style="font-weight:600">${esc(r.n)}</b><br>
+          <span class="mini">${TAGE[d].slice(0,2)} · ${MAHL[mk]}${e.p===0?" · Restetag":""}</span></span></button></div>`;}).join("")}</div>
+    <div class="row-btns" style="margin-top:14px">
+      <button class="btn btn-s" onclick="abschlussAlle(true)">Alle</button>
+      <button class="btn btn-s" onclick="abschlussAlle(false)">Keins</button></div>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="wocheAbschliessenJetzt()">${an} Gericht${an===1?"":"e"} eintragen und Plan leeren</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`;
+}
+function abschlussTick(k){ abschlussAus[k]=!abschlussAus[k]; openSheet(abschlussKoerper(),true); }
+function abschlussAlle(an){
+  abschlussAus={};
+  if(!an) slots().forEach(k=>{ if(S.plan[k]) abschlussAus[k]=true; });
+  openSheet(abschlussKoerper(),true);
+}
+function wocheAbschliessenJetzt(){
   const w=kwPlus(planWoche),v={...S.verlauf},p={...S.plan};
-  slots().forEach((k,i)=>{if(p[k]){v[Date.now()+i]={r:p[k].r,kw:w};delete p[k];}});
+  let n=0;
+  slots().forEach((k,i)=>{
+    if(!p[k]) return;
+    if(!abschlussAus[k]){ v[Date.now()+i]={r:p[k].r,kw:w}; n++; }
+    delete p[k];
+  });
   const keys=Object.keys(v).sort((a,b)=>b-a).slice(0,80);
   mut("verlauf",Object.fromEntries(keys.map(k=>[k,v[k]])),false);
   mut("plan",p);
+  closeSheet();
+  meldung(n?n+" Gericht"+(n===1?"":"e")+" im Verlauf vermerkt.":"Nichts vermerkt – der Plan ist geleert.");
 }
 function waehle(k,mk){
   let q="";
@@ -2900,16 +3035,25 @@ function trefferHtml(){
   if(filter==="asana")list=list.filter(r=>r.src==="asana");
   if(filter==="eigen")list=list.filter(r=>r.src==="eigen");
   if(TYP[filter])list=list.filter(r=>typVon(r)===filter);
-  if(suche)list=list.filter(r=>r.n.toLowerCase().includes(suche.toLowerCase()));
-  list.sort((a,b)=>(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
+  /* Auch in den Zutaten suchen: „Zucchini" soll die Gerichte finden, in denen
+     sie steckt – nicht nur die mit Zucchini im Titel. */
+  const q=String(suche||"").trim().toLowerCase();
+  const imNamen=r=>r.n.toLowerCase().includes(q);
+  const inZutat=r=>(r.z||[]).some(z=>String(z[0]).toLowerCase().includes(q));
+  if(q)list=list.filter(r=>imNamen(r)||inZutat(r));
+  list.sort((a,b)=>(q?(imNamen(b)-imNamen(a)):0)||(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
   if(!list.length)return `<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
   return list.map(r=>{
     const [lbl,tag,,kk]=KIND[r.k];
-    const letzt=Object.values(S.verlauf||{}).filter(v=>v.r===r.id).pop();
+    const zuletzt=zuletztGekocht(r.id);
+    const herTage=zuletzt?Math.round((Date.now()-zuletzt)/TAG):0;
+    /* Wenn nur eine Zutat den Treffer gebracht hat, zeigen welche */
+    const treffZutat=q&&!imNamen(r)?(r.z||[]).find(z=>String(z[0]).toLowerCase().includes(q)):null;
     const drin=!!S.sammlung[r.id];
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}</div>
-      <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN${letzt?" · ZULETZT "+letzt.kw.toUpperCase():""}</div>
+      <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN${herTage?" · ZULETZT VOR "+herTage+" TAG"+(herTage===1?"":"EN"):""}</div>
+      ${treffZutat?`<div class="rec-m" style="color:var(--herb)">mit ${esc(treffZutat[0])}</div>`:""}
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span></div>
     </div>${drin
       ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">🗑</button>`
@@ -2928,12 +3072,83 @@ function teilRender(){
 }
 function sucheAendern(v){suche=v;teilRender();}
 function setFilter(v){filter=v;teilRender();}
+/* ---------- Resteküche: was koche ich aus dem, was noch da ist? ----------
+   Die häufigste Frage, wenn im Kühlschrank etwas weg muss. Sortiert wird nach
+   der Zahl der getroffenen Zutaten, danach nach Zubereitungszeit. */
+let resteWahl=[];
+/* Die gängigsten Zutaten aus dem eigenen Bestand – nach Häufigkeit, damit die
+   Auswahl kurz bleibt und trotzdem das Übliche abdeckt. */
+function resteZutaten(n=36){
+  const zaehler={};
+  RZ().forEach(r=>{
+    const gesehen=new Set();
+    (r.z||[]).forEach(([name])=>{
+      const k=String(name).trim();
+      if(!k||gesehen.has(k.toLowerCase())) return;
+      gesehen.add(k.toLowerCase());
+      zaehler[k]=(zaehler[k]||0)+1;
+    });
+  });
+  /* Grundzutaten wie Salz und Öl helfen bei der Suche nicht weiter */
+  const uninteressant=/^(salz|pfeffer|wasser|öl|olivenöl|zucker|mehl|butter|essig|senf|paprikapulver|kreuzk|currypulver|zimt|honig|hefe|backpulver|semmelbr|petersilie|schnittlauch)/i;
+  return Object.entries(zaehler)
+    .filter(([k,v])=>v>=3&&!uninteressant.test(k))
+    .sort((a,b)=>b[1]-a[1]).slice(0,n).map(([k])=>k);
+}
+function resteTreffer(){
+  if(!resteWahl.length) return [];
+  const passt=(r,w)=>(r.z||[]).some(z=>String(z[0]).toLowerCase().includes(w.toLowerCase()));
+  return RZ().filter(r=>istTagesgericht(r)||typVon(r)==="snack")
+    .map(r=>({r,treffer:resteWahl.filter(w=>passt(r,w))}))
+    .filter(x=>x.treffer.length)
+    .sort((a,b)=>b.treffer.length-a.treffer.length||a.r.min-b.r.min)
+    .slice(0,25);
+}
+function resteKueche(){
+  const koerper=()=>{
+    const zutaten=resteZutaten();
+    const treffer=resteTreffer();
+    return `<div class="grab"></div><h2 style="font-size:20px">Was ist noch da?</h2>
+      <p class="note" style="margin:7px 0 12px">Tipp an, was weg muss. Die Liste zeigt Gerichte, die es verwenden – oben die mit den meisten Treffern.</p>
+      <div class="chips" style="flex-wrap:wrap;overflow:visible;padding-bottom:8px">
+        ${zutaten.map(z=>`<button class="chip" aria-pressed="${resteWahl.includes(z)}" onclick="resteTick('${esc(z).replace(/'/g,"\\'")}')">${esc(z)}</button>`).join("")}</div>
+      <div class="row-btns" style="margin-bottom:10px">
+        <input type="text" id="resteeigen" placeholder="Etwas anderes …" onkeydown="if(event.key==='Enter')resteEigen()">
+        <button class="btn btn-s" onclick="resteEigen()">Dazu</button>
+        ${resteWahl.length?`<button class="btn btn-s btn-ghost" onclick="resteWahl=[];openSheet(resteKoerper(),true)">Auswahl leeren</button>`:""}</div>
+      ${!resteWahl.length
+        ? `<p class="note">Noch nichts gewählt.</p>`
+        : (treffer.length
+          ? `<div class="sect"><h2>${treffer.length} Gericht${treffer.length===1?"":"e"}</h2></div>`+treffer.map(({r,treffer:tr})=>`
+              <div class="meal"><div class="meal-main" onclick="closeSheet();detail('${r.id}')">
+                <div class="meal-name">${esc(r.n)}</div>
+                <div class="meal-sub">${tr.length} von ${resteWahl.length} · ${r.min} Min · ${esc(tr.join(", "))}</div></div>
+                <button class="btn btn-s" onclick="closeSheet();einplanen('${r.id}')">Einplanen</button></div>`).join("")
+          : `<p class="note">Damit findet sich kein Gericht. Nimm eine Zutat heraus oder such unter „Rezepte" direkt danach.</p>`)}
+      <button class="btn btn-wide btn-ghost" style="margin-top:12px" onclick="closeSheet()">Schließen</button>`;
+  };
+  window.resteKoerper=koerper;
+  window.resteTick=z=>{
+    resteWahl=resteWahl.includes(z)?resteWahl.filter(x=>x!==z):resteWahl.concat([z]);
+    openSheet(koerper(),true);
+  };
+  window.resteEigen=()=>{
+    const el=document.getElementById("resteeigen"); if(!el||!el.value.trim()) return;
+    const w=el.value.trim(); el.value="";
+    if(!resteWahl.includes(w)) resteWahl=resteWahl.concat([w]);
+    openSheet(koerper(),true);
+  };
+  openSheet(koerper());
+}
+
 function vRezepte(){
   return `${letztesWeg?`<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
       <span style="flex:1">Rezept entfernt.</span>
       <button class="btn btn-s" onclick="rezeptZurueck()">Rückgängig</button>
       <button class="btn btn-ghost btn-s" onclick="letztesWeg=null;render()">✕</button></div>`:""}
-    <div class="row-btns" style="margin-bottom:10px"><button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button></div>
+    <div class="row-btns" style="margin-bottom:10px">
+      <button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button>
+      <button class="btn btn-s" onclick="resteKueche()">Was ist noch da?</button></div>
     <input type="search" id="sq" placeholder="Rezept suchen" value="${esc(suche)}" oninput="sucheAendern(this.value)" style="margin-bottom:12px">
     <div class="chips" id="chipzeile">${chipsHtml()}</div>
     <div id="trefferliste">${trefferHtml()}</div>`;
@@ -2985,7 +3200,7 @@ function detail(id,slotK){
   let p=slotK&&S.plan[slotK]?(S.plan[slotK].p||2):2;
   const body=()=>`<div class="grab"></div><div class="det">
     <h2>${esc(r.n)}</h2>
-    <div class="rec-tags" style="margin:10px 0 14px"><span class="tag ${KIND[r.k][1]}">${KIND[r.k][0]}</span><span class="pill">${r.p} g Protein pro Portion</span>${r.nut.map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
+    <div class="rec-tags" style="margin:10px 0 14px"><span class="tag ${KIND[r.k][1]}">${KIND[r.k][0]}</span><span class="pill">${r.p} g Protein pro Portion</span>${r.m.includes(monat())&&r.m.length<12?'<span class="tag t-veg">Hat gerade Saison</span>':""}${r.nut.map(n=>`<span class="tag t-neutral">${NUT[n]}</span>`).join("")}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
     <p class="note" style="font-size:14.5px;color:var(--ink-2)">${esc(r.why)}</p>
     ${r.q?`<p style="margin-top:10px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:14px">Originalrezept öffnen</a></p>`:""}
     <div class="sect"><h2>Zutaten</h2><div class="stepper"><button onclick="dp(-1)">−</button><b>${p}</b><button onclick="dp(1)">+</button></div></div>
@@ -3101,13 +3316,36 @@ function vNetz(){
     }).join("")}`;
 }
 
+/* Welche Vorratsdinge kommen in den Gerichten dieser Woche überhaupt vor?
+   Alles andere jede Woche abzufragen ist eine Wand aus Schaltern ohne Nutzen. */
+function vorratGebraucht(){
+  const noetig=new Set();
+  const sammeln=r=>{ if(r) (r.z||[]).forEach(([n])=>{ const v=imVorrat(n); if(v) noetig.add(slug(v.n)); }); };
+  slots().forEach(k=>{const e=S.plan[k]; if(e&&e.p!==0) sammeln(R(e.r));});
+  extraListe(planWoche).forEach(e=>{ if(e.p!==0) sammeln(R(e.r)); });
+  return noetig;
+}
+let vorratAlle=false;
 function vorratFrage(){
-  const body=()=>`<div class="grab"></div><h2 style="font-size:20px">Was ist noch da?</h2>
-    <p class="note" style="margin:7px 0 16px">Alles auf „Fehlt" landet automatisch auf der Einkaufsliste.</p>
-    ${Object.entries(S.vorrat).map(([id,v])=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(v.n)}</div><div class="meal-sub">${ABT[v.k]}</div></div>
-      <div class="toggle"><button aria-pressed="${!!v.da}" onclick="vt('${id}',true)">Da</button><button aria-pressed="${!v.da}" onclick="vt('${id}',false)">Fehlt</button></div></div>`).join("")}
+  vorratAlle=false;
+  const body=()=>{
+    const noetig=vorratGebraucht();
+    const alleEintraege=Object.entries(S.vorrat);
+    const relevant=alleEintraege.filter(([,v])=>noetig.has(slug(v.n)));
+    const zeigen=(vorratAlle||!relevant.length)?alleEintraege:relevant;
+    const rest=alleEintraege.length-zeigen.length;
+    const zeile=([id,v])=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(v.n)}</div><div class="meal-sub">${ABT[v.k]}</div></div>
+      <div class="toggle"><button aria-pressed="${!!v.da}" onclick="vt('${id}',true)">Da</button><button aria-pressed="${!v.da}" onclick="vt('${id}',false)">Fehlt</button></div></div>`;
+    return `<div class="grab"></div><h2 style="font-size:20px">Was ist noch da?</h2>
+    <p class="note" style="margin:7px 0 16px">${relevant.length&&!vorratAlle
+      ? "Nur das, was in den Gerichten dieser Woche vorkommt. Alles auf „Fehlt“ landet auf der Einkaufsliste."
+      : "Alles auf „Fehlt“ landet automatisch auf der Einkaufsliste."}</p>
+    ${zeigen.map(zeile).join("")}
+    ${rest>0?`<button class="btn btn-s btn-wide" style="margin-top:10px" onclick="vorratAlle=true;openSheet(vorratKoerper(),true)">Restliche ${rest} auch zeigen</button>`:""}
     <div style="margin-top:16px"><button class="btn btn-primary btn-wide" onclick="listeBauen()">Liste erstellen</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button></div>`;
+  };
+  window.vorratKoerper=body;
   window.vt=(id,d)=>{mut("vorrat/"+id+"/da",d,false);openSheet(body(),true);};
   openSheet(body());
 }
@@ -3119,21 +3357,28 @@ function imVorrat(name){
 }
 function listeBauen(){
   const map=new Map();
+  const ausVorrat=new Set();   /* welche Zutaten der Vorrat deckt – verschiedene, nicht Vorkommen */
+  /* Im Markt steht man vor „Lauch, 120 g“ und weiß nicht mehr, wofür.
+     Deshalb merkt sich jeder Posten, aus welchen Gerichten er stammt. */
+  const dazu=(n,q,ein,kat,portionen,rezeptId)=>{
+    const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
+    const id=slug(n+"_"+ein), menge=q*(portionen||2);
+    if(map.has(id)){
+      const alt=map.get(id);
+      alt.q+=menge;
+      if(rezeptId&&!alt.fuer.includes(rezeptId)) alt.fuer.push(rezeptId);
+    } else {
+      map.set(id,{n,q:menge,e:ein,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||"",
+        fuer:rezeptId?[rezeptId]:[]});
+    }
+  };
   slots().forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;
     if(e.p===0)return;   /* Restetag */
-    r.z.forEach(([n,q,ein,kat])=>{
-      const v=imVorrat(n); if(v&&v.da)return;          // liegt zuhause, muss nicht auf die Liste
-      const id=slug(n+"_"+ein);
-      if(map.has(id))map.get(id).q+=q*(e.p||2);
-      else map.set(id,{n,q:q*(e.p||2),e:ein,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||""});});});
+    r.z.forEach(([n,q,ein,kat])=>dazu(n,q,ein,kat,e.p,r.id));});
   /* Extras derselben Woche zählen mit */
   extraListe(planWoche).forEach(e=>{
     const r=R(e.r); if(!r||e.p===0) return;
-    r.z.forEach(([n,q,ein,kat])=>{
-      const v=imVorrat(n); if(v&&v.da)return;
-      const id=slug(n+"_"+ein);
-      if(map.has(id))map.get(id).q+=q*(e.p||2);
-      else map.set(id,{n,q:q*(e.p||2),e:ein,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||""});});
+    r.z.forEach(([n,q,ein,kat])=>dazu(n,q,ein,kat,e.p,r.id));
   });
   /* Beim zweiten Einkauf der Woche zählt nur, was noch fehlt */
   const liste={};
@@ -3153,6 +3398,7 @@ function listeBauen(){
   Object.values(S.vorrat).filter(v=>!v.da).forEach(v=>{const id=slug(v.n+"_vorrat");
     if(!Object.values(liste).some(i=>i.n===v.n))liste[id]={n:v.n,q:0,e:"",k:v.k,on:false,nach:true,
       ang:zutatImAngebot(v.n,planWoche)||""};});
+  S.listeInfo={ausVorrat:ausVorrat.size,gebaut:Date.now(),woche:planWoche};
   mut("liste",liste);closeSheet();go("einkauf");
 }
 function vEinkauf(){
@@ -3175,9 +3421,16 @@ function vEinkauf(){
     const sicht=erledigtWeg?s.items.filter(([,i])=>!i.on):s.items;
     if(!sicht.length&&erledigtWeg) return "";
     return `<div class="stop ${done?"done":""}" data-n="${n+1}"><h3>${ABT[s.k]}</h3>
-      <div class="items">${sicht.map(([id,i])=>`<button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
-        <span class="box">✓</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span>
-        <span class="it-q">${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span></button>`).join("")}</div></div>`;
+      <div class="items">${sicht.map(([id,i])=>{
+        const fuer=(i.fuer&&(Array.isArray(i.fuer)?i.fuer:Object.values(i.fuer)))||[];
+        const namen=fuer.map(x=>R(x)).filter(Boolean);
+        return `<div class="itemrow">
+        <button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
+        <span class="box">✓</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
+        <button class="woher" onclick="postenWoher('${id}')" aria-label="Wofür ist das?">
+          <span>${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span>
+          ${namen.length?`<span class="fuerwen">${namen.length===1?esc(namen[0].n.length>18?namen[0].n.slice(0,17)+"…":namen[0].n):namen.length+" Gerichte"}</span>`:""}
+        </button></div>`;}).join("")}</div></div>`;
   }).join("");
   const rEdit=routeOffen?`<div class="card" style="margin-top:8px">${S.route.map((k,i)=>`<div class="ingline"><span>${i+1}. ${ABT[k]}</span><span>
       <button class="btn btn-s" onclick="mv(${i},-1)" aria-label="hoch">↑</button>
@@ -3186,7 +3439,9 @@ function vEinkauf(){
   return wahl+`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
       <b style="font-size:15px">${fertig} von ${ges} erledigt</b><span class="rec-m">${kwPlus(planWoche)}</span></div>
       <div class="progress"><i style="width:${ges?fertig/ges*100:0}%"></i></div>
-      ${eintraege.filter(([,i])=>i.ang).length?`<p class="note" style="margin-top:9px">${eintraege.filter(([,i])=>i.ang).length} Posten stehen im Prospekt.</p>`:""}</div>
+      ${eintraege.filter(([,i])=>i.ang).length?`<p class="note" style="margin-top:9px">${eintraege.filter(([,i])=>i.ang).length} Posten stehen im Prospekt.</p>`:""}
+      ${(S.listeInfo&&S.listeInfo.ausVorrat)?`<p class="note" style="margin-top:4px">${S.listeInfo.ausVorrat} Zutaten sind aus dem Vorrat gedeckt und fehlen deshalb hier.</p>`:""}
+      <p class="note" style="margin-top:4px">Tipp: die Menge rechts antippen zeigt, für welche Gerichte der Posten ist.</p></div>
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="erledigtWeg=!erledigtWeg;render()">${erledigtWeg?"Erledigte zeigen":"Erledigte ausblenden"}</button>
       <button class="btn btn-s" onclick="listeTeilen()">Teilen</button>
@@ -3200,6 +3455,31 @@ function vEinkauf(){
     <div class="row-btns" style="margin:14px 0 8px">
       <button class="btn btn-s" onclick="alleAb(false)">Alles zurücksetzen</button>
       <button class="btn btn-s" onclick="if(confirm('Liste leeren?'))mut('liste',{})">Liste leeren</button></div>`;
+}
+/* Wofür ist dieser Posten? Im Markt die häufigste Rückfrage. */
+function postenWoher(id){
+  const i=(S.liste||{})[id]; if(!i) return;
+  const roh=(i.fuer&&(Array.isArray(i.fuer)?i.fuer:Object.values(i.fuer)))||[];
+  const gerichte=roh.map(x=>R(x)).filter(Boolean);
+  const anteil=r=>{
+    const z=(r.z||[]).find(x=>slug(x[0]+"_"+x[2])===id);
+    if(!z) return "";
+    /* Portionen dieses Gerichts in der laufenden Woche zusammenzählen */
+    let p=0;
+    slots().forEach(k=>{const e=S.plan[k]; if(e&&e.r===r.id&&e.p!==0) p+=(e.p||2);});
+    extraListe(planWoche).forEach(e=>{ if(e.r===r.id&&e.p!==0) p+=(e.p||2); });
+    return p?fmt(z[1]*p,z[2]):"";
+  };
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:20px">${esc(i.n)}</h2>
+    <p class="note" style="margin:6px 0 14px">${i.q?fmt(i.q,i.e)+" insgesamt":"ohne feste Menge"}${i.gekauft?" · "+fmt(i.gekauft,i.e)+" schon gekauft":""}${i.ang?" · steht im Prospekt":""}</p>
+    ${gerichte.length
+      ? `<div class="sect"><h2>Wofür</h2></div>`+gerichte.map(r=>`<div class="meal">
+          <div class="meal-main" onclick="closeSheet();detail('${r.id}')">
+            <div class="meal-name">${esc(r.n)}</div>
+            <div class="meal-sub">${anteil(r)||"Menge nicht zuzuordnen"}</div></div></div>`).join("")
+      : `<p class="note">${i.manuell?"Von Hand ergänzt – gehört zu keinem Gericht.":"Aus dem Vorrat nachzufüllen."}</p>`}
+    <button class="btn btn-wide btn-ghost" style="margin-top:12px" onclick="closeSheet()">Schließen</button>`);
 }
 function alleAb(v){const l={...S.liste};Object.keys(l).forEach(k=>l[k]={...l[k],on:v,gekauft:v?((l[k].gekauft||0)+(l[k].q||0)):0});mut("liste",l);}
 /* Beim Abhaken wird festgehalten, wie viel schon im Wagen liegt */
