@@ -42,7 +42,7 @@ t("Die Karte nennt das Protein des Tages", () => {
   frisch();
   A.S.eigene = { t1: testRezept("t1", [["Quark", 200, "g", "kr"]], { p: 30 }) };
   A.S.plan[heuteSlot("f")] = { r: "t1", p: 2 };
-  wahr(/30 G PROTEIN/.test(A.heuteKarte()), "Protein sichtbar");
+  wahr(/30 g Protein/.test(A.heuteKarte()), "Protein sichtbar");
 });
 
 gruppe("2 · Suche über Zutaten");

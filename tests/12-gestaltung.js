@@ -39,7 +39,7 @@ t("Jede benutzte Variable ist auch definiert", () => {
 
 t("Der dunkle Modus lässt keine Farbe stehen", () => {
   /* Farben müssen umschalten. Maße, Schriften und Radien gelten für beide. */
-  const farbig = k => /^--(paper|card|card-2|fill|fill-2|ink|ink-2|ink-3|line|line-2|herb|herb-bg|sea|sea-bg|beet|beet-bg|sun|sun-bg|schatten)$/.test(k);
+  const farbig = k => /^--(paper|card|card-2|fill|fill-2|ink|ink-2|ink-3|line|line-2|herb|herb-bg|sea|sea-bg|beet|beet-bg|sun|sun-bg|gefahr|schatten)$/.test(k);
   const fehlt = Object.keys(hell).filter(farbig).filter(k => !(k in dunkel));
   gleich(fehlt, [], "im dunklen Modus nicht neu gesetzt");
 });
@@ -143,6 +143,84 @@ t("Keine Steuerzeichen im Quelltext", () => {
   /* JavaScriptCore verzeiht sie, Chrome bricht daran ab – einmal passiert. */
   const treffer = QUELLE.match(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g);
   gleich(treffer, null, "Steuerzeichen gefunden");
+});
+
+gruppe("Rangfolge auf den Bildschirmen");
+
+function frisch() {
+  A.S = A.leer(); A.S.plan = {}; A.S.liste = {}; A.S.eigene = {};
+  A.cfg = { db: "", hid: "", leser: "" };
+  A.planWoche = 0; A.filter = "alle"; A.suche = ""; A.einkaufAnsicht = "woche";
+  A.erledigtWeg = false; A.routeOffen = false;
+}
+const knoepfe = h => (h.match(/<button/g) || []).length;
+
+t("Gefahr und Kategorie sind zwei verschiedene Farben", () => {
+  /* Fleisch ist kein Fehler und darf nicht rot wie ein Löschknopf aussehen. */
+  wahr(hell["--gefahr"], "keine eigene Gefahrenfarbe");
+  wahr(hell["--gefahr"] !== hell["--beet"], "Gefahr und Fleisch sind dieselbe Farbe");
+  const badge = (STIL.match(/\.badge\{([^}]*)\}/) || ["", ""])[1];
+  wahr(/var\(--gefahr\)/.test(badge), "Der Zähler nutzt die Kategoriefarbe");
+  wahr(/var\(--beet\)/.test((STIL.match(/\.t-fleisch\{([^}]*)\}/) || ["", ""])[1]),
+    "Fleisch nutzt nicht mehr seine eigene Farbe");
+});
+
+t("Vor dem Wochenplan steht nur, was zur Woche gehört", () => {
+  frisch();
+  A.autoWoche();
+  const oben = A.vWoche().split('<div class="sect"><h2>Plan</h2>')[0];
+  /* Die Knöpfe der Heute-Karte sind Inhalt (Gericht öffnen, kochen) und zählen
+     nicht als Beiwerk. Gemeint ist die Handlungsreihe der Zustandskarte. */
+  const reihe = (oben.match(/padding-top:12px">([\s\S]*?)<\/div>/) || ["", ""])[1];
+  wahr(knoepfe(reihe) <= 3, "zu viele Handlungen: " + knoepfe(reihe));
+  /* Zustand zuerst, Handlungen darunter – nicht umgekehrt */
+  wahr(oben.indexOf("von 21 geplant") < oben.indexOf("Woche vorschlagen"),
+    "Die Aktionen stehen über dem Zustand");
+  wahr(oben.indexOf("Heute") < oben.indexOf("von 21 geplant"),
+    "Der heutige Tag steht nicht oben");
+});
+
+t("Was nichts kostet, wird nicht gemeldet", () => {
+  frisch();
+  /* Ohne Prospekt gab es früher jede Woche die Zeile „kein Prospekt hinterlegt" */
+  wahr(!/kein Prospekt/.test(A.vWoche()), "Leermeldung über Prospekte");
+});
+
+t("Auf dem Rezeptbildschirm kommt die Suche zuerst", () => {
+  frisch();
+  const h = A.vRezepte();
+  wahr(h.indexOf('id="sq"') < h.indexOf('class="chips"'), "Filter vor der Suche");
+  wahr(h.indexOf('id="sq"') < h.indexOf("Eigenes Rezept anlegen"), "Anlegen vor der Suche");
+});
+
+t("Die Rezeptzeile bietet nicht das Löschen als erstes an", () => {
+  frisch();
+  A.S.eigene = { t1: { id: "t1", n: "Test", k: "veg", typ: "haupt", ma: ["a"], m: A.ALL,
+    min: 20, p: 20, bl: 0, nut: [], why: "Test.", z: [["Mehl", 100, "g", "tr"]], s: [] } };
+  A.S.sammlung = { t1: Date.now() };
+  const h = A.trefferHtml();
+  wahr(/Test/.test(h), "Rezept fehlt");
+  wahr(!/aria-label="Entfernen"/.test(h), "Entfernen steht wieder auf der Zeile");
+});
+
+t("Die Einkaufsliste zeigt den Zustand, dann die Handlungen, dann die Posten", () => {
+  frisch();
+  A.S.liste = { brot: { n: "Brot", q: 1, e: "Stk", k: "bw", on: false } };
+  const h = A.vEinkauf();
+  const bis = h.split('<div class="route">')[0];
+  wahr(knoepfe(bis) <= 6, "zu viel über der Liste: " + knoepfe(bis) + " Knöpfe");
+  wahr(bis.indexOf("erledigt") < bis.indexOf("Weiteres"), "Handlungen vor dem Zustand");
+});
+
+t("Wochenplan und Einkauf benutzen dieselbe Zustandskarte", () => {
+  frisch();
+  A.autoWoche();
+  A.S.liste = { brot: { n: "Brot", q: 1, e: "Stk", k: "bw", on: false } };
+  [A.vWoche(), A.vEinkauf()].forEach(h => {
+    wahr(/<div class="progress">/.test(h), "Fortschrittsbalken fehlt");
+    wahr(/border-top:0\.5px solid var\(--line\);padding-top:12px/.test(h),
+      "Die Handlungen sind nicht abgesetzt");
+  });
 });
 
 bilanz();

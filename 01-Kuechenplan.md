@@ -416,6 +416,65 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
 
 ---
 
+## 12d. Farbkonzept und Rangfolge (3.7)
+
+### Die Farben
+
+Der Grund ist **warmes Papier** (`#F7F6F2`), kein kaltes Systemgrau — eine Küchenapp
+soll nicht wie ein Systemdialog wirken. Der dunkle Modus ist entsprechend warm
+(`#111110` statt reinem Schwarz).
+
+Darauf **eine Leitfarbe**: ein tiefes Kräutergrün `#1F7A4C` / `#5BC98A`. Es trägt
+Fortschritt, Erledigtes und die aktive Leiste — sonst nichts.
+
+Die Kategorien kommen aus der Lebensmittelwelt statt aus der iOS-Systempalette:
+
+| | Hell | Dunkel | wofür |
+|---|---|---|---|
+| Kräutergrün | `#1F7A4C` | `#5BC98A` | Leitfarbe, vegetarisch, erledigt |
+| Schieferblau | `#3B6EA5` | `#7FB0E0` | Fisch |
+| Terracotta | `#B0442E` | `#E58C72` | Fleisch |
+| Bernstein | `#B4600A` | `#E7A64F` | Angebot, Hinweis |
+| Signalrot | `#C4362B` | `#FF6B5E` | **nur** Gefahr |
+
+Die wichtigste Trennung: **Gefahr ist keine Kategorie.** Vorher trug `--beet` beides —
+das Kennzeichen „Fleisch" und den Löschknopf. Fleisch ist kein Fehler und darf nicht
+so aussehen. Signalrot gibt es jetzt getrennt (`--gefahr`) und nur für Zerstörendes
+und den Zähler an der Leiste.
+
+Alle Textfarben liegen über 4,5:1 auf ihrem Grund, in beiden Modi einzeln geprüft.
+
+### Die Rangfolge auf den Bildschirmen
+
+Jeder Bildschirm folgt derselben Ordnung: **Zustand → Handlungen → Inhalt.**
+
+**Woche.** Vorher standen vier Kennzahlenkästchen und drei graue Absätze zwischen dem
+heutigen Tag und dem Plan. Jetzt: die Heute-Karte oben (das, was man täglich braucht),
+darunter **eine** Zustandskarte — „21 von 21 geplant" mit Fortschrittsbalken, eine Zeile
+Mischung, und nur die Hinweise, aus denen sich etwas tun lässt. Die Handlungen sind
+darin unten abgesetzt. **Was nichts kostet, wird nicht gemeldet:** die Zeile „kein
+Prospekt hinterlegt" stand vorher jede Woche da und war nie eine Nachricht.
+
+**Einkauf.** Dieselbe Zustandskarte, dasselbe Muster — bis zu drei graue Absätze sind
+eine Zeile geworden.
+
+**Rezepte.** Die Suche steht jetzt zuoberst; man kommt hierher, um etwas zu finden.
+Anlegen und „Was ist noch da?" folgen als Nebenhandlungen, dann die Filter, dann die
+Liste. Der Löschknopf ist von jeder Zeile verschwunden — er war das Auffälligste neben
+dem Titel, obwohl Löschen selten und zerstörend ist. Er liegt jetzt im Rezept selbst.
+Das Plus bleibt: Aufnehmen braucht man aus der Liste heraus wirklich.
+
+**Knöpfe.** Karten und Knöpfe teilen sich nicht mehr dieselbe Fläche: Knöpfe tragen eine
+neutrale Füllung, sonst verschwanden sie auf weißen Karten und hoben sich nur durch
+einen Schatten ab.
+
+`tests/12-gestaltung.js` prüft das mit: Gefahr und Kategorie sind verschiedene Farben,
+der Zustand steht über den Handlungen, die Suche vor den Filtern, keine Leermeldung
+über Prospekte, kein Löschknopf auf der Rezeptzeile, und beide Listenbildschirme
+benutzen dieselbe Zustandskarte.
+
+---
+
 ## 12c. Gestaltung (3.6)
 
 Die Oberfläche folgt den Apple Human Interface Guidelines. Geschrieben ist sie als

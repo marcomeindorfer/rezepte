@@ -14,34 +14,41 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%234A7A3D'/><path d='M20 16v12a6 6 0 0 0 6 6v14M26 16v12M32 34V16M44 16c-4 0-6 6-6 12s2 8 4 8v12' stroke='%23EFF1EC' stroke-width='4' fill='none' stroke-linecap='round'/></svg>">
 <style>
+/* ── Farbkonzept ────────────────────────────────────────────────────────────
+   Der Grund ist warmes Papier, kein kaltes Systemgrau: eine Küchenapp soll
+   nicht wie ein Systemdialog wirken. Darauf genau EINE Leitfarbe – ein tiefes
+   Kräutergrün, das Fortschritt, Erledigtes und die aktive Leiste trägt.
+   Die Kategorien kommen aus der Lebensmittelwelt statt aus der Systempalette:
+   Terracotta für Fleisch, Schiefergrau-Blau für Fisch, Bernstein für Angebote.
+   Gefahr ist davon getrennt – Fleisch ist kein Fehler und darf nicht so aussehen.
+   Alle Textfarben liegen über 4,5:1, die Kategoriefarben über 4,5:1 auf Weiß. */
 :root{
-  /* Farben aus der iOS-Systempalette. Grün ist die einzige Leitfarbe – Blau,
-     Rot und Orange treten nur auf, wo sie etwas bedeuten: Fisch, Fleisch,
-     Angebot. Flächen bleiben grau, damit die Liste ruhig bleibt. */
-  --paper:#F2F2F7;--card:#FFFFFF;--card-2:#F2F2F7;
-  --fill:rgba(120,120,128,.12);--fill-2:rgba(120,120,128,.20);
-  --ink:#000000;--ink-2:rgba(60,60,67,.75);--ink-3:#6C6C70;
-  --line:rgba(60,60,67,.13);--line-2:rgba(60,60,67,.26);
-  --herb:#248A3D;--herb-bg:rgba(52,199,89,.12);
-  --sea:#0071E3;--sea-bg:rgba(0,122,255,.12);
-  --beet:#D70015;--beet-bg:rgba(255,59,48,.12);
-  --sun:#B25000;--sun-bg:rgba(255,149,0,.14);
+  --paper:#F7F6F2;--card:#FFFFFF;--card-2:#F1EFE9;
+  --fill:rgba(60,56,44,.08);--fill-2:rgba(60,56,44,.14);
+  --ink:#1A1A17;--ink-2:rgba(30,29,24,.74);--ink-3:#6B6960;
+  --line:rgba(30,29,24,.11);--line-2:rgba(30,29,24,.22);
+  --herb:#1F7A4C;--herb-bg:rgba(31,122,76,.10);
+  --sea:#3B6EA5;--sea-bg:rgba(59,110,165,.10);
+  --beet:#B0442E;--beet-bg:rgba(176,68,46,.10);
+  --sun:#B4600A;--sun-bg:rgba(180,96,10,.12);
+  --gefahr:#C4362B;
   --akz:var(--herb);
-  --schatten:0 1px 2px rgba(0,0,0,.05);
-  --r:12px;--r-s:10px;
+  --schatten:0 1px 2px rgba(40,36,26,.06);
+  --r:14px;--r-s:11px;
   --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,Roboto,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --nav-h:50px;
 }
 @media (prefers-color-scheme:dark){:root{
-  --paper:#000000;--card:#1C1C1E;--card-2:#2C2C2E;
-  --fill:rgba(120,120,128,.24);--fill-2:rgba(120,120,128,.32);
-  --ink:#FFFFFF;--ink-2:rgba(235,235,245,.72);--ink-3:rgba(235,235,245,.56);
-  --line:rgba(84,84,88,.45);--line-2:rgba(84,84,88,.65);
-  --herb:#30D158;--herb-bg:rgba(48,209,88,.18);
-  --sea:#0A84FF;--sea-bg:rgba(10,132,255,.20);
-  --beet:#FF453A;--beet-bg:rgba(255,69,58,.20);
-  --sun:#FF9F0A;--sun-bg:rgba(255,159,10,.20);
+  --paper:#111110;--card:#1C1C19;--card-2:#262622;
+  --fill:rgba(238,234,222,.10);--fill-2:rgba(238,234,222,.17);
+  --ink:#F5F3EE;--ink-2:rgba(245,243,238,.74);--ink-3:rgba(245,243,238,.58);
+  --line:rgba(245,243,238,.12);--line-2:rgba(245,243,238,.23);
+  --herb:#5BC98A;--herb-bg:rgba(91,201,138,.15);
+  --sea:#7FB0E0;--sea-bg:rgba(127,176,224,.15);
+  --beet:#E58C72;--beet-bg:rgba(229,140,114,.15);
+  --sun:#E7A64F;--sun-bg:rgba(231,166,79,.15);
+  --gefahr:#FF6B5E;
   --schatten:none;}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -68,15 +75,13 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .card+.card{margin-top:10px}
 .sect{margin:26px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 3px}
 .sect h2{font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
-.btn{background:var(--card);border:0;box-shadow:var(--schatten);border-radius:var(--r-s);padding:12px 16px;font-weight:500;font-size:16px;min-height:44px;transition:opacity .12s,transform .12s}
-@media (prefers-color-scheme:dark){.btn{background:var(--card-2)}}
+.btn{background:var(--fill);border:0;box-shadow:none;border-radius:var(--r-s);padding:12px 16px;font-weight:500;font-size:16px;min-height:44px;transition:opacity .12s,transform .12s}
 .btn:active{transform:scale(.97);opacity:.7}
 .btn-primary{background:var(--herb);color:#fff;font-weight:600;box-shadow:none}
 @media (prefers-color-scheme:dark){.btn-primary{color:#00250C}}
 .btn-wide{width:100%;display:block;text-align:center;padding:14px;font-size:17px}
 .btn-s{padding:9px 14px;font-size:15px;border-radius:99px;min-height:36px}
 .btn-ghost{background:transparent;box-shadow:none;color:var(--sea);padding:9px 10px}
-@media (prefers-color-scheme:dark){.btn-ghost{background:transparent}}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap}
 
 /* Kennzeichen bleiben grau, nur die Schrift trägt die Farbe */
@@ -147,11 +152,11 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .swipe .ing{margin-top:auto;font-size:14px;color:var(--ink-3);line-height:1.5;border-top:0.5px solid var(--line);padding-top:14px}
 .stamp{position:absolute;top:22px;font-size:16px;font-weight:700;letter-spacing:.06em;padding:7px 14px;border-radius:10px;border:2.5px solid;opacity:0;transition:opacity .12s}
 .stamp-y{right:20px;color:var(--herb);border-color:var(--herb);transform:rotate(9deg)}
-.stamp-n{left:20px;color:var(--beet);border-color:var(--beet);transform:rotate(-9deg)}
+.stamp-n{left:20px;color:var(--gefahr);border-color:var(--gefahr);transform:rotate(-9deg)}
 .deck-btns{display:flex;justify-content:center;gap:24px;margin-top:18px}
 .circ{width:60px;height:60px;border-radius:99px;border:0;background:var(--card);font-size:24px;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.10);color:var(--ink-3)}
 @media (prefers-color-scheme:dark){.circ{background:var(--card-2)}}
-.circ.yes{color:var(--herb)}.circ.no{color:var(--beet)}
+.circ.yes{color:var(--herb)}.circ.no{color:var(--gefahr)}
 
 .route{position:relative;padding-left:34px;margin-top:4px}
 .route::before{content:"";position:absolute;left:12px;top:14px;bottom:14px;width:2px;background:var(--line)}
@@ -233,7 +238,7 @@ nav{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--ca
 nav button{flex:1;border:0;background:transparent;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--ink-3);font-size:10px;font-weight:500}
 nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button[aria-current="page"]{color:var(--herb);font-weight:600}
-.badge{position:absolute;transform:translate(16px,-11px);background:var(--beet);color:#fff;font-size:11px;font-weight:600;min-width:18px;height:18px;border-radius:99px;display:grid;place-items:center;padding:0 5px}
+.badge{position:absolute;transform:translate(16px,-11px);background:var(--gefahr);color:#fff;font-size:11px;font-weight:600;min-width:18px;height:18px;border-radius:99px;display:grid;place-items:center;padding:0 5px}
 .empty{text-align:center;padding:44px 24px;color:var(--ink-3)}
 .empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px;font-weight:600}
 .note{font-size:14px;color:var(--ink-3);line-height:1.45}
@@ -2449,7 +2454,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.6";
+const VERSION="3.7";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2909,7 +2914,7 @@ function heuteKarte(){
   const geplant=["f","m","a"].filter(mk=>{const e=S.plan["w0-"+d+"-"+mk];return e&&R(e.r);}).length;
   return `<div class="heutekarte">
     <div class="hk-kopf"><b style="font-size:15px">Heute · ${TAGE[d]}</b>
-      <span class="rec-m">${geplant?proteinTag(0,d)+" G PROTEIN":"NICHTS GEPLANT"}</span></div>
+      <span class="note">${geplant?proteinTag(0,d)+" g Protein":"nichts geplant"}</span></div>
     ${zeilen}</div>`;
 }
 /* Viele essen morgens ohnehin dasselbe – und bei 21 Frühstücken für 21 Plätze
@@ -2929,23 +2934,33 @@ function vWoche(){
   const offen=khOffen(planWoche);
   const wahl=`<div class="toggle" style="width:100%;margin-bottom:12px">
     ${[0,1,2].map(w=>`<button style="flex:1" aria-pressed="${planWoche===w}" onclick="planWoche=${w};render()">${["Diese","Nächste","Übernächste"][w]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(w)}</span></button>`).join("")}</div>`;
-  const kopf=`<div class="rhythm">
-    <div class="rh ${z.fisch===1?"":"warn"}"><b>${z.fisch}</b><span>Fisch</span></div>
-    <div class="rh ${z.fleisch===1?"":"warn"}"><b>${z.fleisch}</b><span>Fleisch</span></div>
-    <div class="rh"><b>${z.veg}</b><span>Vegetarisch</span></div>
-    <div class="rh"><b>${belegt}</b><span>von 21 geplant</span></div></div>
-    ${(()=>{const sch=proteinSchnitt(planWoche);
-      if(!sch) return "";
-      const knapp=sch<PROTEINZIEL;
-      return `<p class="note" style="margin-top:9px${knapp?";color:var(--sun)":""}">Im Schnitt ${sch} g Protein pro Tag${knapp?` – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen; ein Snack schließt die Lücke.`:", Ziel erreicht."}</p>
-        ${knapp?`<button class="btn btn-s" style="margin-top:6px" onclick="proteinSnack()">Protein-Snack für die Woche ergänzen</button>`:""}`;})()}
-    <p class="note" style="margin-top:9px">${wocheHatAngebote(planWoche)?`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`:`Für ${kwPlus(planWoche)} ist kein Prospekt hinterlegt.`}</p>
-    ${belegt&&offen.length?`<p class="note" style="margin-top:4px">Beilagen noch nicht vertreten: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""}
-    <div class="row-btns" style="margin-top:12px">
+  /* Eine Karte statt vier Kästchen und drei grauen Absätzen. Oben steht der
+     Zustand („wie voll ist die Woche"), darunter die Mischung, dann nur die
+     Hinweise, aus denen sich etwas tun lässt, und zuletzt die Aktionen.
+     Was nichts kostet, wird nicht erwähnt: „kein Prospekt hinterlegt" stand
+     vorher jede Woche da und war nie eine Nachricht. */
+  const schnitt=proteinSchnitt(planWoche);
+  const knapp=schnitt&&schnitt<PROTEINZIEL;
+  const meta=[`${z.veg} vegetarisch`,`${z.fisch} Fisch`,`${z.fleisch} Fleisch`].join(" · ");
+  const hinweise=[
+    knapp?`<p class="note" style="color:var(--sun);margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen, ein Snack schließt die Lücke.</p>`:"",
+    (schnitt&&!knapp)?`<p class="note" style="margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel erreicht.</p>`:"",
+    wocheHatAngebote(planWoche)?`<p class="note" style="margin-top:6px">Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.</p>`:"",
+    (belegt&&offen.length)?`<p class="note" style="margin-top:6px">Noch keine Beilage aus: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""
+  ].join("");
+  const kopf=`<div class="card">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+      <b style="font-size:17px">${belegt} von 21 geplant</b>
+      <span class="note">${kwPlus(planWoche)}</span></div>
+    <div class="progress"><i style="width:${belegt/21*100}%"></i></div>
+    ${belegt?`<p class="note" style="margin-top:8px">${meta}</p>`:""}
+    ${hinweise}
+    ${knapp?`<button class="btn btn-s" style="margin-top:10px" onclick="proteinSnack()">Protein-Snack ergänzen</button>`:""}
+    <div class="row-btns" style="margin-top:12px;border-top:0.5px solid var(--line);padding-top:12px">
       <button class="btn btn-s${belegt?"":" btn-primary"}" onclick="autoWoche()">Woche vorschlagen</button>
       ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Woche abschließen</button>`:""}
       <button class="btn btn-s" onclick="wocheMehr()">Weiteres …</button>
-    </div>`;
+    </div></div>`;
 
   const tage_html=TAGE.map((tn,d)=>{
     const eintraege=["f","m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
@@ -3418,8 +3433,11 @@ function trefferHtml(){
         schnell&&gekocht>=SCHNELL_SCHWELLE?`<button class="tag t-sun" style="border:0;cursor:pointer" onclick="event.stopPropagation();schnellAufnehmen('${r.id}')">${gekocht}× gekocht · als Rezept aufnehmen</button>`:""}</div>
     </div>${schnell
       ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="event.stopPropagation();schnellWeg('${r.id}')" aria-label="Löschen">${IKON.muell}</button>`
-      :drin
-      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">${IKON.muell}</button>`
+      /* Entfernen stand bisher auf jeder Zeile und war damit das Auffälligste
+         neben dem Titel – eine seltene und noch dazu zerstörende Handlung.
+         Sie liegt jetzt im Rezept selbst. Das Plus bleibt: Aufnehmen ist eine
+         Handlung, die man aus der Liste heraus wirklich braucht. */
+      :drin ? ""
       :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">${IKON.plus}</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
@@ -3509,10 +3527,10 @@ function vRezepte(){
       <span style="flex:1">Rezept entfernt.</span>
       <button class="btn btn-s" onclick="rezeptZurueck()">Rückgängig</button>
       <button class="btn btn-ghost btn-s" onclick="letztesWeg=null;render()" aria-label="Schließen">${IKON.kreuz}</button></div>`:""}
-    <div class="row-btns" style="margin-bottom:10px">
-      <button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button>
+    <input type="search" id="sq" placeholder="Rezept suchen" value="${esc(suche)}" oninput="sucheAendern(this.value)">
+    <div class="row-btns" style="margin:10px 0 12px">
+      <button class="btn btn-s" onclick="neuesRezept()">Eigenes Rezept anlegen</button>
       <button class="btn btn-s" onclick="resteKueche()">Was ist noch da?</button></div>
-    <input type="search" id="sq" placeholder="Rezept suchen" value="${esc(suche)}" oninput="sucheAendern(this.value)" style="margin-bottom:12px">
     <div class="chips" id="chipzeile">${chipsHtml()}</div>
     <div id="trefferliste">${trefferHtml()}</div>`;
 }
@@ -3530,7 +3548,7 @@ function rezeptWeg(id){
     <p class="note" style="margin:8px 0 14px">${esc(text)}</p>
     <div class="row-btns">
       <button class="btn" style="flex:1" onclick="closeSheet()">Abbrechen</button>
-      <button class="btn" style="flex:1;color:var(--beet);font-weight:600" onclick="rezeptWegJetzt('${id}',${eigen})">${IKON.muell} ${eigen?"Löschen":"Entfernen"}</button>
+      <button class="btn" style="flex:1;color:var(--gefahr);font-weight:600" onclick="rezeptWegJetzt('${id}',${eigen})">${IKON.muell} ${eigen?"Löschen":"Entfernen"}</button>
     </div>`);
 }
 function rezeptWegJetzt(id,eigen){
@@ -3802,16 +3820,22 @@ function vEinkauf(){
       <button class="btn btn-s" onclick="mv(${i},-1)" aria-label="nach oben">${IKON.hoch}</button>
       <button class="btn btn-s" onclick="mv(${i},1)" aria-label="nach unten">${IKON.runter}</button></span></div>`).join("")}
       <p class="note" style="margin-top:10px">Stell die Reihenfolge so ein, wie die Abteilungen in eurem Markt liegen. Die Nummern im Laufplan folgen dieser Liste.</p></div>`:"";
+  /* Dieselbe Karte wie beim Wochenplan: oben der Zustand, darunter eine einzige
+     Zeile Beiwerk, unten die Aktionen. Vorher standen hier bis zu drei graue
+     Absätze übereinander, bevor der erste Posten zu sehen war. */
+  const meta=[
+    (S.listeInfo&&S.listeInfo.ausVorrat)?S.listeInfo.ausVorrat+" aus dem Vorrat gedeckt":"",
+    eintraege.filter(([,i])=>i.ang).length?eintraege.filter(([,i])=>i.ang).length+" im Prospekt":""
+  ].filter(Boolean).join(" · ");
   return wahl+`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
-      <b style="font-size:15px">${fertig} von ${ges} erledigt</b><span class="rec-m">${kwPlus(planWoche)}</span></div>
+      <b style="font-size:17px">${fertig} von ${ges} erledigt</b><span class="note">${kwPlus(planWoche)}</span></div>
       <div class="progress"><i style="width:${ges?fertig/ges*100:0}%"></i></div>
-      ${eintraege.filter(([,i])=>i.ang).length?`<p class="note" style="margin-top:9px">${eintraege.filter(([,i])=>i.ang).length} Posten stehen im Prospekt.</p>`:""}
-      ${(S.listeInfo&&S.listeInfo.ausVorrat)?`<p class="note" style="margin-top:4px">${S.listeInfo.ausVorrat} Zutaten sind aus dem Vorrat gedeckt und fehlen deshalb hier.</p>`:""}
-      ${fertig?"":`<p class="note" style="margin-top:4px">Die Menge rechts antippen zeigt, für welche Gerichte der Posten ist.</p>`}</div>
-    <div class="row-btns" style="margin-top:10px">
-      <button class="btn btn-s" onclick="erledigtWeg=!erledigtWeg;render()">${erledigtWeg?"Erledigte zeigen":"Erledigte ausblenden"}</button>
-      <button class="btn btn-s" onclick="einkaufMehr()">Weiteres …</button>
-    </div>
+      ${meta?`<p class="note" style="margin-top:8px">${meta}</p>`:""}
+      ${fertig?"":`<p class="note" style="margin-top:6px">Die Menge rechts antippen zeigt, für welche Gerichte der Posten ist.</p>`}
+      <div class="row-btns" style="margin-top:12px;border-top:0.5px solid var(--line);padding-top:12px">
+        <button class="btn btn-s" onclick="erledigtWeg=!erledigtWeg;render()">${erledigtWeg?"Erledigte zeigen":"Erledigte ausblenden"}</button>
+        <button class="btn btn-s" onclick="einkaufMehr()">Weiteres …</button>
+      </div></div>
     <div class="card" style="margin-top:10px"><div style="display:flex;gap:8px">
       <input type="text" id="mi" placeholder="Etwas ergänzen" onkeydown="if(event.key==='Enter')manuell()">
       <button class="btn" onclick="manuell()">Hinzufügen</button></div></div>
@@ -3999,7 +4023,7 @@ const MEHR_BLATT={
     const b=basis();
     return blattKopf("Abgleich",b?`Status: ${SYNCTEXT[syncState]||syncState}${queue.length?` · ${queue.length===1?"1 Änderung wartet":queue.length+" Änderungen warten"}`:""}`
                             :"Noch nicht eingerichtet – alles liegt nur auf diesem Gerät.")
-      +(b&&dauerfehler()?`<p class="note" style="color:var(--beet);font-weight:550;margin-bottom:12px">${SYNC_FEHLER[syncState]}</p>`:"")
+      +(b&&dauerfehler()?`<p class="note" style="color:var(--gefahr);font-weight:550;margin-bottom:12px">${SYNC_FEHLER[syncState]}</p>`:"")
       +(b?`<div class="row-btns" style="margin-bottom:14px"><button class="btn btn-s" onclick="versuche=0;verbinden();flush();mehrZeigen()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush();mehrZeigen()">Wartendes senden</button>`:""}</div>`:"")
       +`<label class="fl" for="db">Datenbank-URL aus Firebase</label>
         <input type="url" id="db" value="${esc(cfg.db)}" placeholder="https://name-default-rtdb.europe-west1.firebasedatabase.app">
