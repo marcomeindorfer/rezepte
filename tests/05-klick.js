@@ -128,7 +128,18 @@ const SHEETS = [
   ["Rezeptformular", () => A.neuesRezept()],
   ["Rezeptformular vorbefüllt", () => A.neuesRezept({ n: "Aus dem Netz", z: "200 g Möhren\n1 Zwiebel", s: "Kochen." })],
   ["Angebote bearbeiten", () => A.angeboteBearbeiten()],
-  ["Rezept bearbeiten", () => A.neuesRezept(A.S.eigene.eig1)]
+  ["Rezept bearbeiten", () => A.neuesRezept(A.S.eigene.eig1)],
+  ["Weiteres zur Einkaufsliste", () => A.einkaufMehr()],
+  ["Mehr: Vorrat", () => A.mehrOeffnen("vorrat")],
+  ["Mehr: Angebote", () => A.mehrOeffnen("angebote")],
+  ["Mehr: Eigene Rezepte", () => A.mehrOeffnen("eigene")],
+  ["Mehr: Archiv", () => A.mehrOeffnen("archiv")],
+  ["Mehr: Abgleich", () => A.mehrOeffnen("sync")],
+  ["Mehr: Abgleich eingerichtet", () => {
+    A.cfg = { db: "https://test.example", hid: "h".repeat(24), leser: "" };
+    A.mehrOeffnen("sync");
+  }],
+  ["Mehr: Archiv gefüllt", () => { A.S.archiv = { b1: Date.now() }; A.mehrOeffnen("archiv"); }]
 ];
 SHEETS.forEach(([name, oeffnen]) => {
   t("Fenster „" + name + "“ öffnet", () => {

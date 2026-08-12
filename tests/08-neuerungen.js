@@ -264,7 +264,7 @@ t("Die Karte nennt die Tage seit dem letzten Kochen", () => {
   A.S.eigene = { t1: testRezept("t1", [["Möhren", 100, "g", "og"]], { n: "Möhrensuppe" }) };
   A.S.sammlung = { t1: Date.now() };
   A.S.verlauf = { [Date.now() - 12 * 86400000]: { r: "t1", kw: "KW 30" } };
-  wahr(/ZULETZT VOR 12 TAGEN/.test(A.trefferHtml()), "Tage statt Kalenderwoche");
+  wahr(/zuletzt vor 12 Tagen/.test(A.trefferHtml()), "Tage statt Kalenderwoche");
 });
 
 gruppe("9 · Was der Vorrat gespart hat");

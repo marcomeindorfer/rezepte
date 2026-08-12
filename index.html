@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#EFF1EC">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme:dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Küchenplan</title>
@@ -14,233 +15,292 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%234A7A3D'/><path d='M20 16v12a6 6 0 0 0 6 6v14M26 16v12M32 34V16M44 16c-4 0-6 6-6 12s2 8 4 8v12' stroke='%23EFF1EC' stroke-width='4' fill='none' stroke-linecap='round'/></svg>">
 <style>
 :root{
-  --paper:#EFF1EC;--card:#FFFFFF;--card-2:#F6F8F3;
-  --ink:#1B2018;--ink-2:#56604F;--ink-3:#8A9384;
-  --line:#DBE0D5;--line-2:#C7CFC0;
-  --beet:#A2354C;--beet-bg:#F7E7EA;
-  --sea:#2A6478;--sea-bg:#E3EEF2;
-  --herb:#41702F;--herb-bg:#E7F0E2;
-  --sun:#9A6B12;--sun-bg:#F8EEDA;
-  --r:14px;--r-s:9px;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
-  --mono:ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
-  --nav-h:64px;
+  /* Farben aus der iOS-Systempalette. Grün ist die einzige Leitfarbe – Blau,
+     Rot und Orange treten nur auf, wo sie etwas bedeuten: Fisch, Fleisch,
+     Angebot. Flächen bleiben grau, damit die Liste ruhig bleibt. */
+  --paper:#F2F2F7;--card:#FFFFFF;--card-2:#F2F2F7;
+  --fill:rgba(120,120,128,.12);--fill-2:rgba(120,120,128,.20);
+  --ink:#000000;--ink-2:rgba(60,60,67,.75);--ink-3:#6C6C70;
+  --line:rgba(60,60,67,.13);--line-2:rgba(60,60,67,.26);
+  --herb:#248A3D;--herb-bg:rgba(52,199,89,.12);
+  --sea:#0071E3;--sea-bg:rgba(0,122,255,.12);
+  --beet:#D70015;--beet-bg:rgba(255,59,48,.12);
+  --sun:#B25000;--sun-bg:rgba(255,149,0,.14);
+  --akz:var(--herb);
+  --schatten:0 1px 2px rgba(0,0,0,.05);
+  --r:12px;--r-s:10px;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --nav-h:50px;
 }
 @media (prefers-color-scheme:dark){:root{
-  --paper:#141814;--card:#1E241D;--card-2:#252C24;
-  --ink:#E9EDE6;--ink-2:#A8B2A2;--ink-3:#7C867A;
-  --line:#333B31;--line-2:#414A3E;
-  --beet:#E58DA0;--beet-bg:#3A222A;
-  --sea:#8CC3D6;--sea-bg:#1C2E35;
-  --herb:#9BC98A;--herb-bg:#23301F;
-  --sun:#D9AE5E;--sun-bg:#332916;}}
+  --paper:#000000;--card:#1C1C1E;--card-2:#2C2C2E;
+  --fill:rgba(120,120,128,.24);--fill-2:rgba(120,120,128,.32);
+  --ink:#FFFFFF;--ink-2:rgba(235,235,245,.72);--ink-3:rgba(235,235,245,.56);
+  --line:rgba(84,84,88,.45);--line-2:rgba(84,84,88,.65);
+  --herb:#30D158;--herb-bg:rgba(48,209,88,.18);
+  --sea:#0A84FF;--sea-bg:rgba(10,132,255,.20);
+  --beet:#FF453A;--beet-bg:rgba(255,69,58,.20);
+  --sun:#FF9F0A;--sun-bg:rgba(255,159,10,.20);
+  --schatten:none;}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
-body{font-family:var(--sans);background:var(--paper);color:var(--ink);font-size:16px;line-height:1.45;
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);font-size:17px;line-height:1.4;
+  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;
   overscroll-behavior-y:none;padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
 #app{max-width:560px;margin:0 auto;padding:0 16px}
-h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.02em}
 button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+svg.i{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.12em}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-header{padding:22px 0 12px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
-.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
-header h1{font-size:26px}
-.hd-side{font-family:var(--mono);font-size:12px;color:var(--ink-3);text-align:right;white-space:nowrap}
+
+/* Große Titelzeile wie in den Systemapps */
+header{padding:calc(env(safe-area-inset-top) + 14px) 0 10px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.eyebrow{display:none}
+header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.hd-side{font-size:13px;color:var(--ink-3);text-align:right;white-space:nowrap}
 .sync{display:inline-flex;align-items:center;gap:5px}
 .sync i{width:7px;height:7px;border-radius:99px;background:var(--ink-3)}
 .sync.on i{background:var(--herb)}.sync.off i{background:var(--sun)}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card{background:var(--card);border:0;border-radius:var(--r);padding:15px;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.card{border:0.5px solid var(--line)}}
 .card+.card{margin-top:10px}
-.sect{margin:22px 0 9px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.sect h2{font-size:13px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
-.btn{background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-s);padding:11px 14px;font-weight:550;transition:transform .1s}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:var(--herb);border-color:var(--herb);color:#fff}
-@media (prefers-color-scheme:dark){.btn-primary{color:#12180F}}
-.btn-wide{width:100%;display:block;text-align:center;padding:15px;font-size:16px}
-.btn-s{padding:7px 11px;font-size:14px;border-radius:8px}
-.btn-ghost{background:transparent;border-color:transparent;color:var(--ink-3);padding:6px 8px}
+.sect{margin:26px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 3px}
+.sect h2{font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.btn{background:var(--card);border:0;box-shadow:var(--schatten);border-radius:var(--r-s);padding:12px 16px;font-weight:500;font-size:16px;min-height:44px;transition:opacity .12s,transform .12s}
+@media (prefers-color-scheme:dark){.btn{background:var(--card-2)}}
+.btn:active{transform:scale(.97);opacity:.7}
+.btn-primary{background:var(--herb);color:#fff;font-weight:600;box-shadow:none}
+@media (prefers-color-scheme:dark){.btn-primary{color:#00250C}}
+.btn-wide{width:100%;display:block;text-align:center;padding:14px;font-size:17px}
+.btn-s{padding:9px 14px;font-size:15px;border-radius:99px;min-height:36px}
+.btn-ghost{background:transparent;box-shadow:none;color:var(--sea);padding:9px 10px}
+@media (prefers-color-scheme:dark){.btn-ghost{background:transparent}}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap}
-.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
-.t-fisch{background:var(--sea-bg);color:var(--sea)}.t-fleisch{background:var(--beet-bg);color:var(--beet)}
-.t-veg{background:var(--herb-bg);color:var(--herb)}.t-neutral{background:var(--card-2);color:var(--ink-2)}
-.t-sun{background:var(--sun-bg);color:var(--sun)}
+
+/* Kennzeichen bleiben grau, nur die Schrift trägt die Farbe */
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap;background:var(--fill);color:var(--ink-2)}
+.t-fisch{color:var(--sea)}.t-fleisch{color:var(--beet)}
+.t-veg{color:var(--herb)}.t-neutral{color:var(--ink-2)}
+.t-sun{color:var(--sun)}
 .dot{width:7px;height:7px;border-radius:99px;flex:none}
 .d-fisch{background:var(--sea)}.d-fleisch{background:var(--beet)}.d-veg{background:var(--herb)}
-.chips{display:flex;gap:7px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{border:1px solid var(--line-2);background:var(--card);border-radius:99px;padding:7px 13px;font-size:14px;white-space:nowrap}
-.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip{border:0;background:var(--fill);border-radius:99px;padding:8px 15px;font-size:15px;white-space:nowrap;min-height:36px;color:var(--ink-2)}
+/* Auswahl überall gleich: graue Bahn, heller Schalter – wie die Systemsegmente.
+   Ein schwarz gefülltes Element wäre das Schwerste auf der Seite und zöge den
+   Blick von der Liste weg, um die es eigentlich geht. */
+.chip[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+@media (prefers-color-scheme:dark){.chip[aria-pressed="true"]{background:#636366;color:#fff;box-shadow:none}}
 
-.rhythm{display:flex;gap:7px}
-.rh{flex:1;background:var(--card);border:1px solid var(--line);border-radius:var(--r-s);padding:9px 6px;text-align:center}
-.rh b{display:block;font-family:var(--mono);font-size:20px;font-weight:600;line-height:1.1}
-.rh span{font-size:10.5px;color:var(--ink-3);letter-spacing:.03em}
-.rh.warn{border-color:var(--sun);background:var(--sun-bg)}
+.rhythm{display:flex;gap:8px}
+.rh{flex:1;background:var(--card);border-radius:var(--r-s);padding:10px 6px;text-align:center;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.rh{background:var(--card-2)}}
+.rh b{display:block;font-size:22px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
+.rh span{font-size:11px;color:var(--ink-3)}
+.rh.warn{background:var(--sun-bg)}
+.rh.warn b{color:var(--sun)}
 
 /* Tagesplan */
-.day{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:9px}
-.day-h{display:flex;align-items:baseline;justify-content:space-between;padding:11px 13px 9px;border-bottom:1px solid var(--line);background:var(--card-2)}
-.day.heute{border-color:var(--herb);border-width:1.5px}
-.day.heute .day-h{background:var(--herb-bg)}
+.day{background:var(--card);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.day{border:0.5px solid var(--line)}}
+.day-h{display:flex;align-items:baseline;justify-content:space-between;padding:12px 15px 10px}
 .day.heute .day-h b{color:var(--herb)}
-.heutetag{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;background:var(--herb);color:#fff;padding:2px 6px;border-radius:99px;margin-left:7px;vertical-align:1px}
-.day-h b{font-size:15px}
-.day-h span{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em}
-.slot{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line);min-height:52px}
-.slot:first-of-type{border-top:0}
-.slot-l{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);width:48px;flex:none}
+.heutetag{font-size:11px;font-weight:600;background:var(--herb);color:#fff;padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:1px;letter-spacing:0}
+@media (prefers-color-scheme:dark){.heutetag{color:#00250C}}
+.day-h b{font-size:17px;font-weight:600;letter-spacing:-.02em}
+.day-h span{font-size:12px;color:var(--ink-3)}
+.slot{display:flex;align-items:center;gap:12px;padding:10px 15px;border-top:0.5px solid var(--line);min-height:52px}
+.slot:first-of-type{border-top:0.5px solid var(--line)}
+.slot-l{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);width:48px;flex:none}
 .slot-m{flex:1;min-width:0}
-.slot-n{font-size:14.5px;font-weight:550;line-height:1.25}
-.slot-s{font-size:11.5px;color:var(--ink-3);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.pill{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.01em;padding:2px 7px;border-radius:99px;background:var(--card-2);color:var(--ink-2);border:0.5px solid var(--line);white-space:nowrap}
-.slot-e{font-size:14.5px;color:var(--ink-3)}
+.slot-n{font-size:16px;font-weight:500;line-height:1.25}
+.slot-s{font-size:12.5px;color:var(--ink-3);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--fill);color:var(--ink-2);border:0;white-space:nowrap}
+.slot-e{font-size:16px;color:var(--ink-3)}
 .slot button.pick{flex:1;text-align:left;background:transparent;border:0;padding:0;min-width:0}
-.mini{display:flex;align-items:center;gap:1px;border:1px solid var(--line-2);border-radius:99px;padding:1px;flex:none}
-.mini button{width:26px;height:26px;border:0;background:transparent;border-radius:99px;font-size:15px;line-height:1;display:grid;place-items:center}
-.mini b{font-family:var(--mono);font-size:12.5px;min-width:16px;text-align:center;font-weight:600}
-.warnrow{padding:8px 13px;background:var(--sun-bg);color:var(--sun);font-size:12.5px;border-top:1px solid var(--line)}
+.mini{display:flex;align-items:center;gap:1px;background:var(--fill);border-radius:99px;padding:2px;flex:none}
+.mini button{width:28px;height:28px;border:0;background:transparent;border-radius:99px;font-size:16px;line-height:1;display:grid;place-items:center;color:var(--sea)}
+.mini b{font-size:13px;min-width:18px;text-align:center;font-weight:600}
+.warnrow{padding:9px 15px;background:var(--sun-bg);color:var(--sun);font-size:13px}
 
-.rec{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px;width:100%;text-align:left;border-left-width:4px}
-.rec+.rec{margin-top:8px}
-.rec.k-fisch{border-left-color:var(--sea)}.rec.k-fleisch{border-left-color:var(--beet)}.rec.k-veg{border-left-color:var(--herb)}
+.rec{display:flex;gap:12px;background:var(--card);border:0;border-radius:var(--r);padding:14px;width:100%;text-align:left;box-shadow:var(--schatten);position:relative;overflow:hidden}
+@media (prefers-color-scheme:dark){.rec{border:0.5px solid var(--line)}}
+.rec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink-3);opacity:.5}
+.rec+.rec{margin-top:9px}
+.rec.k-fisch::before{background:var(--sea);opacity:1}
+.rec.k-fleisch::before{background:var(--beet);opacity:1}
+.rec.k-veg::before{background:var(--herb);opacity:1}
 .rec-b{flex:1;min-width:0}
-.rec-t{font-weight:600;font-size:15.5px;line-height:1.25}
-.rec-m{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:5px;letter-spacing:.02em}
-.rec-tags{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap}
-.add-b{flex:none;width:38px;height:38px;border-radius:99px;border:1px solid var(--line-2);background:var(--card-2);font-size:20px;display:grid;place-items:center;align-self:center}
+.rec-t{font-weight:600;font-size:17px;line-height:1.25;letter-spacing:-.02em}
+.rec-m{font-size:13px;color:var(--ink-3);margin-top:5px}
+.rec-tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.add-b{flex:none;width:40px;height:40px;border-radius:99px;border:0;background:var(--fill);font-size:21px;color:var(--sea);display:grid;place-items:center;align-self:center}
 
 .deck{position:relative;height:400px;margin-top:6px}
-.swipe{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;display:flex;flex-direction:column;touch-action:pan-y;user-select:none}
-.swipe h3{font-size:21px;line-height:1.2;margin-bottom:10px}
-.swipe .why{font-size:14.5px;color:var(--ink-2);line-height:1.5}
-.swipe .ing{margin-top:auto;font-size:13px;color:var(--ink-3);line-height:1.55;border-top:1px solid var(--line);padding-top:12px}
-.stamp{position:absolute;top:22px;font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.1em;padding:7px 13px;border-radius:8px;border:2.5px solid;opacity:0;transition:opacity .12s}
+.swipe{position:absolute;inset:0;background:var(--card);border:0;border-radius:20px;padding:22px;display:flex;flex-direction:column;touch-action:pan-y;user-select:none;box-shadow:0 6px 20px rgba(0,0,0,.10)}
+@media (prefers-color-scheme:dark){.swipe{border:0.5px solid var(--line)}}
+.swipe h3{font-size:24px;line-height:1.15;margin-bottom:10px;letter-spacing:-.03em}
+.swipe .why{font-size:16px;color:var(--ink-2);line-height:1.45}
+.swipe .ing{margin-top:auto;font-size:14px;color:var(--ink-3);line-height:1.5;border-top:0.5px solid var(--line);padding-top:14px}
+.stamp{position:absolute;top:22px;font-size:16px;font-weight:700;letter-spacing:.06em;padding:7px 14px;border-radius:10px;border:2.5px solid;opacity:0;transition:opacity .12s}
 .stamp-y{right:20px;color:var(--herb);border-color:var(--herb);transform:rotate(9deg)}
 .stamp-n{left:20px;color:var(--beet);border-color:var(--beet);transform:rotate(-9deg)}
-.deck-btns{display:flex;justify-content:center;gap:22px;margin-top:16px}
-.circ{width:60px;height:60px;border-radius:99px;border:1.5px solid var(--line-2);background:var(--card);font-size:24px;display:grid;place-items:center}
-.circ.yes{border-color:var(--herb);color:var(--herb)}.circ.no{border-color:var(--beet);color:var(--beet)}
+.deck-btns{display:flex;justify-content:center;gap:24px;margin-top:18px}
+.circ{width:60px;height:60px;border-radius:99px;border:0;background:var(--card);font-size:24px;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.10);color:var(--ink-3)}
+@media (prefers-color-scheme:dark){.circ{background:var(--card-2)}}
+.circ.yes{color:var(--herb)}.circ.no{color:var(--beet)}
 
 .route{position:relative;padding-left:34px;margin-top:4px}
-.route::before{content:"";position:absolute;left:12px;top:14px;bottom:14px;width:2px;background:repeating-linear-gradient(to bottom,var(--line-2) 0 6px,transparent 6px 12px)}
-.stop{position:relative;margin-bottom:16px}
-.stop::before{content:attr(data-n);position:absolute;left:-34px;top:1px;width:25px;height:25px;border-radius:99px;background:var(--herb);color:#fff;font-family:var(--mono);font-size:12px;font-weight:700;display:grid;place-items:center;border:3px solid var(--paper)}
+.route::before{content:"";position:absolute;left:12px;top:14px;bottom:14px;width:2px;background:var(--line)}
+.stop{position:relative;margin-bottom:18px}
+.stop::before{content:attr(data-n);position:absolute;left:-34px;top:1px;width:24px;height:24px;border-radius:99px;background:var(--herb);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;border:3px solid var(--paper)}
 .stop.done::before{background:var(--ink-3)}
-@media (prefers-color-scheme:dark){.stop::before{color:#12180F}}
-.stop h3{font-size:15px;margin-bottom:7px}
+@media (prefers-color-scheme:dark){.stop::before{color:#00250C}}
+.stop h3{font-size:16px;margin-bottom:8px;font-weight:600}
 .stop.done h3{color:var(--ink-3)}
-.items{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.itemrow{display:flex;align-items:stretch;border-top:1px solid var(--line)}
+.items{background:var(--card);border:0;border-radius:var(--r);overflow:hidden;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.items{border:0.5px solid var(--line)}}
+.itemrow{display:flex;align-items:stretch;border-top:0.5px solid var(--line)}
 .itemrow:first-child{border-top:0}
-.item{display:flex;align-items:center;gap:11px;padding:12px 13px;flex:1;min-width:0;text-align:left;background:transparent;border:0}
-.item-x{border:0;background:transparent;color:var(--ink-3);padding:0 13px;font-size:15px}
+.item{display:flex;align-items:center;gap:12px;padding:12px 15px;flex:1;min-width:0;text-align:left;background:transparent;border:0;min-height:48px}
+.item-x{border:0;background:transparent;color:var(--ink-3);padding:0 15px;font-size:15px}
 
-.box{width:23px;height:23px;border-radius:7px;border:1.8px solid var(--line-2);flex:none;display:grid;place-items:center;font-size:14px;color:transparent}
+.box{width:24px;height:24px;border-radius:99px;border:1.8px solid var(--line-2);flex:none;display:grid;place-items:center;font-size:14px;color:transparent}
+.box svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .item.on .box{background:var(--herb);border-color:var(--herb);color:#fff}
-@media (prefers-color-scheme:dark){.item.on .box{color:#12180F}}
-.item.on .it-n{text-decoration:line-through;color:var(--ink-3)}
-.it-n{flex:1;font-size:15px;line-height:1.3}
-.it-q{font-family:var(--mono);font-size:13px;color:var(--ink-2);white-space:nowrap}
+@media (prefers-color-scheme:dark){.item.on .box{color:#00250C}}
+.item.on .it-n{color:var(--ink-3)}
+.it-n{flex:1;font-size:17px;line-height:1.3}
+.it-q{font-size:15px;color:var(--ink-2);white-space:nowrap}
 .item.on .it-q{color:var(--ink-3)}
-.progress{height:7px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:9px}
+.progress{height:6px;border-radius:99px;background:var(--fill);overflow:hidden;margin-top:10px}
 .progress i{display:block;height:100%;background:var(--herb);border-radius:99px;transition:width .25s}
 
-.sheet{position:fixed;inset:0;background:rgba(12,16,11,.5);z-index:50;display:flex;align-items:flex-end;justify-content:center}
-.sheet-in{background:var(--paper);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
-.grab{width:38px;height:4px;border-radius:99px;background:var(--line-2);margin:0 auto 16px}
-.toggle{display:flex;border:1px solid var(--line-2);border-radius:99px;overflow:hidden;flex:none}
-.toggle button{border:0;background:transparent;padding:7px 13px;font-size:13.5px;font-weight:550;color:var(--ink-3)}
-.toggle button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
-.meal{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 13px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+/* 92vh misst am Handy die Fläche OHNE die ein- und ausfahrende Browserleiste –
+   das Blatt ragt dann unter den sichtbaren Rand und der Schließen-Knopf ist nicht
+   erreichbar. dvh misst, was gerade wirklich zu sehen ist; vh bleibt als Rückfall
+   für ältere Browser stehen. overscroll-behavior verhindert, dass ein Wisch am
+   Ende des Blattes die Seite dahinter weiterschiebt. */
+.sheet-in{background:var(--paper);width:100%;max-width:560px;max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;border-radius:14px 14px 0 0;padding:12px 16px calc(20px + env(safe-area-inset-bottom));animation:blattrein .28s cubic-bezier(.32,.72,0,1)}
+@keyframes blattrein{from{transform:translateY(18px)}to{transform:none}}
+.grab{width:36px;height:5px;border-radius:99px;background:var(--line-2);margin:0 auto 14px}
+.toggle{display:flex;background:var(--fill);border-radius:99px;padding:2px;flex:none}
+.toggle button{border:0;background:transparent;padding:7px 14px;font-size:14px;font-weight:600;color:var(--ink-2);border-radius:99px}
+.toggle button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+@media (prefers-color-scheme:dark){.toggle button[aria-pressed="true"]{background:#636366;color:#fff}}
+.zeilen{background:var(--card);border:0;border-radius:var(--r);overflow:hidden;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.zeilen{border:0.5px solid var(--line)}}
+.zeile{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;border-bottom:0.5px solid var(--line);padding:13px 15px;text-align:left;font-size:17px;color:var(--ink);min-height:48px}
+.zeile:last-child{border-bottom:0}
+.zeile-n{flex:1;font-weight:400}
+.zeile-w{color:var(--ink-3);font-size:16px}
+.zeile-w.warn{color:var(--sun);font-weight:500}
+.zeile-p{color:var(--line-2);font-size:20px;line-height:1;font-weight:600}
+.meal{display:flex;align-items:center;gap:12px;background:var(--card);border:0;border-radius:var(--r);padding:12px 15px;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.meal{border:0.5px solid var(--line)}}
 .meal+.meal{margin-top:8px}
 .meal-main{flex:1;min-width:0}
-.meal-name{font-weight:600;font-size:15px;line-height:1.25}
-.meal-sub{font-size:12.5px;color:var(--ink-3);margin-top:3px}
-.det h2{font-size:22px;line-height:1.2}
+.meal-name{font-weight:500;font-size:17px;line-height:1.25}
+.meal-sub{font-size:13px;color:var(--ink-3);margin-top:3px}
+/* Nur der Rezepttitel, nicht die Abschnittsüberschriften darunter – die sind
+   ebenfalls h2 und wurden sonst mitvergrößert. */
+.det > h2{font-size:26px;line-height:1.15;letter-spacing:-.03em}
 .det .steps{counter-reset:s;list-style:none;padding:0;margin:0}
-.det .steps li{counter-increment:s;position:relative;padding-left:32px;margin-bottom:13px;font-size:15px;line-height:1.5}
-.det .steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:99px;background:var(--card-2);border:1px solid var(--line);font-family:var(--mono);font-size:11.5px;font-weight:700;display:grid;place-items:center;color:var(--ink-2)}
-.ingline{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px;align-items:center}
+.det .steps li{counter-increment:s;position:relative;padding-left:34px;margin-bottom:14px;font-size:17px;line-height:1.45}
+.det .steps li::before{content:counter(s);position:absolute;left:0;top:2px;width:24px;height:24px;border-radius:99px;background:var(--fill);border:0;font-size:12px;font-weight:700;display:grid;place-items:center;color:var(--ink-2)}
+.ingline{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:0.5px solid var(--line);font-size:17px;align-items:center}
 .ingline:last-child{border-bottom:0}
-.ingline.ab span:first-child{text-decoration:line-through;color:var(--ink-3)}
-.steps li.ab{color:var(--ink-3);text-decoration:line-through}
+.ingline.ab span:first-child{color:var(--ink-3)}
+.steps li.ab{color:var(--ink-3)}
 .steps li{cursor:pointer}
-.grid3{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px;align-items:center}
-.grid3 button{border:1px solid var(--line-2);background:var(--card);border-radius:8px;padding:9px 4px;font-size:13px}
-.grid3 button.voll{background:var(--card-2);color:var(--ink-3)}
-.grid3 span{font-size:13px;color:var(--ink-2)}
-.ingline .q{font-family:var(--mono);font-size:13.5px;color:var(--ink-2);white-space:nowrap}
-.stepper{display:flex;align-items:center;gap:2px;border:1px solid var(--line-2);border-radius:99px;padding:2px;flex:none}
-.stepper button{width:30px;height:30px;border:0;background:transparent;border-radius:99px;font-size:17px;line-height:1;display:grid;place-items:center}
-.stepper b{font-family:var(--mono);font-size:14px;min-width:20px;text-align:center;font-weight:600}
+.grid3{display:grid;grid-template-columns:auto repeat(3,1fr);gap:7px;align-items:center}
+.grid3 button{border:0;background:var(--fill);border-radius:10px;padding:11px 4px;font-size:14px;min-height:44px}
+.grid3 button.voll{color:var(--ink-3)}
+.grid3 span{font-size:14px;color:var(--ink-2)}
+.ingline .q{font-size:15px;color:var(--ink-2);white-space:nowrap}
+.stepper{display:flex;align-items:center;gap:2px;background:var(--fill);border-radius:99px;padding:3px;flex:none}
+.stepper button{width:32px;height:32px;border:0;background:transparent;border-radius:99px;font-size:19px;line-height:1;display:grid;place-items:center;color:var(--sea)}
+.stepper b{font-size:15px;min-width:22px;text-align:center;font-weight:600}
 
-nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:40;padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;border:0;background:transparent;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:10.5px}
-nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* Durchscheinende Leiste wie in den Systemapps */
+nav{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--card) 78%,transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);
+  border-top:0.5px solid var(--line);display:flex;z-index:40;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:transparent;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--ink-3);font-size:10px;font-weight:500}
+nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button[aria-current="page"]{color:var(--herb);font-weight:600}
-.badge{position:absolute;transform:translate(16px,-11px);background:var(--beet);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:99px;display:grid;place-items:center;padding:0 4px}
-.empty{text-align:center;padding:38px 20px;color:var(--ink-3)}
-.empty b{display:block;color:var(--ink);font-size:16.5px;margin-bottom:5px}
-.note{font-size:13px;color:var(--ink-3);line-height:1.55}
-input[type=text],input[type=search],input[type=url],select{font-family:inherit;font-size:16px;width:100%;padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--card);color:var(--ink)}
-label.fl{display:block;font-size:13px;color:var(--ink-2);margin:12px 0 5px;font-weight:550}
-textarea{font-family:inherit;font-size:16px;width:100%;padding:12px 13px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--card);color:var(--ink);line-height:1.5;resize:vertical}
-.pickrow{display:flex;gap:6px;flex-wrap:wrap}
-.pickrow button{border:1px solid var(--line-2);background:var(--card);border-radius:99px;padding:8px 14px;font-size:14px}
-.pickrow button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-.pruefz{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.badge{position:absolute;transform:translate(16px,-11px);background:var(--beet);color:#fff;font-size:11px;font-weight:600;min-width:18px;height:18px;border-radius:99px;display:grid;place-items:center;padding:0 5px}
+.empty{text-align:center;padding:44px 24px;color:var(--ink-3)}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px;font-weight:600}
+.note{font-size:14px;color:var(--ink-3);line-height:1.45}
+input[type=text],input[type=search],input[type=url],select{font-family:inherit;font-size:17px;width:100%;padding:12px 14px;border:0;border-radius:var(--r-s);background:var(--card);color:var(--ink);box-shadow:var(--schatten);min-height:44px}
+@media (prefers-color-scheme:dark){input[type=text],input[type=search],input[type=url],select{background:var(--card-2)}}
+label.fl{display:block;font-size:14px;color:var(--ink-3);margin:14px 0 6px;font-weight:400}
+textarea{font-family:inherit;font-size:17px;width:100%;padding:12px 14px;border:0;border-radius:var(--r-s);background:var(--card);color:var(--ink);line-height:1.45;resize:vertical;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){textarea{background:var(--card-2)}}
+.pickrow{display:flex;gap:7px;flex-wrap:wrap}
+.pickrow button{border:0;background:var(--fill);border-radius:99px;padding:10px 16px;font-size:15px;min-height:40px;color:var(--ink-2)}
+.pickrow button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.14)}
+@media (prefers-color-scheme:dark){.pickrow button[aria-pressed="true"]{background:#636366;color:#fff;box-shadow:none}}
+.pruefz{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-bottom:0.5px solid var(--line)}
 .pruefz:last-child{border-bottom:0}
-.pruefz.aus .pt{color:var(--ink-3);text-decoration:line-through}
-.pruefz .pt{flex:1;font-size:14.5px;line-height:1.35;word-break:break-word}
-.pruefz .pt i{display:block;font-style:italic;font-size:12px;color:var(--ink-3);text-decoration:none;margin-top:2px}
-.pruefz .pw{display:flex;gap:4px;flex:none}
-.pz{width:30px;height:30px;border:1px solid var(--line-2);background:var(--card);border-radius:8px;
-  font-size:13px;font-weight:600;color:var(--ink-3);padding:0;line-height:1}
-.pz.an{background:var(--sea);border-color:var(--sea);color:#fff}
-.zline{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:6px 0;border-bottom:0.5px solid var(--line)}
+.pruefz.aus .pt{color:var(--ink-3)}
+.pruefz .pt{flex:1;font-size:16px;line-height:1.35;word-break:break-word}
+.pruefz .pt i{display:block;font-style:italic;font-size:13px;color:var(--ink-3);margin-top:2px}
+.pruefz .pw{display:flex;gap:5px;flex:none}
+.pz{width:34px;height:34px;border:0;background:var(--fill);border-radius:10px;
+  font-size:13px;font-weight:600;color:var(--ink-2);padding:0;line-height:1}
+.pz.an{background:var(--sea);color:#fff}
+.zline{display:flex;justify-content:space-between;gap:10px;font-size:15px;padding:8px 0;border-bottom:0.5px solid var(--line)}
 .zline:last-child{border-bottom:0}
-.zline em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
-code{font-family:var(--mono);font-size:12.5px;background:var(--card-2);padding:2px 5px;border-radius:5px;word-break:break-all}
-pre{font-family:var(--mono);font-size:12px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-s);padding:11px;overflow-x:auto;line-height:1.5}
-input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
+.zline em{font-style:normal;font-size:13px;color:var(--ink-3)}
+code{font-family:var(--mono);font-size:13px;background:var(--fill);padding:2px 6px;border-radius:6px;word-break:break-all}
+pre{font-family:var(--mono);font-size:12px;background:var(--card);border:0;border-radius:var(--r-s);padding:13px;overflow-x:auto;line-height:1.5;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){pre{background:var(--card-2)}}
+input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--sea);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* Kurze Rückmeldung am unteren Rand, unabhängig vom Seiteninhalt */
+/* Über allem, auch über einem offenen Blatt (z-index 50) – eine Rückmeldung,
+   die hinter dem Blatt liegt, sieht aus, als sei nichts passiert. */
 #meldung{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));
-  z-index:45;display:flex;justify-content:center;padding:0 12px 10px;pointer-events:none}
+  z-index:60;display:flex;justify-content:center;padding:0 12px 10px;pointer-events:none}
 .meldung{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);
-  border-radius:var(--r-s);padding:11px 13px;font-size:14px;max-width:576px;width:100%;
-  pointer-events:auto;box-shadow:0 8px 24px rgba(20,24,18,.25);animation:hochrein .2s ease}
+  border-radius:14px;padding:13px 15px;font-size:15px;max-width:576px;width:100%;
+  pointer-events:auto;box-shadow:0 8px 28px rgba(0,0,0,.22);animation:hochrein .22s ease}
 .meldung span{flex:1}
-.meldung button{border:0;background:transparent;color:var(--paper);font-weight:650;
+.meldung button{border:0;background:transparent;color:var(--paper);font-weight:600;
   text-decoration:underline;padding:2px 4px}
-@keyframes hochrein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes hochrein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* Heute-Karte über dem Wochenplan */
-.heutekarte{background:var(--card);border:1px solid var(--herb);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.heutekarte{background:var(--card);border:0;border-radius:var(--r);padding:15px;margin-bottom:12px;box-shadow:var(--schatten)}
+@media (prefers-color-scheme:dark){.heutekarte{border:0.5px solid var(--line)}}
 .heutekarte .hk-kopf{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
-.hk-zeile{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.hk-zeile{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:0.5px solid var(--line)}
 .hk-zeile:first-of-type{border-top:0}
-.hk-zeile .hk-m{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);width:52px;flex:none;text-transform:uppercase}
-.hk-zeile .hk-n{flex:1;min-width:0;font-size:15px;font-weight:600;text-align:left;background:transparent;border:0;color:inherit;padding:0}
-.hk-zeile .hk-leer{flex:1;color:var(--ink-3);font-size:14px;text-align:left;background:transparent;border:0;padding:0}
+.hk-zeile .hk-m{font-size:12px;color:var(--ink-3);width:52px;flex:none;text-transform:uppercase;letter-spacing:.03em}
+.hk-zeile .hk-n{flex:1;min-width:0;font-size:17px;font-weight:500;text-align:left;background:transparent;border:0;color:inherit;padding:0}
+.hk-zeile .hk-leer{flex:1;color:var(--ink-3);font-size:16px;text-align:left;background:transparent;border:0;padding:0}
 
 /* Herkunft eines Einkaufspostens */
 .it-q{cursor:pointer}
-.woher{display:flex;flex-direction:column;gap:2px;background:transparent;border:0;padding:12px 13px;
-  font-family:var(--mono);font-size:13px;color:var(--ink-2);white-space:nowrap;flex:none;align-items:flex-end;justify-content:center}
-.woher .fuerwen{font-family:var(--sans);font-size:10.5px;color:var(--ink-3);text-transform:none}
+.woher{display:flex;flex-direction:column;gap:2px;background:transparent;border:0;padding:12px 15px;
+  font-size:15px;color:var(--ink-2);white-space:nowrap;flex:none;align-items:flex-end;justify-content:center}
+.woher .fuerwen{font-size:11px;color:var(--ink-3);text-transform:none}
 /* SCHNELLGERICHT */
-.schnellbox { border: 1.5px dashed var(--line-2); border-radius: var(--r-s); margin-bottom: 12px; background: var(--card); }
-.schnellbox > summary { list-style: none; cursor: pointer; padding: 11px 13px; font-size: 14px; font-weight: 600; }
-.schnellbox > summary::-webkit-details-marker { display: none; }
-.schnellbox .leise { font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-left: 6px; }
-.schnellbox[open] > summary { border-bottom: 1px solid var(--line); }
-.schnellinhalt { padding: 4px 13px 13px; }
-.schnellinhalt input, .schnellinhalt textarea { width: 100%; }
-
+.schnellbox{background:var(--card);border:0;border-radius:var(--r);margin-bottom:12px;box-shadow:var(--schatten);overflow:hidden}
+@media (prefers-color-scheme:dark){.schnellbox{border:0.5px solid var(--line)}}
+.schnellbox > summary{list-style:none;cursor:pointer;padding:13px 15px;font-size:16px;font-weight:500;color:var(--sea);min-height:44px}
+.schnellbox > summary::-webkit-details-marker{display:none}
+.schnellbox .leise{font-weight:400;color:var(--ink-3);font-size:13px;margin-left:6px}
+.schnellbox[open] > summary{border-bottom:0.5px solid var(--line)}
+.schnellinhalt{padding:6px 15px 15px}
+.schnellinhalt input,.schnellinhalt textarea{width:100%}
 </style>
 </head>
 <body>
@@ -264,6 +324,19 @@ const SOMMER=[5,6,7,8,9], WINTER=[10,11,12,1,2,3], HERBST=[9,10,11], KALT=[11,12
 
 const ABT={og:"Obst & Gemüse",bw:"Backwaren",kr:"Kühlregal",ff:"Fleisch & Fisch",tk:"Tiefkühl",tr:"Nudeln, Reis & Konserven",gw:"Öl, Gewürze & Backzutaten",gt:"Getränke",so:"Sonstiges"};
 const ABT_STD=["og","bw","kr","ff","tk","tr","gw","gt","so"];
+/* Zeichen wie ✓ und ✕ sehen auf jedem Gerät anders aus und lassen sich nicht
+   einfärben. Die Bedienzeichen sind deshalb Vektoren – eine Strichstärke, eine
+   Größe. Die Lebensmittel-Emoji auf der Einkaufsliste bleiben: die sind Inhalt
+   und helfen beim Überfliegen im Markt. */
+const IKON={
+  haken:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
+  kreuz:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  hoch:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  runter:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+  plus:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  muell:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 4h4M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
+  herz:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="fill:currentColor;stroke:none"><path d="M12 20.5l-1.5-1.4C5.2 14.4 2 11.5 2 8A5 5 0 0 1 12 5.8 5 5 0 0 1 22 8c0 3.5-3.2 6.4-8.5 11.3z"/></svg>'
+};
 const NUT={eisen:"Eisen",jod:"Jod",omega3:"Omega-3",folat:"Folat",b12:"B12",calcium:"Calcium",zink:"Zink",ballast:"Ballaststoffe"};
 const MAHL={f:"Frühstück",m:"Mittag",a:"Abend"};
 const TAGE=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
@@ -1039,18 +1112,34 @@ const KAT_INDEX=()=>{
   VORRAT_STD.forEach(v=>{if(!m[slug(v.n)])m[slug(v.n)]=v.k;});
   return (_katIndex=m);
 };
+/* Fleisch und Fisch stehen an genau einer Stelle. Früher gab es zwei Listen:
+   eine entschied, ob ein Rezept als Fleischgericht gilt, die andere, in welche
+   Abteilung eine Zutat kommt. Sie liefen auseinander – „Speck“ machte das Rezept
+   zum Fleischgericht, landete auf der Einkaufsliste aber unter Sonstiges. */
+const ZUT_FLEISCH=/h(ä|ae)hnchen|h(ü|ue)hner|huhn|pute|truthahn|\bente|g(ä|ae)nse|\bgans|\brind|rinder|kalb|\blamm|schwein|\bhack|\bmett|schnitzel|geschnetzeltes|gulasch|frikadelle|bulette|\bleber|salami|speck|bacon|schinken|kassler|kasseler|wurst|w(ü|ue)rst|chorizo|cabanossi|mortadella|pastrami|gyros|d(ö|oe)ner|corned|gefl(ü|ue)gel|steak/i;
+const ZUT_FISCH=/lachs|kabeljau|forelle|seelachs|thunfisch|garnele|shrimp|scampi|fischst(ä|ae)bchen|backfisch|hering|matjes|makrele|scholle|dorsch|sardell|sardine|anchovi|tintenfisch|calamari|muschel|krabbe|surimi|zander|rotbarsch|pangasius|\bfisch/i;
+/* Reihenfolge ist hier die halbe Miete: Die erste zutreffende Regel gewinnt.
+   Deshalb steht Tiefkühl vor Gemüse und Drogerie vor allem anderen – sonst wird
+   aus „Zahnpasta“ eine Nudel und aus „TK-Erbsen“ frisches Gemüse. */
 const KAT_WORT=[
- [/milch|kaese|käse|joghurt|quark|sahne|butter|\bei\b|eier|tofu|feta|mozzarella|schmand|frischkaese|halloumi|kefir|burrata|paneer|sauerkraut|kimchi|gnocchi|falafel/i,"kr"],
- [/haehnchen|hähnchen|hühner|huhn|rind|pute|lachs|fisch|kabeljau|forelle|garnele|hack|schnitzel|filet/i,"ff"],
- [/\btk\b|tiefkuehl|tiefkühl|gefroren/i,"tk"],
- [/brot|broetchen|brötchen|tortilla|bagel|baguette|ciabatta|fladen|toast|semmel/i,"bw"],
- [/oel$|öl$|essig|salz|pfeffer|gewuerz|gewürz|honig|sirup|zucker|bruehe|brühe|paste|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver/i,"gw"],
- [/nudel|pasta|spaghetti|reis|linsen|bohnen|kichererbsen|dose|mehl|hafer|couscous|quinoa|hirse|samen|kerne|nuss|nuesse|nüsse|mandeln|sesam|sojasosse|sojasoße|tomatenmark|passierte/i,"tr"],
- [/wasser|saft|wein|bier|limo|cola/i,"gt"],
- [/teig|pizzaboden|wrap/i,"bw"],
+ /* Drogerie und Haushalt zuerst aussortieren, sonst greifen Lebensmittelwörter */
+ [/zahnpasta|zahnb(ü|ue)rst|zahnseide|duschgel|shampoo|\bseife|deo\b|deodorant|rasier|windel|binden\b|klopapier|toilettenpapier|k(ü|ue)chenrolle|taschentuch|servietten|waschmittel|weichsp(ü|ue)ler|sp(ü|ue)lmittel|sp(ü|ue)lmaschine|putzmittel|reiniger|schwamm|m(ü|ue)llbeutel|m(ü|ue)llsack|alufolie|frischhaltefolie|gefrierbeutel|backpapier|batterie|gl(ü|ue)hbirne|kerze|katzenfutter|hundefutter|katzenstreu|blumenerde/i,"so"],
+ /* Tiefkühl vor allem Essbaren: „TK-Erbsen“ gehören nicht ins Gemüseregal */
+ [/\btk\b|tiefk(ü|ue)hl|gefroren|fischst(ä|ae)bchen|eisw(ü|ue)rfel|speiseeis/i,"tk"],
+ /* Brühe vor Fleisch: „Hühnerbrühe“ steht bei den Gewürzen, nicht an der Theke */
+ [/br(ü|ue)he|bouillon|\bfond\b|br(ü|ue)hw(ü|ue)rfel/i,"gw"],
+ [ZUT_FISCH,"ff"],
+ [ZUT_FLEISCH,"ff"],
+ /* Pflanzendrinks stehen im Regal, nicht im Kühlregal */
+ [/(kokos|mandel|hafer|soja|reis|cashew|dinkel)(-| )?(milch|drink)/i,"tr"],
+ [/milch|k(ä|ae)se|joghurt|jogurt|quark|sahne|butter(?!brotpapier)|margarine|\bei\b|eier|tofu|seitan|tempeh|sojaschnetzel|feta|mozzarella|schmand|cr(è|e)me fra(î|i)che|halloumi|kefir|burrata|paneer|skyr|h(ü|ue)ttenk(ä|ae)se|sauerkraut|kimchi|gnocchi|falafel|hummus|tzatziki/i,"kr"],
+ [/brot|br(ö|oe)tchen|tortilla|bagel|baguette|ciabatta|fladen|toast|semmel|kn(ä|ae)ckebrot|zwieback|croissant|brezel|pita|naan|teig|pizzaboden|wrap|br(ö|oe)sel/i,"bw"],
+ [/(ö|oe)l\b|essig|\bsalz|pfeffer|gew(ü|ue)rz|honig|sirup|zucker|\bpaste\b|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver|hefe\b|natron|kakao|ketchup|mayonnaise|sojaso(ß|ss)e|sojasauce|worcester|tabasco|sriracha|harissa|tahin|oregano|majoran|lorbeer|kreuzk(ü|ue)mmel|\bkümmel|chiliflocken|st(ä|ae)rke/i,"gw"],
+ [/nudel|spaghetti|penne|fusilli|tagliatelle|lasagne|makkaroni|\bpasta|reis\b|risotto|linsen|bohnen|kichererbsen|\bdose|mehl|hafer|couscous|bulgur|quinoa|hirse|polenta|graupen|samen|kerne|nuss|n(ü|ue)sse|mandeln|sesam|tomatenmark|passierte|konserve|m(ü|ue)sli|cornflakes|erdnussmus/i,"tr"],
+ [/wasser\b|saft\b|\bwein\b|rot-?wein|wei(ß|ss)-?wein|\bbier\b|limo|cola|kaffee|\btee\b|teebeutel|espresso|schorle|smoothie/i,"gt"],
  /* Obst und Gemuese bewusst zuletzt: "Kuerbiskerne" soll ins Trockensortiment, nicht ins Gemuese */
- [/beere|erdbeer|himbeer|apfel|äpfel|birne|pflaume|kirsche|traube|melone|orange|zitrone|limette|banane|mango|pfirsich|ananas|avocado|granatapfel|feige|dattel/i,"og"],
- [/salat|kohl|kraut|lauch|sellerie|spinat|spargel|kuerbis|kürbis|zucchini|aubergine|paprika|gurke|tomate|kartoffel|zwiebel|knoblauch|moehre|möhre|karotte|radies|rucola|petersilie|basilikum|minze|dill|schnittlauch|koriander|thymian|rosmarin|salbei|ingwer|chili|pilz|champignon|fenchel|rote bete|rettich|brokkoli|blumenkohl|erbse|mais|bete|kresse|sprossen/i,"og"]
+ [/beere|erdbeer|himbeer|apfel|äpfel|birne|pflaume|kirsche|traube|melone|orange|zitrone|limette|banane|mango|pfirsich|ananas|avocado|granatapfel|feige|dattel|nektarine|aprikose|kiwi/i,"og"],
+ [/salat|kohl|kraut|lauch|sellerie|spinat|spargel|kuerbis|kürbis|zucchini|aubergine|paprika|gurke|tomate|kartoffel|zwiebel|knoblauch|moehre|möhre|karotte|radies|rucola|petersilie|basilikum|minze|dill|schnittlauch|koriander|thymian|rosmarin|salbei|ingwer|chili|pilz|champignon|fenchel|rote bete|rettich|brokkoli|blumenkohl|erbse|mais|bete|kresse|sprossen|pastinake|kohlrabi|mangold|chicor(é|e)e|topinambur|artischocke|zuckerschote/i,"og"]
 ];
 const EINH={g:"g",gr:"g",gramm:"g",kg:"kg",ml:"ml",l:"l",liter:"l",el:"EL",essloeffel:"EL",tl:"TL",teeloeffel:"TL",
  stk:"Stk","stück":"Stk",stueck:"Stk",st:"Stk",dose:"Dose",dosen:"Dose",bund:"Bund",zehe:"Zehe",zehen:"Zehe",
@@ -1532,7 +1621,7 @@ function neuesRezept(vorgabe){
 }
 function rezeptBearbeiten(id){
   const r=R(id); if(!r) return;
-  nf={id,n:r.n,q:r.q||"",k:r.k,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
+  nf={id,n:r.n,q:r.q||"",k:r.k,kFest:!!r.kFest,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
       zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
       sText:(r.s||[]).join("\n"),port:1,status:"",pAuto:false,minAuto:false};
   formZeigen();
@@ -1551,6 +1640,7 @@ function nfSet(feld,wert){
   nfLesen();
   if(feld==="ma"){nf.ma=nf.ma.includes(wert)?nf.ma.filter(x=>x!==wert):[...nf.ma,wert];if(!nf.ma.length)nf.ma=[wert];}
   else nf[feld]=wert;
+  if(feld==="k") nf.kFest=true;   /* ab jetzt hat die Automatik hier nichts mehr zu suchen */
   formZeigen(true);
 }
 function nfPruefen(){nfLesen();formZeigen(true);}
@@ -1576,6 +1666,8 @@ function formZeigen(behalten){
     <label class="fl">Art</label>
     <div class="pickrow">${[["veg","Vegetarisch"],["fisch","Fisch"],["fleisch","Fleisch"]]
       .map(([v,l])=>`<button aria-pressed="${nf.k===v}" onclick="nfSet('k','${v}')">${l}</button>`).join("")}</div>
+    ${(()=>{const auto=artAusZutaten(zut,nf.k);
+      return auto!==nf.k?`<p class="note" style="margin-top:6px">Die Zutaten sprechen eher für „${KIND[auto][0]}“ – deine Wahl gilt trotzdem.</p>`:"";})()}
     ${["haupt","fruehstueck"].includes(nf.typ||"haupt")?`<label class="fl">Passt zu</label>
     <div class="pickrow">${["f","m","a"].map(v=>`<button aria-pressed="${nf.ma.includes(v)}" onclick="nfSet('ma','${v}')">${MAHL[v]}</button>`).join("")}</div>`:""}
     <div style="display:flex;gap:10px">
@@ -1609,7 +1701,7 @@ function nfSpeichern(){
   schaetzungAuffrischen();
   const id=nf.id||neueId("u");
   const typ=nf.typ||"haupt";
-  const r={id,n:nf.n.trim(),k:nf.k,typ,ma:["haupt","fruehstueck"].includes(typ)?nf.ma:[],m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
+  const r={id,n:nf.n.trim(),k:nf.k,kFest:!!nf.kFest,typ,ma:["haupt","fruehstueck"].includes(typ)?nf.ma:[],m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
     why:nf.why||"Selbst angelegt.",z:parseZutaten(nf.zText),s:parseSchritte(nf.sText),src:"eigen"};
   if(nf.q.trim())r.q=nf.q.trim();
   /* Bearbeitetes Grundrezept behält Saison, Blähfaktor und Nährstoffe des Originals */
@@ -1725,13 +1817,17 @@ const angeboteListe=()=>Object.entries(S.angebote||{})
   .map(([id,p])=>({id,...p}))
   .sort((a,b)=>String(a.bis).localeCompare(String(b.bis)));
 
-const isoHeute=()=>{const d=new Date();d.setHours(12,0,0,0);return d.toISOString().slice(0,10);};
+/* toISOString() rechnet nach UTC um. Östlich von UTC+12 fällt die Ortszeit 12 Uhr
+   dort auf den Vortag, und die Wochenspanne begann am Sonntag statt am Montag.
+   Der Kalendertag muss aus den örtlichen Feldern kommen. */
+const isoTag=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const isoHeute=()=>isoTag(new Date());
 /* Montag und Sonntag der Planwoche, damit Angebote zur richtigen Woche passen */
 function wochenSpanne(w){
   const d=new Date(); d.setHours(12,0,0,0);
   d.setDate(d.getDate()-((d.getDay()+6)%7)+w*7);
   const mo=new Date(d), so=new Date(d.getTime()+6*86400000);
-  return [mo.toISOString().slice(0,10), so.toISOString().slice(0,10)];
+  return [isoTag(mo), isoTag(so)];
 }
 /* Ein Prospekt zählt für eine Woche, wenn sich die Zeiträume überschneiden */
 const deckt=(p,von,bis)=>(!p.bis||p.bis>=von)&&(!p.von||p.von<=bis);
@@ -2025,7 +2121,7 @@ function datumBauen(tag,monat){
   [-1,0,1].forEach(v=>{
     const d=new Date(heute.getFullYear()+v,monat-1,tag,12);
     const a=Math.abs(d-heute);
-    if(a<abstand){abstand=a;best=d.toISOString().slice(0,10);}
+    if(a<abstand){abstand=a;best=isoTag(d);}
   });
   return best;
 }
@@ -2097,13 +2193,13 @@ function quellenVerwalten(){
   const body=()=>`<div class="grab"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
       <h2 style="font-size:20px">Rezeptquellen</h2>
-      <button class="btn btn-ghost btn-s" onclick="closeSheet()">✕</button></div>
+      <button class="btn btn-ghost btn-s" onclick="closeSheet()">${IKON.kreuz}</button></div>
     <p class="note" style="margin:8px 0 12px">Aus diesen Blogs holt die App unter Entdecken die neuesten Rezepte. Voreingestellt sind die Seiten, die in eurer Asana-Sammlung am häufigsten vorkamen.</p>
     ${Object.entries(S.quellen||{}).map(([id,q])=>`<div class="meal">
       <div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(q.n||q.u)}</div>
         <div class="meal-sub">${esc(q.u)}</div></div>
       <div class="toggle"><button aria-pressed="${!!q.an}" onclick="quelleSchalten('${id}',true)">An</button><button aria-pressed="${!q.an}" onclick="quelleSchalten('${id}',false)">Aus</button></div>
-      <button class="btn btn-ghost btn-s" onclick="quelleWeg('${id}')" aria-label="Entfernen">✕</button></div>`).join("")}
+      <button class="btn btn-ghost btn-s" onclick="quelleWeg('${id}')" aria-label="Entfernen">${IKON.kreuz}</button></div>`).join("")}
     <label class="fl" for="qn">Weitere Seite</label>
     <input type="text" id="qn" placeholder="Name, etwa „Zucker&Jagdwurst“">
     <input type="url" id="qu" placeholder="https://beispiel.de" style="margin-top:7px">
@@ -2112,7 +2208,11 @@ function quellenVerwalten(){
   window.__qBody=body;
   openSheet(body());
 }
-function quelleSchalten(id,an){ mut("quellen/"+id+"/an",an,false); openSheet(window.__qBody(),true); }
+/* Ganze Einträge statt einzelner Felder: nur so tragen sie einen Zeitstempel,
+   und nur damit kann das Zusammenführen zwei Stände auseinanderhalten. */
+function quelleSchalten(id,an){ const q=(S.quellen||{})[id]; if(!q)return;
+  mut("quellen/"+id,{...q,an},false);
+  const blatt=window.__qBody; if(blatt) openSheet(blatt(),true); }
 function quelleWeg(id){ mut("quellen/"+id,null,false); openSheet(window.__qBody(),true); }
 function quelleDazu(){
   const n=document.getElementById("qn").value.trim(), u=document.getElementById("qu").value.trim();
@@ -2165,7 +2265,7 @@ function extraWaehlen(){
     return pool.map(r=>{const [lbl,tag,,kk]=KIND[r.k];
       return `<div class="rec ${kk}" onclick="extraSetzen('${r.id}')"><div class="rec-b">
         <div class="rec-t">${esc(r.n)}</div>
-        <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN</div>
+        <div class="rec-m">${TYP[typVon(r)]} · ${r.min} Min</div>
         <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${imAngebot(r).length?'<span class="tag t-sun">Im Angebot</span>':""}</div>
       </div><span class="add-b">+</span></div>`;}).join("");
   };
@@ -2218,29 +2318,47 @@ function symbolFuer(name){
 
 /* ===== Zusätzliche Einkaufslisten, etwa für die Drogerie ===== */
 const zusatzListen=()=>Object.entries(S.listen||{}).map(([id,l])=>({id,...l}));
+/* prompt() blockiert die ganze Seite und sieht in einer installierten App aus
+   wie eine Browsermeldung. Überall sonst fragt die App in einem Blatt – hier jetzt auch. */
 function zusatzAnlegen(){
-  const n=prompt("Name der Liste, zum Beispiel dm oder Baumarkt");
-  if(!n||!n.trim()) return;
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:20px">Neue Liste</h2>
+    <p class="note" style="margin:6px 0 14px">Für alles, was nicht zum Wochenplan gehört – Drogerie, Baumarkt, Getränkemarkt.</p>
+    <label class="fl" for="ln">Name</label>
+    <input type="text" id="ln" placeholder="dm" onkeydown="if(event.key==='Enter')zusatzAnlegenJetzt()">
+    <button class="btn btn-wide btn-primary" style="margin-top:12px" onclick="zusatzAnlegenJetzt()">Liste anlegen</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`);
+  const el=document.getElementById("ln"); if(el&&el.focus)el.focus();
+}
+function zusatzAnlegenJetzt(){
+  const el=document.getElementById("ln");
+  const n=el?el.value.trim():"";
+  if(!n){ meldung("Die Liste braucht einen Namen."); return; }
   const id=neueId("l");
-  mut("listen/"+id,{n:n.trim(),items:{}});
-  einkaufAnsicht=id; render();
+  mut("listen/"+id,{n,items:{}},false);
+  einkaufAnsicht=id; closeSheet();
 }
 function zusatzPosten(listeId){
   const el=document.getElementById("zi_"+listeId); if(!el) return;
   const t=el.value.trim(); if(!t) return;
   el.value="";
-  mut("listen/"+listeId+"/items/"+neueId("i"),{n:t,on:false});
+  const l=(S.listen||{})[listeId]; if(!l) return;
+  mut("listen/"+listeId,{...l,items:{...(l.items||{}),[neueId("i")]:{n:t,on:false}}});
   const neu=document.getElementById("zi_"+listeId); if(neu&&neu.focus)neu.focus();
 }
-function zusatzHaken(listeId,id,wert){ mut("listen/"+listeId+"/items/"+id+"/on",wert); }
+function zusatzHaken(listeId,id,wert){
+  const l=(S.listen||{})[listeId]; const i=l&&l.items&&l.items[id]; if(!i) return;
+  mut("listen/"+listeId,{...l,items:{...l.items,[id]:{...i,on:wert}}});
+}
 function zusatzWeg(listeId){
-  if(!confirm("Diese Liste komplett löschen?")) return;
+  const l=(S.listen||{})[listeId];
+  if(!confirm("Die Liste „"+((l&&l.n)||"")+"“ mit allem darauf löschen?")) return;
   mut("listen/"+listeId,null); einkaufAnsicht="woche"; render();
 }
 function zusatzAufraeumen(listeId){
   const l=(S.listen||{})[listeId]; if(!l) return;
   const rest={}; Object.entries(l.items||{}).forEach(([k,v])=>{ if(!v.on) rest[k]=v; });
-  mut("listen/"+listeId+"/items",rest);
+  mut("listen/"+listeId,{...l,items:rest});
 }
 function vZusatz(id){
   const l=(S.listen||{})[id];
@@ -2248,14 +2366,14 @@ function vZusatz(id){
   const posten=Object.entries(l.items||{});
   const offen=posten.filter(([,i])=>!i.on).length;
   return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
-      <b style="font-size:15px">${esc(l.n)}</b><span class="rec-m">${offen} OFFEN</span></div>
+      <b style="font-size:15px">${esc(l.n)}</b><span class="rec-m">${offen} offen</span></div>
       <div class="progress"><i style="width:${posten.length?(posten.length-offen)/posten.length*100:0}%"></i></div></div>
     <div class="card" style="margin-top:8px"><div style="display:flex;gap:8px">
       <input type="text" id="zi_${id}" placeholder="Etwas hinzufügen" onkeydown="if(event.key==='Enter')zusatzPosten('${id}')">
       <button class="btn" onclick="zusatzPosten('${id}')">+</button></div></div>
     ${posten.length?`<div class="items" style="margin-top:8px">${posten.map(([iid,i])=>
       `<button class="item ${i.on?"on":""}" onclick="zusatzHaken('${id}','${iid}',${!i.on})">
-        <span class="box">✓</span><span class="it-n">${symbolFuer(i.n)} ${esc(i.n)}</span></button>`).join("")}</div>`
+        <span class="box">${IKON.haken}</span><span class="it-n">${symbolFuer(i.n)} ${esc(i.n)}</span></button>`).join("")}</div>`
       :`<div class="empty"><b>Noch nichts drauf</b>Trag oben ein, was du brauchst.</div>`}
     <div class="row-btns" style="margin:14px 0 8px">
       <button class="btn btn-s" onclick="zusatzAufraeumen('${id}')">Erledigte entfernen</button>
@@ -2331,7 +2449,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.3";
+const VERSION="3.6";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
 let idZaehler=0;
@@ -2341,7 +2459,7 @@ const slug=s=>String(s).toLowerCase().replace(/[äÄ]/g,"ae").replace(/[öÖ]/g,
 const START=["b1","b2","b5","b10x","l2","l4","f1","f4","m2","m5","v1","v2","v7","v10","v11"].filter(x=>x!=="b10x");
 const leer=()=>({
   sammlung:Object.fromEntries(START.map(i=>[i,Date.now()])),
-  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, geloescht:{}, angebote:{}, quellen:{}, extra:{}, listen:{}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
+  spaeter:{}, archiv:{}, geprueft:{}, eigene:{}, geloescht:{}, weg:{}, angebote:{}, quellen:{}, extra:{}, listen:{}, portionStd:2, plan:{}, liste:{}, verlauf:{}, still:true,
   route:[...ABT_STD],
   vorrat:Object.fromEntries(VORRAT_STD.map(v=>[slug(v.n),{...v,da:true}]))
 });
@@ -2351,8 +2469,8 @@ let tab="woche", filter="alle", suche="", routeOffen=false, es=null, syncState="
 
 /* Firebase speichert leere Listen nicht – nach einem Sync fehlen dann Felder wie
    z, s oder nut. Deshalb wird jedes eigene Rezept beim Lesen vervollständigt. */
-const ZUT_FLEISCH=/h(ä|ae)hnchen|pute|huhn|rind|hack|schnitzel|geschnetzeltes|schenkel|leberk|salami|speck|schinken|w(ü|ue)rst|chorizo|gyros|steak|lamm|kalb|ente|bacon/i;
-const ZUT_FISCH=/lachs|kabeljau|forelle|seelachs|thunfisch|garnele|fischst(ä|ae)bchen|backfisch|hering|makrele|scholle|dorsch|sardell|anchovi/i;
+/* ZUT_FLEISCH und ZUT_FISCH stehen weiter oben bei den Abteilungen –
+   dieselben Wörter entscheiden über Rezeptart und Einkaufsabteilung. */
 /* Wer Hackfleisch einträgt, meint kein vegetarisches Gericht – das wird automatisch berichtigt */
 function artAusZutaten(z,jetzt){
   const text=(z||[]).map(x=>Array.isArray(x)?x[0]:"").join(" | ");
@@ -2365,7 +2483,11 @@ function rezeptNorm(r){
   const arr=(x,f)=>Array.isArray(x)?x:(x&&typeof x==="object"?Object.values(x):f);
   return {...r,
     id:r.id, n:String(r.n),
-    k:artAusZutaten(arr(r.z,[]),["veg","fisch","fleisch"].includes(r.k)?r.k:"veg"),
+    /* Die Automatik ist ein Netz, kein Urteil: wer die Art im Formular angetippt
+       hat, behält sie – sonst wäre „veganes Hack“ auf ewig ein Fleischgericht. */
+    k:(r.kFest&&["veg","fisch","fleisch"].includes(r.k))?r.k
+      :artAusZutaten(arr(r.z,[]),["veg","fisch","fleisch"].includes(r.k)?r.k:"veg"),
+    kFest:!!r.kFest,
     ma:(arr(r.ma,[]).filter(x=>MAHL[x])).length?arr(r.ma,[]).filter(x=>MAHL[x]):["a"],
     m:arr(r.m,[]).length?arr(r.m,[]):ALL,
     min:+r.min||30, p:+r.p||20, bl:[0,1,2].includes(r.bl)?r.bl:0,
@@ -2400,6 +2522,7 @@ function grabsteinLoesen(id){ setPfad(S,"geloescht/"+id,null); senden("geloescht
 function grabsteineAufraeumen(){
   const jetzt=Date.now(); let weg=0;
   Object.entries(S.geloescht||{}).forEach(([id,t])=>{ if(jetzt-(+t||0)>GRAB_FRIST*TAG){ delete S.geloescht[id]; weg++; } });
+  Object.entries(S.weg||{}).forEach(([k,t])=>{ if(jetzt-(+t||0)>WEG_FRIST*TAG){ delete S.weg[k]; weg++; } });
   return weg;
 }
 const R=id=>{
@@ -2456,7 +2579,13 @@ function migrieren(){
     if(v==null){delete S.sammlung[id];neu=true;return;}   /* nie wieder aus null einen Zeitstempel machen */
     if(typeof v!=="number"){S.sammlung[id]=Date.now()-FRIST.alt*TAG;neu=true;}
   });
+  /* Fehlt eine Abteilung im Laufplan, fielen alle Posten daraus lautlos aus der
+     Ansicht – mitgezählt wurden sie trotzdem, die Liste wurde also nie fertig. */
+  if(!Array.isArray(S.route)||!S.route.length){S.route=[...ABT_STD];neu=true;}
+  ABT_STD.forEach(k=>{ if(!S.route.includes(k)){S.route.push(k);neu=true;} });
+  if(S.route.some(k=>!ABT[k])){S.route=S.route.filter(k=>ABT[k]);neu=true;}
   if(!S.geloescht){S.geloescht={};neu=true;}
+  if(!S.weg||typeof S.weg!=="object"){S.weg={};neu=true;}
   if(grabsteineAufraeumen())neu=true;
   Object.keys(S.geloescht).forEach(id=>{ if(S.sammlung[id]){delete S.sammlung[id];neu=true;} });
   if(neu){schreibenLokal();if(basis()){senden("plan",S.plan);senden("sammlung",S.sammlung);senden("archiv",S.archiv);senden("spaeter",S.spaeter);senden("geprueft",S.geprueft);}}
@@ -2527,13 +2656,60 @@ function senden(pfad,wert){
   einreihen(pfad,wert); schreibenLokal(); flush();
   return true;
 }
+/* Liste und Plan bearbeiten beide Geräte gleichzeitig. Ohne Zeitstempel kann das
+   Zusammenführen die zwei Stände nicht unterscheiden und nimmt immer den fernen –
+   im Markt Abgehaktes stünde danach wieder offen da. */
+const GESTEMPELT=new Set(["liste","plan","vorrat","extra","listen","quellen","angebote"]);
+/* Rezepte haben ihre Grabsteine (S.geloescht) seit jeher. Alles andere hatte keine –
+   und ohne sie macht das Zusammenführen jede Löschung der anderen Person rückgängig:
+   Ein Eintrag, den nur noch diese Seite kennt, sieht genauso aus, ob ihn die eigene
+   Seite gerade angelegt oder die andere Seite gerade gelöscht hat. Bisher wurde er
+   immer behalten – und beim anschließenden Hochladen war die Löschung auch drüben weg. */
+/* Kürzer als bei Rezepten: ein Grabstein muss nur überleben, bis das andere Gerät
+   das nächste Mal online ist. Sonst wächst die Sammlung mit jedem Listen-Neubau. */
+const WEG_FRIST=60;
+const WEG_FELDER=new Set(["plan","liste","vorrat","listen","extra","angebote","quellen","archiv","spaeter","geprueft","sammlung","verlauf"]);
+const wegSchluessel=(feld,id)=>feld+"__"+id;
+function grabstein(feld,id){
+  const k=wegSchluessel(feld,id);
+  setPfad(S,"weg/"+k,Date.now()); senden("weg/"+k,S.weg[k]);
+}
+function grabsteinWeg(feld,id){
+  const k=wegSchluessel(feld,id);
+  if(!S.weg||S.weg[k]===undefined) return;
+  setPfad(S,"weg/"+k,null); senden("weg/"+k,null);
+}
+/* Legt oder löst die Grabsteine zu einem Schreibvorgang */
+function grabsteinePflegen(pfad,wert){
+  const p=String(pfad).split("/").filter(Boolean);
+  if(p.length===2&&WEG_FELDER.has(p[0])){
+    if(wert===null) grabstein(p[0],p[1]); else grabsteinWeg(p[0],p[1]);
+    return;
+  }
+  /* Ganze Sammlung ersetzt – etwa beim Neubau der Einkaufsliste oder beim Leeren
+     der Woche. Was darin fehlt, ist gelöscht und muss auch drüben verschwinden. */
+  if(p.length===1&&WEG_FELDER.has(p[0])&&wert&&typeof wert==="object"&&!Array.isArray(wert)){
+    const alt=S[p[0]]||{};
+    Object.keys(alt).forEach(k=>{ if(!(k in wert)) grabstein(p[0],k); });
+    Object.keys(wert).forEach(k=>grabsteinWeg(p[0],k));
+  }
+}
+function stempeln(pfad,wert){
+  if(!wert||typeof wert!=="object"||Array.isArray(wert)) return wert;
+  const p=String(pfad).split("/").filter(Boolean);
+  return (p.length===2&&GESTEMPELT.has(p[0])) ? {...wert,ts:Date.now()} : wert;
+}
 function mut(pfad,wert,neuZeichnen=true){
+  wert=stempeln(pfad,wert);
+  grabsteinePflegen(pfad,wert);
   setPfad(S,pfad,wert); schreibenLokal(); senden(pfad,wert);
   if(neuZeichnen) render();
 }
 /* Zwei Stände treffen aufeinander: pro Eintrag gewinnt der jüngere,
    Einzelstücke bleiben auf beiden Seiten erhalten. */
 const stempel=v=>{
+  /* In sammlung, archiv, spaeter und geprueft ist der Wert selbst der Zeitpunkt */
+  if(typeof v==="number")return v;
   if(!v||typeof v!=="object")return 0;
   return v.geaendert||v.ts||v.erstellt||0;
 };
@@ -2542,16 +2718,37 @@ const stempel=v=>{
 const SAMMELFELDER=()=>Object.entries(leer())
   .filter(([k,v])=>v&&typeof v==="object"&&!Array.isArray(v))
   .map(([k])=>k);
+/* Was noch in der Warteschlange liegt, ist der jüngste Wille dieses Geräts –
+   nur eben noch nicht angekommen. Ohne diesen Schritt löscht ein Fernstand, der
+   während des Wiederverbindens eintrifft, genau die Änderungen, die offline
+   entstanden sind: zwölf abgehakte Posten, und der Laufplan ist wieder voll. */
+function wartendeAnwenden(ziel){
+  queue.forEach(q=>{ if(q.pfad) setPfad(ziel,q.pfad,q.wert); });
+  return queue.filter(q=>q.pfad).length;
+}
 function zusammenfuehren(fern){
   const vorher=JSON.stringify(S);
   const neu={...leer()};
+  /* Grabsteine beider Seiten zuerst vereinigen – sie entscheiden gleich mit */
+  const weg={...((fern&&fern.weg)||{}), ...(S.weg||{})};
   SAMMELFELDER().forEach(f=>{
     const lokal=S[f]||{}, entfernt=(fern&&fern[f])||{};
     const raus={...entfernt};
+    const totSeit=k=>(f==="weg"?0:(weg[wegSchluessel(f,k)]||0));
     Object.entries(lokal).forEach(([k,v])=>{
       const r=entfernt[k];
-      if(r===undefined){raus[k]=v;return;}
+      if(r===undefined){
+        /* Nur noch hier: entweder gerade selbst angelegt oder von der anderen Seite
+           gelöscht. Der Grabstein sagt, was von beidem – und was jünger ist. */
+        if(totSeit(k)>=stempel(v)&&totSeit(k)>0) return;
+        raus[k]=v; return;
+      }
       if(v&&r&&typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
+    });
+    /* Und andersherum: was diese Seite gelöscht hat, die andere aber noch kennt */
+    Object.keys(raus).forEach(k=>{
+      if(lokal[k]!==undefined) return;
+      if(totSeit(k)>0&&totSeit(k)>=stempel(raus[k])) delete raus[k];
     });
     neu[f]=raus;
   });
@@ -2568,6 +2765,10 @@ function zusammenfuehren(fern){
   neu.route=(fern&&fern.route)||S.route;
   neu.still=fern&&fern.still!==undefined?fern.still:S.still;
   neu.portionStd=(fern&&fern.portionStd)||S.portionStd||2;
+  /* Rein örtliche Notizen zur Einkaufsliste – sie stehen nicht in leer() und wären
+     nach jedem Zusammenführen verschwunden, samt dem Hinweis, was der Vorrat deckt. */
+  neu.listeInfo=S.listeInfo;
+  wartendeAnwenden(neu);
   S=neu; schreibenLokal();
   const kern=x=>JSON.stringify(SAMMELFELDER().map(f=>(x&&x[f])||{}));
   if(kern(fern)!==kern(neu)) senden("",S);
@@ -2645,7 +2846,7 @@ function meldung(text,knopfText,aktion){
   const el=document.getElementById("meldung"); if(!el) return;
   el.innerHTML=`<div class="meldung"><span>${esc(text)}</span>
     ${knopfText?`<button onclick="meldungAusfuehren()">${esc(knopfText)}</button>`:""}
-    <button onclick="meldungWeg()" aria-label="Schließen">✕</button></div>`;
+    <button onclick="meldungWeg()" aria-label="Schließen">${IKON.kreuz}</button></div>`;
   meldungTimer=setTimeout(meldungWeg,7000);
 }
 function meldungAusfuehren(){ const f=meldungAktion; meldungWeg(); if(f)f(); }
@@ -2740,12 +2941,10 @@ function vWoche(){
         ${knapp?`<button class="btn btn-s" style="margin-top:6px" onclick="proteinSnack()">Protein-Snack für die Woche ergänzen</button>`:""}`;})()}
     <p class="note" style="margin-top:9px">${wocheHatAngebote(planWoche)?`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`:`Für ${kwPlus(planWoche)} ist kein Prospekt hinterlegt.`}</p>
     ${belegt&&offen.length?`<p class="note" style="margin-top:4px">Beilagen noch nicht vertreten: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""}
-    <div class="row-btns" style="margin-top:10px">
-      <button class="btn btn-s" onclick="autoWoche()">Woche vorschlagen</button>
-      <button class="btn btn-s" onclick="if(confirm('Plan dieser Woche leeren?'))leereWoche()">Plan leeren</button>
-      ${[...Array(7)].some((_,d)=>{const e=S.plan["w"+planWoche+"-"+d+"-f"];return e&&R(e.r);})
-        ?`<button class="btn btn-s" onclick="fruehstueckUebernehmen()">Frühstück für alle Tage</button>`:""}
+    <div class="row-btns" style="margin-top:12px">
+      <button class="btn btn-s${belegt?"":" btn-primary"}" onclick="autoWoche()">Woche vorschlagen</button>
       ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Woche abschließen</button>`:""}
+      <button class="btn btn-s" onclick="wocheMehr()">Weiteres …</button>
     </div>`;
 
   const tage_html=TAGE.map((tn,d)=>{
@@ -2754,7 +2953,7 @@ function vWoche(){
     const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
     const istHeute=planWoche===0&&d===heuteIdx();
     return `<div class="day${istHeute?" heute":""}">
-      <div class="day-h"><b>${tn}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b><span>${voll?voll+" VON 3":"OFFEN"}${voll===3&&proteinTag(planWoche,d)<PROTEINZIEL?" · "+proteinTag(planWoche,d)+" G":""}</span></div>
+      <div class="day-h"><b>${tn}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b><span>${voll?voll+" von 3":"offen"}${voll===3&&proteinTag(planWoche,d)<PROTEINZIEL?" · "+proteinTag(planWoche,d)+" g":""}</span></div>
       ${eintraege.map(({mk,k,e})=>{
         const r=e&&R(e.r);
         if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
@@ -2765,7 +2964,7 @@ function vWoche(){
             <span class="slot-n">${esc(r.n)}</span>
             <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}</span></span></button>
           <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
-          <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">✕</button></div>`;
+          <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;
       }).join("")}
       ${S.still&&bl2>1?`<div class="warnrow">Zwei stark blähende Gerichte an einem Tag – in der Stillzeit gern auf zwei Tage verteilen.</div>`:""}
     </div>`;
@@ -2783,11 +2982,24 @@ function vWoche(){
           <button class="pick" onclick="detail('${r.id}')"><span class="slot-m"><span class="slot-n">${esc(r.n)}</span>
             <span class="slot-s">${e.p===0?"Reste, nichts einkaufen":`${r.p} g Protein je Portion`}</span></span></button>
           <span class="mini"><button onclick="extraPortion('${e.id}',-1)">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="extraPortion('${e.id}',1)">+</button></span>
-          <button class="btn btn-ghost btn-s" onclick="mut('extra/${e.id}',null)">✕</button></div>`;}).join("")
+          <button class="btn btn-ghost btn-s" onclick="mut('extra/${e.id}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;}).join("")
         :`<p class="note">Nichts zusätzlich geplant. Hier landen Dinge außerhalb des Wochenplans – zum Grillen mitbringen, Snacks, ein Kuchen.</p>`}`;})()}
     ${belegt||extraListe(planWoche).length?`<button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
       <p class="note" style="margin-top:9px">Vorher fragt die App kurz ab, was vom Vorrat noch da ist.</p>`:""}
     ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}`;
+}
+/* Wie beim Einkauf: was man selten braucht, steht nicht dauerhaft über dem Plan. */
+function wocheMehr(){
+  const fruehstueckDa=[...Array(7)].some((_,d)=>{const e=S.plan["w"+planWoche+"-"+d+"-f"];return e&&R(e.r);});
+  const {belegt}=planStat();
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:20px">${kwPlus(planWoche)}</h2>
+    <p class="note" style="margin:6px 0 14px">${belegt} von 21 Mahlzeiten geplant.</p>
+    ${fruehstueckDa?`<button class="btn btn-wide" onclick="closeSheet();fruehstueckUebernehmen()">Frühstück für alle Tage übernehmen</button>
+      <p class="note" style="margin-top:6px">Setzt das Frühstück des ersten belegten Tages auf alle sieben Tage.</p>`:""}
+    <div class="sect"><h2>Von vorn</h2></div>
+    <button class="btn btn-wide" onclick="if(confirm('Den Plan dieser Woche leeren? Die Einkaufsliste bleibt stehen.')){closeSheet();leereWoche()}">Plan dieser Woche leeren</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:14px" onclick="closeSheet()">Schließen</button>`);
 }
 function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
 /* 0 Portionen heißt: wird von Resten gegessen und taucht nicht auf der Einkaufsliste auf */
@@ -2811,7 +3023,7 @@ function abschlussKoerper(){
     <div class="items">${eintraege.map(({k,e,r})=>{
       const d=slotTag(k), mk=slotMahl(k);
       return `<div class="itemrow"><button class="item ${abschlussAus[k]?"":"on"}" onclick="abschlussTick('${k}')">
-        <span class="box">✓</span>
+        <span class="box">${IKON.haken}</span>
         <span class="it-n"><b style="font-weight:600">${esc(r.n)}</b><br>
           <span class="mini">${TAGE[d].slice(0,2)} · ${MAHL[mk]}${e.p===0?" · Restetag":""}</span></span></button></div>`;}).join("")}</div>
     <div class="row-btns" style="margin-top:14px">
@@ -3200,15 +3412,15 @@ function trefferHtml(){
     const schnell=istSchnell(r), gekocht=schnell?malGekocht(r.id):0;
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}${schnell?'<span class="pill" style="margin-left:7px">Schnell</span>':""}</div>
-      <div class="rec-m">${TYP[typVon(r)].toUpperCase()} · ${r.min} MIN${herTage?" · ZULETZT VOR "+herTage+" TAG"+(herTage===1?"":"EN"):""}</div>
+      <div class="rec-m">${TYP[typVon(r)]} · ${r.min} Min${herTage?" · zuletzt vor "+herTage+" Tag"+(herTage===1?"":"en"):""}</div>
       ${treffZutat?`<div class="rec-m" style="color:var(--herb)">mit ${esc(treffZutat[0])}</div>`:""}
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${
         schnell&&gekocht>=SCHNELL_SCHWELLE?`<button class="tag t-sun" style="border:0;cursor:pointer" onclick="event.stopPropagation();schnellAufnehmen('${r.id}')">${gekocht}× gekocht · als Rezept aufnehmen</button>`:""}</div>
     </div>${schnell
-      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="event.stopPropagation();schnellWeg('${r.id}')" aria-label="Löschen">🗑</button>`
+      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="event.stopPropagation();schnellWeg('${r.id}')" aria-label="Löschen">${IKON.muell}</button>`
       :drin
-      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">🗑</button>`
-      :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">+</button>`}</div>`;}).join("");
+      ?`<button class="add-b" style="border:0;background:transparent;font-size:18px" onclick="rezeptWeg('${r.id}')" aria-label="Entfernen">${IKON.muell}</button>`
+      :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">${IKON.plus}</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
   return [["alle","Alle"],["kurz","Unter 25 Min"],["darm","Darmfreundlich"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
@@ -3296,7 +3508,7 @@ function vRezepte(){
   return `${letztesWeg?`<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:10px">
       <span style="flex:1">Rezept entfernt.</span>
       <button class="btn btn-s" onclick="rezeptZurueck()">Rückgängig</button>
-      <button class="btn btn-ghost btn-s" onclick="letztesWeg=null;render()">✕</button></div>`:""}
+      <button class="btn btn-ghost btn-s" onclick="letztesWeg=null;render()" aria-label="Schließen">${IKON.kreuz}</button></div>`:""}
     <div class="row-btns" style="margin-bottom:10px">
       <button class="btn btn-s btn-primary" onclick="neuesRezept()">Eigenes Rezept anlegen</button>
       <button class="btn btn-s" onclick="resteKueche()">Was ist noch da?</button></div>
@@ -3318,7 +3530,7 @@ function rezeptWeg(id){
     <p class="note" style="margin:8px 0 14px">${esc(text)}</p>
     <div class="row-btns">
       <button class="btn" style="flex:1" onclick="closeSheet()">Abbrechen</button>
-      <button class="btn btn-primary" style="flex:1;background:var(--beet);border-color:var(--beet)" onclick="rezeptWegJetzt('${id}',${eigen})">🗑 ${eigen?"Löschen":"Entfernen"}</button>
+      <button class="btn" style="flex:1;color:var(--beet);font-weight:600" onclick="rezeptWegJetzt('${id}',${eigen})">${IKON.muell} ${eigen?"Löschen":"Entfernen"}</button>
     </div>`);
 }
 function rezeptWegJetzt(id,eigen){
@@ -3363,7 +3575,7 @@ function detail(id,slotK){
     <button class="btn btn-wide" style="margin-top:6px" onclick="kochModus('${r.id}',${p})">Kochmodus</button>
     <button class="btn btn-wide" style="margin-top:6px" onclick="rezeptBearbeiten('${r.id}')">Bearbeiten</button>
     ${(S.eigene&&S.eigene[r.id]&&REZEPTE.some(o=>o.id===r.id))?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptUrsprung('${r.id}')">Änderungen verwerfen</button>`:""}
-    ${S.sammlung[r.id]?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptWeg('${r.id}')">🗑 ${S.eigene&&S.eigene[r.id]?"Rezept löschen":"Aus der Sammlung nehmen"}</button>`:""}
+    ${S.sammlung[r.id]?`<button class="btn btn-wide" style="margin-top:6px" onclick="rezeptWeg('${r.id}')">${IKON.muell} ${S.eigene&&S.eigene[r.id]?"Rezept löschen":"Aus der Sammlung nehmen"}</button>`:""}
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button></div>`;
   window.dp=d=>{p=Math.max(1,p+d);openSheet(body(),true);};
   openSheet(body());
@@ -3411,8 +3623,8 @@ function vEntdecken(){
       ${r.q?`<p style="margin-top:8px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13.5px">Originalrezept öffnen</a></p>`:""}
       <div class="ing"><b>Zutaten</b><br>${r.z.map(z=>esc(z[0])).join(" · ")}</div>
     </div></div>
-    <div class="deck-btns"><button class="circ no" onclick="swipe(-1)" aria-label="${deckMode==="neu"?"Zurückstellen":"Aussortieren"}">✕</button>
-      <button class="circ yes" onclick="swipe(1)" aria-label="${deckMode==="neu"?"Merken":"Behalten"}">♥</button></div>`;
+    <div class="deck-btns"><button class="circ no" onclick="swipe(-1)" aria-label="${deckMode==="neu"?"Zurückstellen":"Aussortieren"}">${IKON.kreuz}</button>
+      <button class="circ yes" onclick="swipe(1)" aria-label="${deckMode==="neu"?"Merken":"Behalten"}">${IKON.herz}</button></div>`;
 }
 function swipe(d){
   const p=deckPool(); if(!p.length) return;
@@ -3460,10 +3672,10 @@ function vNetz(){
       const da=feedSchonDa(e.link);
       return `<div class="rec k-veg"><div class="rec-b">
         <div class="rec-t">${esc(e.titel)}</div>
-        <div class="rec-m">${esc(e.quelle).toUpperCase()}${e.datum?" · "+new Date(e.datum).toLocaleDateString("de-DE"):""}${da?" · SCHON IN DER SAMMLUNG":""}</div>
+        <div class="rec-m">${esc(e.quelle)}${e.datum?" · "+new Date(e.datum).toLocaleDateString("de-DE"):""}${da?" · schon in der Sammlung":""}</div>
         ${e.text?`<p class="note" style="margin-top:6px">${esc(e.text).slice(0,140)}</p>`:""}
         <div class="rec-tags"><a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13px">Original ansehen</a></div>
-      </div><button class="add-b" onclick="feedUebernehmen(${i})" aria-label="Übernehmen">${da?"✓":"+"}</button></div>`;
+      </div><button class="add-b" onclick="feedUebernehmen(${i})" aria-label="Übernehmen">${da?IKON.haken:IKON.plus}</button></div>`;
     }).join("")}`;
 }
 
@@ -3497,7 +3709,8 @@ function vorratFrage(){
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button></div>`;
   };
   window.vorratKoerper=body;
-  window.vt=(id,d)=>{mut("vorrat/"+id+"/da",d,false);openSheet(body(),true);};
+  window.vt=(id,d)=>{const v=(S.vorrat||{})[id]; if(!v)return;
+    mut("vorrat/"+id,{...v,da:d},false);openSheet(body(),true);};
   openSheet(body());
 }
 /* Vorratstreffer: nur exakt oder als einfache Mehrzahl, damit Kokosmilch nicht als Milch durchgeht */
@@ -3566,7 +3779,9 @@ function vEinkauf(){
       <button class="btn" onclick="manuell()">Hinzufügen</button></div></div>
     <button class="btn btn-wide" style="margin-top:10px" onclick="go('woche')">Zur Wochenplanung</button>`;
   const fertig=eintraege.filter(([,i])=>i.on).length,ges=eintraege.length;
-  const stops=S.route.map(k=>({k,items:eintraege.filter(([,i])=>i.k===k)})).filter(s=>s.items.length);
+  /* Kennt der Laufplan eine Abteilung nicht, landet der Posten unter Sonstiges –
+     nur nicht im Nirgendwo, sonst zeigt der Zähler mehr an, als zu sehen ist. */
+  const stops=S.route.map(k=>({k,items:eintraege.filter(([,i])=>abteilungSicher(i.k)===k)})).filter(s=>s.items.length);
   const route=stops.map((s,n)=>{
     const done=s.items.every(([,i])=>i.on);
     const sicht=erledigtWeg?s.items.filter(([,i])=>!i.on):s.items;
@@ -3577,35 +3792,49 @@ function vEinkauf(){
         const namen=fuer.map(x=>R(x)).filter(Boolean);
         return `<div class="itemrow">
         <button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
-        <span class="box">✓</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
+        <span class="box">${IKON.haken}</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
         <button class="woher" onclick="postenWoher('${id}')" aria-label="Wofür ist das?">
           <span>${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span>
           ${namen.length?`<span class="fuerwen">${namen.length===1?esc(namen[0].n.length>18?namen[0].n.slice(0,17)+"…":namen[0].n):namen.length+" Gerichte"}</span>`:""}
         </button></div>`;}).join("")}</div></div>`;
   }).join("");
   const rEdit=routeOffen?`<div class="card" style="margin-top:8px">${S.route.map((k,i)=>`<div class="ingline"><span>${i+1}. ${ABT[k]}</span><span>
-      <button class="btn btn-s" onclick="mv(${i},-1)" aria-label="hoch">↑</button>
-      <button class="btn btn-s" onclick="mv(${i},1)" aria-label="runter">↓</button></span></div>`).join("")}
+      <button class="btn btn-s" onclick="mv(${i},-1)" aria-label="nach oben">${IKON.hoch}</button>
+      <button class="btn btn-s" onclick="mv(${i},1)" aria-label="nach unten">${IKON.runter}</button></span></div>`).join("")}
       <p class="note" style="margin-top:10px">Stell die Reihenfolge so ein, wie die Abteilungen in eurem Markt liegen. Die Nummern im Laufplan folgen dieser Liste.</p></div>`:"";
   return wahl+`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
       <b style="font-size:15px">${fertig} von ${ges} erledigt</b><span class="rec-m">${kwPlus(planWoche)}</span></div>
       <div class="progress"><i style="width:${ges?fertig/ges*100:0}%"></i></div>
       ${eintraege.filter(([,i])=>i.ang).length?`<p class="note" style="margin-top:9px">${eintraege.filter(([,i])=>i.ang).length} Posten stehen im Prospekt.</p>`:""}
       ${(S.listeInfo&&S.listeInfo.ausVorrat)?`<p class="note" style="margin-top:4px">${S.listeInfo.ausVorrat} Zutaten sind aus dem Vorrat gedeckt und fehlen deshalb hier.</p>`:""}
-      <p class="note" style="margin-top:4px">Tipp: die Menge rechts antippen zeigt, für welche Gerichte der Posten ist.</p></div>
+      ${fertig?"":`<p class="note" style="margin-top:4px">Die Menge rechts antippen zeigt, für welche Gerichte der Posten ist.</p>`}</div>
     <div class="row-btns" style="margin-top:10px">
       <button class="btn btn-s" onclick="erledigtWeg=!erledigtWeg;render()">${erledigtWeg?"Erledigte zeigen":"Erledigte ausblenden"}</button>
-      <button class="btn btn-s" onclick="listeTeilen()">Teilen</button>
-      ${wachMoeglich()?`<button class="btn btn-s" onclick="wachHalten(!wachAn).then(render)">${wachAn?"Bildschirm aus":"Bildschirm anlassen"}</button>`:""}
+      <button class="btn btn-s" onclick="einkaufMehr()">Weiteres …</button>
     </div>
-    <div class="sect"><h2>Laufplan</h2><button class="btn btn-s" onclick="routeOffen=!routeOffen;render()">${routeOffen?"Fertig":"Reihenfolge"}</button></div>
-    ${rEdit}<div class="route">${route}</div>
-    <div class="card" style="margin-top:6px"><div style="display:flex;gap:8px">
+    <div class="card" style="margin-top:10px"><div style="display:flex;gap:8px">
       <input type="text" id="mi" placeholder="Etwas ergänzen" onkeydown="if(event.key==='Enter')manuell()">
       <button class="btn" onclick="manuell()">Hinzufügen</button></div></div>
-    <div class="row-btns" style="margin:14px 0 8px">
-      <button class="btn btn-s" onclick="alleAb(false)">Alles zurücksetzen</button>
-      <button class="btn btn-s" onclick="if(confirm('Liste leeren?'))mut('liste',{})">Liste leeren</button></div>`;
+    <div class="sect"><h2>Laufplan</h2>${routeOffen?`<button class="btn btn-s btn-primary" onclick="routeOffen=false;render()">Fertig</button>`:""}</div>
+    ${rEdit}<div class="route">${route}</div>`;
+}
+/* Alles, was man im Markt nicht braucht, liegt hinter einem Knopf statt in
+   einer Reihe über der Liste. Im Laden zählt nur: abhaken und ergänzen. */
+function einkaufMehr(){
+  const ges=Object.keys(S.liste||{}).length;
+  const offen=Object.values(S.liste||{}).filter(i=>!i.on).length;
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:20px">Einkaufsliste</h2>
+    <p class="note" style="margin:6px 0 14px">${ges} Posten, davon ${offen} offen · ${kwPlus(planWoche)}</p>
+    <button class="btn btn-wide btn-primary" onclick="closeSheet();listeTeilen()">Liste teilen</button>
+    <button class="btn btn-wide" style="margin-top:6px" onclick="routeOffen=true;closeSheet()">Reihenfolge der Abteilungen</button>
+    ${wachMoeglich()?`<button class="btn btn-wide" style="margin-top:6px" onclick="wachHalten(${!wachAn}).then(closeSheet)">${wachAn?"Bildschirm wieder ausgehen lassen":"Bildschirm anlassen"}</button>`:""}
+    <p class="note" style="margin-top:10px">Der Laufplan folgt der Reihenfolge der Abteilungen in eurem Markt. Einmal eingestellt, bleibt sie.</p>
+    <div class="sect"><h2>Von vorn</h2></div>
+    <button class="btn btn-wide" onclick="closeSheet();alleAb(false)">Alle Haken entfernen</button>
+    <p class="note" style="margin-top:6px">Die Posten bleiben stehen, nur das Abgehakte wird zurückgesetzt.</p>
+    <button class="btn btn-wide" style="margin-top:10px" onclick="if(confirm('Die ganze Liste leeren? Auch von Hand Ergänztes verschwindet.')){closeSheet();mut('liste',{})}">Liste leeren</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:14px" onclick="closeSheet()">Schließen</button>`);
 }
 /* Wofür ist dieser Posten? Im Markt die häufigste Rückfrage. */
 function postenWoher(id){
@@ -3632,7 +3861,9 @@ function postenWoher(id){
       : `<p class="note">${i.manuell?"Von Hand ergänzt – gehört zu keinem Gericht.":"Aus dem Vorrat nachzufüllen."}</p>`}
     <button class="btn btn-wide btn-ghost" style="margin-top:12px" onclick="closeSheet()">Schließen</button>`);
 }
-function alleAb(v){const l={...S.liste};Object.keys(l).forEach(k=>l[k]={...l[k],on:v,gekauft:v?((l[k].gekauft||0)+(l[k].q||0)):0});mut("liste",l);}
+function alleAb(v){const t=Date.now();const l={...S.liste};
+  Object.keys(l).forEach(k=>l[k]={...l[k],on:v,gekauft:v?((l[k].gekauft||0)+(l[k].q||0)):0,ts:t});
+  mut("liste",l);}
 /* Beim Abhaken wird festgehalten, wie viel schon im Wagen liegt */
 function posten(id,an){
   const i=(S.liste||{})[id]; if(!i) return;
@@ -3647,14 +3878,30 @@ function manuell(){
     ang:zutatImAngebot(n,planWoche)||""});
   const neu=document.getElementById("mi"); if(neu&&neu.focus)neu.focus();
 }
+/* Eine Abteilung, die es im Laufplan wirklich gibt */
+function abteilungSicher(k){
+  if(S.route.includes(k)) return k;
+  return S.route.includes("so")?"so":S.route[S.route.length-1];
+}
 /* Für von Hand ergänzte Posten die passende Abteilung raten */
 function zutatAbteilung(n){ try{ return katFuer(n); }catch(e){ return "so"; } }
 
 /* ============ Mehr ============ */
+/* Der Mehr-Bereich war eine einzige lange Rolle: neun Abschnitte, Firebase-Anleitung
+   und die komplette Vorratsliste untereinander. Jetzt steht hier eine kurze
+   Übersicht, alles Weitere öffnet sich als Blatt. */
 function vMehr(){
   const fehlt=Object.values(S.vorrat).filter(v=>!v.da).length;
-  const gruppen=S.route.map(k=>({k,items:Object.entries(S.vorrat).filter(([,v])=>v.k===k)})).filter(g=>g.items.length);
+  const vorrat=Object.keys(S.vorrat||{}).length;
+  const prospekte=angeboteListe().length;
+  const blogs=Object.values(S.quellen||{}).filter(q=>q.an).length||QUELLEN_START.length;
+  const eigene=Object.keys(S.eigene||{}).length;
+  const arch=Object.keys(S.archiv||{}).length;
   const b=basis();
+  const zeile=(name,wert,ruf,warnung)=>`<button class="zeile" onclick="${ruf}">
+    <span class="zeile-n">${name}</span>
+    <span class="zeile-w${warnung?" warn":""}">${wert}</span>
+    <span class="zeile-p" aria-hidden="true">›</span></button>`;
   return `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div><b style="font-size:15px">Stillzeit-Modus</b><p class="note" style="margin-top:3px">Markiert stark blähende Gerichte, warnt bei zwei davon am selben Tag und hebt Jod-Quellen hervor.</p></div>
       <div class="toggle"><button aria-pressed="${!!S.still}" onclick="mut('still',true)">An</button><button aria-pressed="${!S.still}" onclick="mut('still',false)">Aus</button></div></div></div>
@@ -3663,90 +3910,114 @@ function vMehr(){
       <div><b style="font-size:15px">Standardportionen</b><p class="note" style="margin-top:3px">Wird bei jedem neu eingeplanten Gericht voreingestellt.</p></div>
       <div class="stepper"><button onclick="mut('portionStd',Math.max(1,(S.portionStd||2)-1))">−</button><b>${S.portionStd||2}</b><button onclick="mut('portionStd',Math.min(8,(S.portionStd||2)+1))">+</button></div></div></div>
 
-    <div class="sect"><h2>Angebote bei Aldi Süd</h2></div>
-    <div class="card">
-      ${(()=>{const l=angeboteListe();
-        if(!l.length) return `<p class="note">Noch kein Prospekt hinterlegt. Aldi Süd stellt die Prospekte für drei Wochen im Voraus bereit – lade sie zusammen herunter und lies sie in einem Rutsch ein.</p>`;
-        return l.map(p=>{
-          const passt=[0,1,2].filter(w=>{const [v,b]=wochenSpanne(w);return deckt(p,v,b);}).map(w=>kwPlus(w));
-          return `<div class="ingline"><span><b>${esc(zeitraumText(p))}</b><br><span class="note">${p.items.length} Einträge${passt.length?" · "+passt.join(", "):" · keine Planwoche"}</span></span>
-            <span><button class="btn btn-s" onclick="angebotWeg('${p.id}')">✕</button></span></div>`;}).join("");})()}
-      <div class="row-btns" style="margin-top:10px">
-        <button class="btn btn-s btn-primary" onclick="angeboteBearbeiten()">Prospekt hinzufügen</button>
-        ${angeboteListe().length?`<button class="btn btn-s" onclick="abgelaufeneWeg()">Abgelaufene löschen</button>`:""}
-      </div>
+    <div class="sect"><h2>Verwalten</h2></div>
+    <div class="zeilen">
+      ${zeile("Vorrat",fehlt?fehlt+" fehlen":vorrat+" Dinge","mehrOeffnen('vorrat')",!!fehlt)}
+      ${zeile("Angebote",prospekte?prospekte+(prospekte===1?" Prospekt":" Prospekte"):"keins","mehrOeffnen('angebote')")}
+      ${zeile("Rezeptquellen",blogs+" Blogs","quellenVerwalten()")}
+      ${zeile("Eigene Rezepte",eigene+" angelegt","mehrOeffnen('eigene')")}
+      ${zeile("Archiv",arch?arch+" aussortiert":"leer","mehrOeffnen('archiv')")}
     </div>
 
-    <div class="sect"><h2>Rezeptquellen</h2></div>
-    <div class="card">
-      <p class="note">${Object.values(S.quellen||{}).filter(q=>q.an).length||QUELLEN_START.length} Blogs eingestellt. Unter Entdecken holst du daraus die neuesten Rezepte.</p>
-      <div class="row-btns" style="margin-top:10px">
-        <button class="btn btn-s btn-primary" onclick="quellenVerwalten()">Quellen verwalten</button>
-        <button class="btn btn-s" onclick="deckMode='netz';go('entdecken')">Neues ansehen</button></div>
+    <div class="sect"><h2>Zwischen euren Handys</h2></div>
+    <div class="zeilen">
+      ${zeile("Abgleich",b?(SYNCTEXT[syncState]||syncState):"nicht eingerichtet",
+        "mehrOeffnen('sync')",b&&dauerfehler())}
     </div>
 
-    <div class="sect"><h2>Eigene Rezepte</h2></div>
-    <div class="card">
-      <p class="note">${Object.keys(S.eigene||{}).length} selbst angelegt. Sie synchronisieren sich wie alles andere auf beide Handys.</p>
-      <div class="row-btns" style="margin-top:10px">
-        <button class="btn btn-s btn-primary" onclick="neuesRezept()">Neues anlegen</button>
-        <button class="btn btn-s" onclick="eigeneImportieren()">Einspielen</button>
-        <button class="btn btn-s" onclick="eigeneExportieren()">Sichern</button></div>
-      <label class="fl" for="leser">Rezept-Leser (optional)</label>
-      <input type="url" id="leser" value="${esc(cfg.leser)}" placeholder="https://rezeptleser.dein-name.workers.dev">
-      <button class="btn btn-s" style="margin-top:8px" onclick="leserSpeichern()">Speichern</button>
-      <p class="note" style="margin-top:9px">Damit füllt „Aus Link holen“ Zutaten und Zubereitung automatisch aus einer Rezeptseite. Ohne Eintrag funktioniert weiterhin „Rezepttext einfügen“.</p>
-      <p class="note" style="margin-top:10px">Damit „Küchenplan“ im Teilen-Menü deines Handys auftaucht, muss die App über das Chrome-Menü installiert sein. Danach kannst du beim Surfen auf Teilen tippen und die Seite landet direkt hier im Formular.</p>
-    </div>
+    <p class="note" style="margin-top:26px;text-align:center">Version ${VERSION} · ${RZ().length} Rezepte</p>
+    <p style="text-align:center;margin-top:10px"><button class="btn btn-s btn-ghost" onclick="if(confirm('Alle lokalen Daten auf diesem Gerät löschen? Was schon abgeglichen ist, bleibt in der Datenbank.')){localStorage.clear();location.reload()}">App zurücksetzen</button></p>`;
+}
+/* Welches Blatt gerade offen ist – Änderungen darin sollen sichtbar werden,
+   ohne dass es zuklappt. */
+let mehrBlatt=null;
+function mehrOeffnen(name){ mehrBlatt=name; mehrZeigen(false); }
+function mehrZeigen(behalten=true){
+  const bauen=MEHR_BLATT[mehrBlatt]; if(!bauen) return;
+  openSheet(bauen(),behalten);
+}
+function mehrSchliessen(){ mehrBlatt=null; closeSheet(); }
+const blattKopf=(titel,unter)=>`<div class="grab"></div><h2 style="font-size:20px">${titel}</h2>
+  ${unter?`<p class="note" style="margin:6px 0 14px">${unter}</p>`:'<div style="height:10px"></div>'}`;
+const blattFuss=`<button class="btn btn-wide btn-ghost" style="margin-top:16px" onclick="mehrSchliessen()">Schließen</button>`;
 
-    <div class="sect"><h2>Archiv</h2></div>
-    ${(()=>{
-      const arch=Object.entries(S.archiv||{}).sort((a,b)=>b[1]-a[1]);
-      const spa=Object.entries(S.spaeter||{}).length;
-      if(!arch.length) return `<p class="note">Noch nichts aussortiert.${spa?` ${spa} Rezept${spa>1?"e liegen":" liegt"} auf „Später nochmal" und taucht nach ${FRIST.spaeter} Tagen wieder unter Entdecken auf.`:""}</p>`;
-      return `<p class="note" style="margin-bottom:10px">${arch.length} aussortiert.${spa?` Weitere ${spa} auf „Später nochmal“.`:""} Nichts davon ist gelöscht – du kannst jedes Rezept einzeln zurückholen.</p>
-        ${arch.map(([id])=>{const r=R(id);if(!r)return "";
-          return `<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(r.n)}</div>
-            <div class="meal-sub">${KIND[r.k][0]} · ${r.min} Min</div></div>
-            <button class="btn btn-s" onclick="nochmalZeigen('${id}')">Nochmal zeigen</button>
-            <button class="btn btn-s btn-primary" onclick="zurueckholen('${id}')">In die Sammlung</button></div>`;}).join("")}`;
-    })()}
-
-    <div class="sect"><h2>Sync zwischen euren Handys</h2></div>
-    <div class="card">
-      <p class="note">Status: <b style="color:var(--ink)">${b?(SYNCTEXT[syncState]||syncState):"nur auf diesem Gerät"}</b>${queue.length?` · ${queue.length===1?"1 Änderung wartet":queue.length+" Änderungen warten"}`:""}</p>
-      ${b&&dauerfehler()?`<p class="note" style="color:var(--beet);font-weight:550;margin-top:6px">${SYNC_FEHLER[syncState]}</p>`:""}
-      ${b?`<div class="row-btns" style="margin-top:8px"><button class="btn btn-s" onclick="versuche=0;verbinden();flush()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush()">Wartendes senden</button>`:""}</div>`:""}
-      <label class="fl" for="db">Datenbank-URL aus Firebase</label>
-      <input type="url" id="db" value="${esc(cfg.db)}" placeholder="https://name-default-rtdb.europe-west1.firebasedatabase.app">
-      <label class="fl" for="hid">Haushalts-Code</label>
-      <input type="text" id="hid" value="${esc(cfg.hid)}" placeholder="mindestens 20 Zeichen">
-      <div class="row-btns" style="margin-top:10px">
-        <button class="btn btn-s" onclick="codeErzeugen()">Code erzeugen</button>
-        <button class="btn btn-s btn-primary" onclick="cfgSpeichern()">Speichern und verbinden</button>
-        ${b?`<button class="btn btn-s" onclick="hochladen()">Diesen Stand hochladen</button>`:""}
-      </div>
-      <p class="note" style="margin-top:11px">Beim Verbinden werden beide Stände zusammengeführt statt überschrieben. „Diesen Stand hochladen“ brauchst du nur, wenn du bewusst überschreiben willst.</p>
-      <p class="note" style="margin-top:8px">Auf dem zweiten Handy dieselbe URL und denselben Code eintragen – danach sehen beide Geräte dieselbe Liste in Echtzeit. Ohne Eintrag läuft alles wie bisher nur lokal.</p>
-    </div>
-
-    <div class="sect"><h2>Vorrat</h2></div>
-    <p class="note" style="margin-bottom:10px">Diese Dinge sollen immer im Haus sein. ${fehlt?`Aktuell fehlen ${fehlt}.`:"Aktuell ist alles da."}</p>
-    ${gruppen.map(g=>`<div class="sect"><h2>${ABT[g.k]}</h2></div>
-      ${g.items.map(([id,v])=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(v.n)}</div></div>
-        <div class="toggle"><button aria-pressed="${!!v.da}" onclick="mut('vorrat/${id}/da',true)">Da</button><button aria-pressed="${!v.da}" onclick="mut('vorrat/${id}/da',false)">Fehlt</button></div>
-        <button class="btn btn-ghost btn-s" onclick="mut('vorrat/${id}',null)" aria-label="entfernen">✕</button></div>`).join("")}`).join("")}
-    <div class="card" style="margin-top:14px"><div style="display:flex;gap:8px;margin-bottom:8px">
-      <input type="text" id="vn" placeholder="Neues Vorratsprodukt">
-      <select id="vk" style="width:auto">${S.route.map(k=>`<option value="${k}">${ABT[k]}</option>`).join("")}</select></div>
-      <button class="btn btn-wide" onclick="addV()">Zum Vorrat hinzufügen</button></div>
-
-    <div class="sect"><h2>Firebase einrichten</h2></div>
-    <div class="card"><p class="note">Einmalig, kostenlos, dauert etwa fünf Minuten:</p>
-      <ol class="note" style="padding-left:18px;margin:8px 0"><li>Auf console.firebase.google.com ein Projekt anlegen (Spark-Tarif, keine Karte nötig).</li>
-      <li>Realtime Database erstellen, Region Europa, Start im gesperrten Modus.</li>
-      <li>Unter Regeln folgendes eintragen und veröffentlichen:</li></ol>
-      <pre>{
+const MEHR_BLATT={
+  vorrat(){
+    const fehlt=Object.values(S.vorrat).filter(v=>!v.da).length;
+    const gruppen=S.route.map(k=>({k,items:Object.entries(S.vorrat).filter(([,v])=>abteilungSicher(v.k)===k)})).filter(g=>g.items.length);
+    return blattKopf("Vorrat",`Diese Dinge sollen immer im Haus sein. ${fehlt?`Aktuell fehlen ${fehlt} – sie stehen auf der Einkaufsliste.`:"Aktuell ist alles da."}`)
+      +`<div class="card" style="margin-bottom:14px"><div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" id="vn" placeholder="Neues Vorratsprodukt" onkeydown="if(event.key==='Enter')addV()">
+        <select id="vk" style="width:auto">${S.route.map(k=>`<option value="${k}">${ABT[k]}</option>`).join("")}</select></div>
+        <button class="btn btn-wide" onclick="addV()">Hinzufügen</button></div>`
+      +gruppen.map(g=>`<div class="sect"><h2>${ABT[g.k]}</h2></div>
+        ${g.items.map(([id,v])=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(v.n)}</div></div>
+          <div class="toggle"><button aria-pressed="${!!v.da}" onclick="vorratSetzen('${id}',true)">Da</button><button aria-pressed="${!v.da}" onclick="vorratSetzen('${id}',false)">Fehlt</button></div>
+          <button class="btn btn-ghost btn-s" onclick="vorratWeg('${id}')" aria-label="entfernen">${IKON.kreuz}</button></div>`).join("")}`).join("")
+      +blattFuss;
+  },
+  angebote(){
+    const l=angeboteListe();
+    return blattKopf("Angebote bei Aldi Süd",
+      l.length?`${l.length===1?"Ein Prospekt":l.length+" Prospekte"} hinterlegt. Passende Posten werden auf der Einkaufsliste gekennzeichnet.`
+             :"Aldi Süd stellt die Prospekte für drei Wochen im Voraus bereit – lade sie zusammen herunter und lies sie in einem Rutsch ein.")
+      +(l.length?`<div class="card" style="margin-bottom:12px">${l.map(pr=>{
+          const passt=[0,1,2].filter(w=>{const [v,bb]=wochenSpanne(w);return deckt(pr,v,bb);}).map(w=>kwPlus(w));
+          return `<div class="ingline"><span><b>${esc(zeitraumText(pr))}</b><br><span class="note">${pr.items.length} Einträge${passt.length?" · "+passt.join(", "):" · keine Planwoche"}</span></span>
+            <span><button class="btn btn-s" onclick="angebotWeg('${pr.id}');mehrZeigen()" aria-label="entfernen">${IKON.kreuz}</button></span></div>`;}).join("")}</div>`:"")
+      +`<button class="btn btn-wide btn-primary" onclick="angeboteBearbeiten()">Prospekt hinzufügen</button>
+        ${l.length?`<button class="btn btn-wide" style="margin-top:6px" onclick="abgelaufeneWeg();mehrZeigen()">Abgelaufene löschen</button>`:""}`
+      +blattFuss;
+  },
+  eigene(){
+    return blattKopf("Eigene Rezepte",`${Object.keys(S.eigene||{}).length} selbst angelegt. Sie gleichen sich wie alles andere auf beide Handys ab.`)
+      +`<button class="btn btn-wide btn-primary" onclick="mehrSchliessen();neuesRezept()">Neues Rezept anlegen</button>
+        <div class="row-btns" style="margin-top:8px">
+          <button class="btn btn-s" onclick="eigeneImportieren()">Aus Datei einspielen</button>
+          <button class="btn btn-s" onclick="eigeneExportieren()">Als Datei sichern</button></div>
+        <div class="sect"><h2>Aus Link holen</h2></div>
+        <label class="fl" for="leser">Adresse des Rezept-Lesers</label>
+        <input type="url" id="leser" value="${esc(cfg.leser)}" placeholder="https://rezeptleser.dein-name.workers.dev">
+        <button class="btn btn-s" style="margin-top:8px" onclick="leserSpeichern();mehrZeigen()">Speichern</button>
+        <p class="note" style="margin-top:9px">Damit füllt „Aus Link holen“ Zutaten und Zubereitung automatisch aus einer Rezeptseite. Ohne Eintrag funktioniert weiterhin „Rezepttext einfügen“.</p>
+        <p class="note" style="margin-top:10px">Damit „Küchenplan“ im Teilen-Menü deines Handys auftaucht, muss die App über das Chrome-Menü installiert sein. Danach landet eine geteilte Seite direkt im Formular.</p>`
+      +blattFuss;
+  },
+  archiv(){
+    const arch=Object.entries(S.archiv||{}).sort((a,b)=>b[1]-a[1]);
+    const spa=Object.entries(S.spaeter||{}).length;
+    if(!arch.length) return blattKopf("Archiv",`Noch nichts aussortiert.${spa?` ${spa} Rezept${spa>1?"e liegen":" liegt"} auf „Später nochmal“ und taucht nach ${FRIST.spaeter} Tagen wieder unter Entdecken auf.`:""}`)+blattFuss;
+    return blattKopf("Archiv",`${arch.length} aussortiert.${spa?` Weitere ${spa} auf „Später nochmal“.`:""} Nichts davon ist gelöscht.`)
+      +arch.map(([id])=>{const r=R(id); if(!r) return "";
+        return `<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(r.n)}</div>
+          <div class="meal-sub">${KIND[r.k][0]} · ${r.min} Min</div></div>
+          <button class="btn btn-s" onclick="nochmalZeigen('${id}');mehrZeigen()">Nochmal zeigen</button>
+          <button class="btn btn-s btn-primary" onclick="zurueckholen('${id}');mehrZeigen()">In die Sammlung</button></div>`;}).join("")
+      +blattFuss;
+  },
+  sync(){
+    const b=basis();
+    return blattKopf("Abgleich",b?`Status: ${SYNCTEXT[syncState]||syncState}${queue.length?` · ${queue.length===1?"1 Änderung wartet":queue.length+" Änderungen warten"}`:""}`
+                            :"Noch nicht eingerichtet – alles liegt nur auf diesem Gerät.")
+      +(b&&dauerfehler()?`<p class="note" style="color:var(--beet);font-weight:550;margin-bottom:12px">${SYNC_FEHLER[syncState]}</p>`:"")
+      +(b?`<div class="row-btns" style="margin-bottom:14px"><button class="btn btn-s" onclick="versuche=0;verbinden();flush();mehrZeigen()">Neu verbinden</button>${queue.length?`<button class="btn btn-s" onclick="flush();mehrZeigen()">Wartendes senden</button>`:""}</div>`:"")
+      +`<label class="fl" for="db">Datenbank-URL aus Firebase</label>
+        <input type="url" id="db" value="${esc(cfg.db)}" placeholder="https://name-default-rtdb.europe-west1.firebasedatabase.app">
+        <label class="fl" for="hid">Haushalts-Code</label>
+        <input type="text" id="hid" value="${esc(cfg.hid)}" placeholder="mindestens 20 Zeichen">
+        <div class="row-btns" style="margin-top:10px">
+          <button class="btn btn-s" onclick="codeErzeugen()">Code erzeugen</button>
+          <button class="btn btn-s btn-primary" onclick="cfgSpeichern();mehrZeigen()">Speichern und verbinden</button></div>
+        <p class="note" style="margin-top:11px">Auf dem zweiten Handy dieselbe URL und denselben Code eintragen. Beim Verbinden werden beide Stände zusammengeführt, nicht überschrieben.</p>
+        ${b?`<div class="sect"><h2>Notfall</h2></div>
+          <button class="btn btn-wide" onclick="hochladen()">Diesen Stand hochladen</button>
+          <p class="note" style="margin-top:6px">Überschreibt den Stand in der Datenbank mit dem dieses Geräts. Nur nötig, wenn wirklich etwas schiefgegangen ist.</p>`:""}
+        <div class="sect"><h2>Firebase einrichten</h2></div>
+        <p class="note">Einmalig, kostenlos, etwa fünf Minuten:</p>
+        <ol class="note" style="padding-left:18px;margin:8px 0"><li>Auf console.firebase.google.com ein Projekt anlegen (Spark-Tarif, keine Karte nötig).</li>
+        <li>Realtime Database erstellen, Region Europa, Start im gesperrten Modus.</li>
+        <li>Unter Regeln folgendes eintragen und veröffentlichen:</li></ol>
+        <pre>{
   "rules": {
     "haushalte": {
       "$id": {
@@ -3756,14 +4027,16 @@ function vMehr(){
     }
   }
 }</pre>
-      <p class="note" style="margin-top:8px">Die URL steht oben in der Datenbankansicht. Wer den Haushalts-Code kennt, kann eure Liste lesen und ändern – auflisten oder erraten kann sie niemand. Für eine Einkaufsliste ist das in Ordnung, für Sensibleres wäre es das nicht.</p></div>
-
-    <div class="sect"><h2>Zurücksetzen</h2></div>
-    <button class="btn btn-wide" onclick="if(confirm('Alle lokalen Daten löschen?')){localStorage.clear();location.reload()}">App zurücksetzen</button>
-    <p class="note" style="margin-top:12px;text-align:center">Version ${VERSION} · ${RZ().length} Rezepte</p>`;
-}
-function addV(){const n=document.getElementById("vn").value.trim();if(!n)return;
-  mut("vorrat/"+slug(n),{n,k:document.getElementById("vk").value,da:true});}
+        <p class="note" style="margin-top:8px">Die URL steht oben in der Datenbankansicht. Wer den Haushalts-Code kennt, kann eure Liste lesen und ändern – auflisten oder erraten kann sie niemand. Für eine Einkaufsliste ist das in Ordnung, für Sensibleres wäre es das nicht.</p>`
+      +blattFuss;
+  }
+};
+/* Ganzer Eintrag statt nur des Feldes: nur so bekommt er einen Zeitstempel */
+function vorratSetzen(id,da){ const v=S.vorrat&&S.vorrat[id]; if(!v)return; mut("vorrat/"+id,{...v,da}); mehrZeigen(); }
+function vorratWeg(id){ mut("vorrat/"+id,null); mehrZeigen(); }
+function addV(){const el=document.getElementById("vn"); const n=el?el.value.trim():""; if(!n)return;
+  el.value="";
+  mut("vorrat/"+slug(n),{n,k:document.getElementById("vk").value,da:true}); mehrZeigen();}
 function codeErzeugen(){
   const a="abcdefghijkmnopqrstuvwxyz23456789";let s="";
   const r=crypto.getRandomValues(new Uint8Array(24));r.forEach(x=>s+=a[x%a.length]);

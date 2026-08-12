@@ -118,7 +118,22 @@ die wichtigste Konvention der ganzen App.
 `gt` Getränke · `so` Sonstiges
 
 Standardreihenfolge `ABT_STD = ["og","bw","kr","ff","tk","tr","gw","gt","so"]`, vom Nutzer
-unter „Einkauf → Reihenfolge" anpassbar, weil Filialen sich unterscheiden.
+unter „Einkauf → Weiteres → Reihenfolge der Abteilungen" anpassbar, weil Filialen sich
+unterscheiden.
+
+`migrieren()` ergänzt fehlende und entfernt unbekannte Abteilungen im gespeicherten
+Laufweg. Was die App dennoch nicht zuordnen kann, zeigt `abteilungSicher()` unter
+Sonstiges. Beides sichert dieselbe Zusage: **kein Posten verschwindet aus der Ansicht,
+während er im Zähler weiterläuft** – die Liste ließe sich sonst nie abschließen.
+
+Welche Abteilung eine Zutat bekommt, entscheidet `katFuer(name)` in drei Stufen:
+zuerst der Index aus den mitgelieferten Rezepten (`KAT_INDEX`, exakter Name gewinnt
+immer), dann einfache Mehrzahl-Varianten, zuletzt die Wortregeln `KAT_WORT`. Dort
+zählt die Reihenfolge: Drogerie steht vor allem („Zahnpasta" ist keine Pasta),
+Tiefkühl vor Frischware, Brühe vor Fleisch. Fleisch und Fisch kommen aus
+`ZUT_FLEISCH`/`ZUT_FISCH` – **denselben** Ausdrücken, die auch die Rezeptart bestimmen.
+Zwei getrennte Listen liefen früher auseinander: „Speck" machte das Rezept zum
+Fleischgericht, landete auf der Einkaufsliste aber unter Sonstiges.
 
 ---
 
@@ -169,8 +184,11 @@ Eingabefeld für eigene Posten – **auch bei leerer Liste**, und diese Posten �
 jeden Neuaufbau.
 
 ### Mehr
-Standardportionen, Stillzeit-Modus, Angebote, Rezeptquellen, eigene Rezepte samt
-Import/Export, Rezept-Leser, Vorrat, Sync, Rückblick, Zurücksetzen, Versionsnummer.
+Seit 3.4 eine kurze Übersicht statt einer langen Rolle: Stillzeit-Modus und
+Standardportionen stehen direkt da (ein Tipp genügt), alles andere liegt hinter einer
+Zeile mit Kennzahl – Vorrat, Angebote, Rezeptquellen, eigene Rezepte, Archiv, Abgleich.
+Die Blätter kommen aus `MEHR_BLATT`, `mehrOeffnen(name)` öffnet, `mehrZeigen()` zeichnet
+nach einer Änderung neu, ohne das Blatt zu schließen oder die Rollposition zu verlieren.
 
 ---
 
@@ -395,6 +413,157 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
 - **PDF-Einlesen auf dem Handy** ist speicherintensiv; ein 44-MB-Prospekt dauert spürbar.
 - **Prospekt-Viewer von Aldi** (publitas.com) gibt Daten nur mit signierten Parametern
   heraus, ist also nicht automatisierbar. Das PDF dagegen schon.
+
+---
+
+## 12c. Gestaltung (3.6)
+
+Die Oberfläche folgt den Apple Human Interface Guidelines. Geschrieben ist sie als
+CSS-Variablensatz in `:root`, den ein `@media (prefers-color-scheme:dark)`-Block
+vollständig ersetzt — jede Farbe ist in beiden Modi definiert, keine nur in einem.
+
+| | Hell | Dunkel |
+|---|---|---|
+| Fläche | `#F2F2F7` | `#000000` |
+| Karten | `#FFFFFF` | `#1C1C1E` |
+| Leitfarbe | `#248A3D` | `#30D158` |
+| Fisch | `#0071E3` | `#0A84FF` |
+| Fleisch | `#D70015` | `#FF453A` |
+| Angebot | `#B25000` | `#FF9F0A` |
+
+**Eine Leitfarbe.** Grün trägt Fortschritt, Erfolg und die aktive Leiste. Blau, Rot und
+Orange erscheinen nur, wo sie etwas bedeuten: Fisch, Fleisch, Angebot. Kennzeichen
+liegen auf grauer Fläche und tragen die Farbe nur in der Schrift — vorher hatte jede
+Art ihren eigenen farbigen Hintergrund, und die Rezeptliste war ein Flickenteppich.
+
+**Eine Auswahl-Optik.** Reiter, Filterknöpfe und Umschalter benutzen dasselbe Muster:
+graue Bahn, heller Schalter, wie die Systemsegmente. Vorher war die Auswahl mal ein
+schwarz gefülltes Element, mal ein Rahmen.
+
+**Schrift.** Die Systemschrift (San Francisco auf Apple-Geräten), bewusst **kein
+Webfont** — die App muss offline starten. Zahlen laufen über
+`font-variant-numeric: tabular-nums` in gleicher Breite; die frühere Schreibmaschinen-
+schrift für Mengen und Beschriftungen ist weg, ebenso die Versalien in Zeilen wie
+„3 VON 3 · 62 G". Die Größen folgen der iOS-Staffel: 32 Titel, 17 Grundtext,
+15 Nebentext, 13 Fußnote.
+
+**Flächen statt Rahmen.** Karten haben im hellen Modus einen weichen Schatten und
+keinen Rahmen, im dunklen eine Haarlinie. Trennlinien sind 0,5 px.
+
+**Bedienzeichen sind Vektoren** (`IKON`): Haken, Kreuz, Pfeile, Papierkorb, Plus, Herz.
+Sie sehen auf jedem Gerät gleich aus und lassen sich einfärben. **Die Lebensmittel-Emoji
+auf der Einkaufsliste bleiben** — die sind Inhalt und helfen beim Überfliegen im Markt.
+
+**Antippflächen ab 44 Punkten**, Tab-Leiste durchscheinend mit Weichzeichner,
+Systemleisten oben und unten über `env(safe-area-inset-*)` freigehalten, keine
+Animationen für alle, die Bewegung reduziert haben.
+
+**Weniger Knöpfe.** Über dem Wochenplan standen vier, jetzt zwei plus „Weiteres …"
+(`wocheMehr()`) — dasselbe Muster wie beim Einkauf seit 3.4.
+
+`tests/12-gestaltung.js` (18 Prüfungen) hält das nach: jede benutzte Variable ist
+definiert, der dunkle Modus lässt keine Farbe stehen und erfindet keine dazu,
+Eingabefelder sind mindestens 16 px groß (sonst zoomt iOS beim Tippen), Antippflächen
+und Systemleisten stimmen, kein fremder Webfont, keine Emoji als Knopfbeschriftung,
+keine festen Farbwerte im Markup, keine Steuerzeichen im Quelltext.
+
+---
+
+## 12b. Der Abgleich zwischen zwei Handys (3.5)
+
+Gemeldet war: „Dinge, die der andere Benutzer geändert hat, werden nicht übernommen."
+Beim Durchspielen aller Fälle zeigte sich ein scharf umrissenes Muster.
+**Änderungen kamen immer an. Löschungen nie.**
+
+### Warum
+
+`zusammenfuehren()` sah einen Eintrag, den nur noch die eigene Seite kennt, und behielt
+ihn. Das ist richtig, wenn man ihn gerade selbst angelegt hat, und falsch, wenn die
+andere Seite ihn gerade gelöscht hat — von außen sind beide Fälle nicht zu unterscheiden.
+Behalten wurde immer. Schlimmer noch: danach lud das Gerät seinen Stand hoch, und die
+Löschung war auch auf dem anderen Handy wieder weg. Betroffen war alles außer Rezepten,
+die ihre Grabsteine (`S.geloescht`) seit jeher haben: Plan-Plätze, Einkaufsposten, ganze
+geleerte Listen, geleerte Wochen, Vorratsprodukte, Zusatzlisten, Zusatzgerichte,
+Prospekte, Rezeptquellen.
+
+### Was jetzt passiert
+
+Grabsteine für alles: `S.weg` mit Schlüsseln der Form `<feld>__<id>` und dem Zeitpunkt
+der Löschung. `mut()` pflegt sie von allein — löscht man einen Eintrag, entsteht der
+Grabstein, legt man ihn wieder an, verschwindet er. Wird eine ganze Sammlung ersetzt
+(Einkaufsliste neu bauen, Woche leeren), bekommt jeder verschwundene Schlüssel einen.
+
+Beim Zusammenführen entscheidet der Grabstein, was ein Eintrag ist, den nur eine Seite
+kennt: Ohne Grabstein neu angelegt → behalten. Mit Grabstein, der jünger ist als der
+Eintrag → gelöscht. Ist der Eintrag jünger (jemand hat danach wieder etwas angelegt),
+gewinnt der Eintrag. Die Frist ist 60 Tage — ein Grabstein muss nur überleben, bis das
+andere Gerät wieder online war.
+
+### Damit das überhaupt entscheidbar ist
+
+Ein Zeitstempel gehört an den ganzen Eintrag. Fünf Stellen schrieben vorher einzelne
+Unterfelder (`quellen/<id>/an`, `listen/<id>/items/<id>/on`, `vorrat/<id>/da` …) — solche
+Schreibvorgänge tragen keinen Zeitstempel, und das Zusammenführen konnte zwei Stände
+nicht auseinanderhalten. Jetzt wird immer der ganze Eintrag geschrieben.
+`stempel()` liest außerdem eine reine Zahl als Zeitpunkt: in `sammlung`, `archiv`,
+`spaeter` und `geprueft` **ist** der Wert der Zeitpunkt.
+
+### Nebenbefunde
+
+- `S.listeInfo` steht nicht in `leer()` und ging bei jedem Zusammenführen verloren —
+  samt dem Hinweis, wie viel der Vorrat gedeckt hat. Wird jetzt mitgenommen.
+- `wochenSpanne()` und `isoHeute()` bauten den Kalendertag über `toISOString()`, also
+  nach UTC. Östlich von UTC+12 fiel die Ortszeit 12 Uhr auf den Vortag und die
+  Wochenspanne begann sonntags. Jetzt aus den örtlichen Feldern (`isoTag()`).
+  Für Deutschland ohne Wirkung, die Prüfungen laufen jetzt aber in jeder Zeitzone.
+- `quelleSchalten()` rief `window.__qBody()` ungeprüft auf.
+
+### Wie es geprüft wird
+
+`tests/11-zwei-geraete.js` (29 Prüfungen) spielt jeden Fall mit **zwei Geräten** durch:
+Beide starten gleich, B ändert etwas über die echten App-Funktionen, A bekommt B's Stand
+und führt zusammen. Die letzte Gruppe geht noch einen Schritt weiter und stellt A das zu,
+was B **tatsächlich an die Datenbank geschickt hat**, als Ereignisstrom — also der Weg,
+den Firebase geht. Dazu die Gegenprobe: offline Angelegtes darf nicht verschwinden,
+offline Gelöschtes nicht zurückkommen.
+
+---
+
+## 12a. Was in Version 3.4 behoben wurde
+
+Sechs gemeldete oder dabei gefundene Fehler, alle per Test abgesichert
+(`tests/10-korrekturen.js`, 62 Prüfungen):
+
+1. **Die Art eines Rezepts ließ sich nicht ändern.** `rezeptNorm()` rief bei jedem Lesen
+   `artAusZutaten()` auf und überschrieb damit die Wahl im Formular. Wer „veganes Hack"
+   eintrug, bekam für immer ein Fleischgericht. Jetzt setzt ein Tipp auf die Art das
+   Kennzeichen `kFest`; die Automatik greift nur noch, wo niemand selbst entschieden hat.
+   Das Formular sagt, wenn Wahl und Zutaten auseinandergehen – und dass die Wahl gilt.
+2. **Fleisch landete unter Sonstiges.** Die Wortliste der Einkaufsabteilungen kannte nur
+   „Hähnchen, Rind, Pute" – Speck, Schinken, Salami, Wurst, Gyros, Kasseler, Frikadellen,
+   Hering und Makrele fielen durch. „Schweinebauch" wurde sogar zum Getränk, weil darin
+   `wein` steckt, und „Zahnpasta" zur Nudel. Siehe Abschnitt 4, Abteilungen.
+3. **Offline Abgehaktes ging verloren.** Traf beim Wiederverbinden der Fernstand ein,
+   ersetzte `zusammenfuehren()` den lokalen Stand – Einträge ohne Zeitstempel gewannen
+   immer von fern – und `senden("",S)` leerte danach die Warteschlange. Ein ganzer
+   Einkauf im Funkloch war damit weg. Jetzt legt `wartendeAnwenden()` alles noch
+   Wartende nach dem Mischen wieder obenauf, und Einträge in `liste`, `plan`, `vorrat`
+   und `extra` bekommen beim Schreiben ein `ts`, damit echter Streit nach Zeit entschieden
+   wird statt nach Zufall.
+4. **Blätter reichten unter den Bildschirmrand.** `max-height:92vh` misst am Handy ohne
+   die ein- und ausfahrende Browserleiste; der Schließen-Knopf war nicht erreichbar.
+   Jetzt `92dvh` mit `vh` als Rückfall. Dazu `overscroll-behavior:contain`, sonst schob
+   ein Wisch am Ende des Blattes die Seite dahinter weiter.
+5. **Posten mit unbekannter Abteilung verschwanden**, wurden aber weiter mitgezählt –
+   siehe Abschnitt 4.
+6. **`prompt()` für neue Listen** blockierte die Seite und sah in der installierten App
+   aus wie eine Fremdmeldung. Jetzt ein Blatt wie überall sonst. Dabei fiel auf, dass
+   Rückmeldungen (`#meldung`, z-index 45) hinter offenen Blättern (z-index 50) lagen –
+   sie wirkten wie „nichts passiert". Jetzt liegt die Meldung mit 60 über allem.
+
+**Aufgeräumt:** Über der Einkaufsliste standen sieben Knöpfe; geblieben sind zwei
+(„Erledigte ausblenden" und „Weiteres …"), das Eingabefeld ist nach oben gerückt.
+Teilen, Laufweg, Bildschirm anlassen und die beiden Zurücksetzen-Wege liegen im Blatt.
 
 ---
 

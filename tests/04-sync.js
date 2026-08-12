@@ -20,7 +20,9 @@ t("Adressen zeigen unter /haushalte/<code>", () => {
 t("Plan-Schlüssel erzeugen keine verschachtelte Struktur", () => {
   frisch();
   A.mut("plan/w0-2-a", { r: "b1", p: 2 }, false);
-  gleich(A.S.plan["w0-2-a"], { r: "b1", p: 2 });
+  const e = A.S.plan["w0-2-a"];
+  gleich({ r: e.r, p: e.p }, { r: "b1", p: 2 });
+  wahr(e.ts > 0, "Eintrag traegt einen Zeitstempel");
   gleich(Object.keys(A.S.plan), ["w0-2-a"], "flach geblieben");
 });
 t("Ein Schlüssel mit Schrägstrich landet nie in den Daten", () => {
