@@ -17,7 +17,8 @@ function fetch() { return Promise.reject(new Error("kein Netz im Test")); }
 
 var quellText = read("worker.js").replace(/export default/, "globalThis.WORKER =");
 var namen = ["adressePruefen", "dauer", "portionen", "saeubern", "ausSchema", "suchen", "aufbereiten",
-  "flachSchritte", "video", "notbehelf", "produkteAusHtml", "nameAusSlug", "feedZerlegen", "isoDatum", "PRIVAT"];
+  "flachSchritte", "video", "notbehelf", "produkteAusHtml", "nameAusSlug", "feedZerlegen", "isoDatum", "PRIVAT",
+  "rezeptVerdacht", "titelAusAdresse", "norm"];
 (0, eval)(quellText + ";globalThis.W={" + namen.map(n => `get ${n}(){return ${n}}`).join(",") + "};");
 
 /* ---------- Testframework ---------- */
@@ -195,6 +196,31 @@ t("HTML statt Feed ergibt keine Einträge statt Unsinn", () => {
 t("Fehlendes Datum wird zu null, nicht zu NaN", () => {
   const xml = `<rss><item><title>X</title><link>https://blog.de/x</link><pubDate>keine Ahnung</pubDate></item></rss>`;
   gleich(W.feedZerlegen(xml)[0].datum, 0);
+});
+
+gruppe("Archiv aus der Sitemap");
+t("Rezeptseiten werden erkannt", () => {
+  ["https://blog.de/kichererbsen-curry-mit-spinat/",
+   "https://blog.de/2026/08/ofen-feta-pasta/",
+   "https://blog.de/rezepte/one-pot-nudeln/",
+   "https://blog.de/schokokuchen/"].forEach(u => wahr(W.rezeptVerdacht(u), u));
+});
+t("Alles, was sicher kein Rezept ist, faellt heraus", () => {
+  ["https://blog.de/", "https://blog.de/impressum/", "https://blog.de/datenschutz",
+   "https://blog.de/kategorie/hauptgerichte/", "https://blog.de/tag/vegan/",
+   "https://blog.de/ueber-mich/", "https://blog.de/shop/", "https://blog.de/produkt/kochbuch-neu/",
+   "https://blog.de/rezepte/", "https://blog.de/blog/", "https://blog.de/seite/2",
+   "https://blog.de/newsletter/", "https://blog.de/gewinnspiel-2026/"].forEach(u => wahr(!W.rezeptVerdacht(u), u));
+});
+t("Aus der Adresse wird ein lesbarer Titel", () => {
+  gleich(W.titelAusAdresse("https://blog.de/kichererbsen-curry-mit-spinat/"), "Kichererbsen Curry mit Spinat");
+  gleich(W.titelAusAdresse("https://blog.de/2026/08/ofen-feta-pasta.html"), "Ofen Feta Pasta");
+  gleich(W.titelAusAdresse("https://blog.de/blog/nudeln-und-brokkoli-123456"), "Nudeln und Brokkoli");
+});
+t("Adressen werden zum Vergleich vereinheitlicht", () => {
+  gleich(W.norm("https://Blog.de/Rezept/?utm=1"), "https://blog.de/rezept");
+  gleich(W.norm("https://blog.de/rezept/"), "https://blog.de/rezept");
+  gleich(W.norm(null), "");
 });
 
 print("\n" + ok + " bestanden, " + fehler.length + " fehlgeschlagen");

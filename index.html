@@ -108,6 +108,10 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .rh.warn{background:var(--sun-bg)}
 .rh.warn b{color:var(--sun)}
 
+/* Bio hat eine eigene Farbe – die Leitfarbe, weil es das ist, was wir wollen.
+   Die gewöhnliche Angebotspille bleibt bernstein. */
+.pill.bio{background:var(--herb-bg);color:var(--herb);border-color:var(--herb);font-weight:600}
+
 /* Thema der Woche über dem Ideenstrom */
 .themakarte{background:var(--card);border-radius:var(--r);padding:15px;margin-bottom:12px;box-shadow:var(--schatten);
   border-left:3px solid var(--herb)}
@@ -1879,6 +1883,16 @@ const wocheHatAngebote=w=>angeboteFuerWoche(w).length>0;
    wortweise verglichen: "Meine Metzgerei Puten-Geschnetzeltes" trifft "Putenschnitzel". */
 /* Vier Buchstaben genügen, sonst fielen Feta, Reis und Eier durchs Raster.
    Damit dabei keine Markennamen treffen, ist die Sperrliste entsprechend länger. */
+/* ---------- Bio ----------
+   Wir kaufen möglichst Bio. Steht ein Angebot in Bio da, ist das die Nachricht –
+   deshalb bekommt es überall eine eigene Kennzeichnung, nicht nur die übliche
+   Angebotspille. Erkannt wird am Wortanfang: „Biomilch" und „Bio-Möhren" zählen,
+   „Biskuit" nicht, weil dort kein Wort mit „bio" beginnt. */
+const BIO=/(^|[^a-zäöüß])(bio|öko|oeko)|demeter|naturland/i;
+const istBio=t=>BIO.test(String(t||""));
+/* Alle Bio-Posten des Prospekts einer Woche */
+const bioAngebote=(w)=>angeboteAktiv(w).filter(istBio);
+
 const ANG_STOPP=new Set(["meine","aldi","aktion","gramm","packung","frisch","deutscher","deutsche","marken",
  "artikel","produkt","stueck","sorten","verschiedene","classic","original","family","gutbio","bio","tiefgekuehlt",
  "gekuehlt","angebot","kracher","aktionspreis","preis","stueckpreis","ursprung","klasse","preise",
@@ -2205,7 +2219,21 @@ const QUELLEN_START=[
   {n:"Emmi kocht einfach",u:"https://emmikochteinfach.de"},
   {n:"Valentinas Kochbuch",u:"https://valentinas-kochbuch.de"}
 ];
-let feedStand={laden:false,eintraege:[],fehler:[]};
+/* Der Netz-Bestand liegt neben dem Zustand im lokalen Speicher, nicht in S:
+   Er ist Zwischenspeicher, keine Verabredung. Ihn über Firebase auf beide Geräte
+   zu schieben, kostete Übertragung für Daten, die jedes Gerät selbst holen kann. */
+let feedStand={laden:false,eintraege:[],fehler:[],geholt:0};
+const NETZ_FRISCH=12*3600000;      /* danach wird beim Öffnen neu geholt */
+const NETZ_MAX=400;                /* mehr braucht die Ansicht nie */
+function netzLesen(){
+  try{ const v=localStorage.getItem(KEY+".netz"); if(v){ const d=JSON.parse(v);
+    if(d&&Array.isArray(d.eintraege)) feedStand={laden:false,eintraege:d.eintraege,fehler:d.fehler||[],geholt:d.geholt||0}; } }catch(e){}
+}
+function netzSchreiben(){
+  try{ localStorage.setItem(KEY+".netz",JSON.stringify({
+    eintraege:feedStand.eintraege.slice(0,NETZ_MAX),fehler:feedStand.fehler,geholt:feedStand.geholt})); }catch(e){}
+}
+const netzAlt=()=>!feedStand.geholt||Date.now()-feedStand.geholt>NETZ_FRISCH;
 
 function quellen(){ return (S.quellen&&Object.keys(S.quellen).length)?S.quellen:null; }
 function quellenStarten(){
@@ -2246,24 +2274,76 @@ function quelleDazu(){
   openSheet(window.__qBody(),true);
 }
 
-async function feedsHolen(){
-  if(!cfg.leser){ alert("Dafür braucht es den Rezept-Leser unter Mehr."); return; }
+/* Holt bei jeder aktiven Quelle den Feed und – einmal am Tag – zusätzlich das
+   Archiv aus der Sitemap. Läuft still: Wer die Ansicht öffnet, sieht sofort den
+   letzten Stand und bekommt den neuen nachgereicht. */
+async function feedsHolen(still=false){
+  if(!cfg.leser){ if(!still) alert("Dafür braucht es den Rezept-Leser unter Mehr."); return; }
+  if(feedStand.laden) return;
   if(!quellen()) quellenStarten();
-  feedStand={laden:true,eintraege:[],fehler:[]};
-  render();
+  feedStand={...feedStand,laden:true};
+  if(!still) render();
   const aktive=Object.values(S.quellen||{}).filter(q=>q.an);
   const alle=[], fehler=[];
   await Promise.all(aktive.map(async q=>{
     try{
-      const res=await fetch(cfg.leser.replace(/\/$/,"")+"/feed?url="+encodeURIComponent(q.u));
+      const res=await fetch(cfg.leser.replace(/\/$/,"")+"/feed?archiv=1&url="+encodeURIComponent(q.u));
       const d=await res.json();
-      if(d.eintraege&&d.eintraege.length) d.eintraege.slice(0,12).forEach(e=>alle.push({...e,quelle:q.n}));
-      else fehler.push(q.n);
+      if(d.eintraege&&d.eintraege.length){
+        d.eintraege.forEach(e=>alle.push({...e,art:e.art||"neu",quelle:q.n}));
+      } else fehler.push(q.n);
     }catch(e){ fehler.push(q.n); }
   }));
-  feedStand={laden:false,eintraege:alle.sort((a,b)=>b.datum-a.datum),fehler};
+  /* Doppelte zusammenführen, zweifach: erst über die Adresse (dieselbe Seite mit
+     und ohne Schrägstrich am Ende), dann über den Titel. Dasselbe Gericht steht
+     durchaus bei zwei Blogs – für einen Vorschlag reicht es einmal, und fünf
+     gleiche Karten untereinander sehen nach einem Fehler aus. */
+  const gesehen=new Set(), titel=new Set(), sauber=[];
+  alle.sort((a,b)=>(b.datum||0)-(a.datum||0)).forEach(e=>{
+    const k=String(e.link||"").replace(/[?#].*$/,"").replace(/\/$/,"").toLowerCase();
+    const tk=String(e.titel||"").toLowerCase().replace(/[^a-zäöüß0-9]/g,"");
+    if(!k||gesehen.has(k)||(tk&&titel.has(tk))) return;
+    gesehen.add(k); if(tk) titel.add(tk); sauber.push(e);
+  });
+  feedStand={laden:false,eintraege:sauber.slice(0,NETZ_MAX),fehler,geholt:Date.now()};
+  netzSchreiben();
   render();
 }
+/* Beim Öffnen der Ansicht: liegt der letzte Abruf länger als zwölf Stunden
+   zurück, wird im Hintergrund nachgeladen. Der alte Stand bleibt derweil stehen. */
+function netzPruefen(){
+  if(!cfg.leser||feedStand.laden||!netzAlt()) return;
+  feedsHolen(true);
+}
+/* Aus dem Archiv werden nicht alle gezeigt, sondern eine Handvoll – jeden Tag
+   eine andere. Der Tag ist der Zufallsschlüssel: Die Auswahl bleibt stabil,
+   solange man in der App hin und her wechselt, und ist morgen eine neue. */
+function archivAuswahl(n=6){
+  const pool=feedStand.eintraege.filter(e=>e.art==="archiv"&&!feedSchonDa(e.link));
+  if(!pool.length) return [];
+  const tag=Math.floor(Date.now()/86400000)+archivVersatz;
+  const bewertet=pool.map((e,i)=>({e,r:mischWert(tag,e.link||String(i))}));
+  bewertet.sort((a,b)=>a.r-b.r);
+  /* Zwei Blogs führen durchaus dasselbe Gericht. In einer Auswahl von sechs
+     Karten sähe derselbe Titel zweimal nach einem Fehler aus. */
+  const titel=new Set(), raus=[];
+  for(const {e} of bewertet){
+    const k=String(e.titel||"").toLowerCase().replace(/[^a-zäöüß0-9]/g,"");
+    if(k&&titel.has(k)) continue;
+    titel.add(k); raus.push(e);
+    if(raus.length>=n) break;
+  }
+  return raus;
+}
+/* Kleiner, stabiler Streuwert aus Tag und Adresse – kein Zufall, der bei jedem
+   Neuzeichnen andere Karten zeigt. */
+function mischWert(tag,text){
+  let h=tag*2654435761%4294967296;
+  for(let i=0;i<text.length;i++){ h=(h^text.charCodeAt(i))*16777619%4294967296; }
+  return h;
+}
+const netzNeu=()=>feedStand.eintraege.filter(e=>e.art!=="archiv");
+
 const feedSchonDa=link=>RZ().some(r=>r.q&&r.q.replace(/\/$/,"")===String(link).replace(/\/$/,""));
 function feedUebernehmen(i){
   const e=feedStand.eintraege[i]; if(!e) return;
@@ -2449,7 +2529,7 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.8";
+const VERSION="3.9";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90,idee:120};   /* Tage */
 let idZaehler=0;
@@ -2878,6 +2958,9 @@ function render(){
   document.getElementById("title").textContent=ti;
   document.getElementById("view").innerHTML={woche:vWoche,rezepte:vRezepte,entdecken:vEntdecken,einkauf:vEinkauf,mehr:vMehr}[tab]();
   nav();
+  /* Beim Öffnen von „Aus dem Netz" still nachladen, wenn der Stand alt ist.
+     Nach dem Zeichnen, damit die Ansicht nicht auf das Netz wartet. */
+  if(tab==="entdecken"&&ideenModus==="netz") setTimeout(netzPruefen,0);
 }
 
 /* ============ Wochenplan ============ */
@@ -2970,7 +3053,11 @@ function wochenHinweise(){
   const raus=[];
   if(schnitt&&schnitt<PROTEINZIEL) raus.push({warn:true,t:`Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g.`});
   if(belegt&&offen.length) raus.push({t:`Noch keine Beilage aus: ${offen.map(k=>KH[k]).join(", ")}.`});
-  if(wocheHatAngebote(planWoche)) raus.push({t:`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`});
+  if(wocheHatAngebote(planWoche)){
+    const bio=bioAngebote(planWoche).length;
+    raus.push({t:`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`
+      +(bio?` Davon ${bio} in Bio.`:"")});
+  }
   return raus;
 }
 function vWoche(){
@@ -3906,7 +3993,8 @@ function ideenImAngebot(){
   return IDEEN.filter(ideeOffen).map(i=>{
     const treffer=(i.z||[]).map(([n])=>({n,a:zutatImAngebot(n,0)})).filter(x=>x.a);
     return treffer.length?{idee:i,treffer}:null;
-  }).filter(Boolean).sort((a,b)=>b.treffer.length-a.treffer.length);
+  }).filter(Boolean).sort((a,b)=>
+    (b.treffer.some(x=>istBio(x.a))-a.treffer.some(x=>istBio(x.a))) || (b.treffer.length-a.treffer.length));
 }
 
 function ideeUebernehmen(id){
@@ -4012,7 +4100,10 @@ function vIdeenAngebote(){
       Diese Woche trifft keine offene Idee auf ein Angebot. Sieh unter „Ideen" nach – oder nächste Woche wieder hier.</div>`;
   return `<p class="note" style="margin-bottom:12px">${treffer.length} Idee${treffer.length===1?"":"n"}, deren Zutaten gerade im Prospekt stehen.</p>`
     +treffer.slice(0,8).map(({idee,treffer:t})=>ideenKarte(idee,
-      `<p class="note" style="margin-top:6px;color:var(--sun)">Im Angebot: ${t.map(x=>esc(x.n)).join(", ")}</p>`)).join("");
+      (()=>{const bio=t.filter(x=>istBio(x.a));
+        return `<p class="note" style="margin-top:6px;color:var(--${bio.length?"herb":"sun"})">${
+          bio.length?"Bio im Angebot: "+bio.map(x=>esc(x.n)).join(", ")+(t.length>bio.length?" · außerdem im Angebot: "+t.filter(x=>!istBio(x.a)).map(x=>esc(x.n)).join(", "):"")
+                    :"Im Angebot: "+t.map(x=>esc(x.n)).join(", ")}</p>`;})())).join("");
 }
 
 /* ---------- Aufräumen: liegt jetzt unter „Mehr" ----------
@@ -4043,29 +4134,51 @@ function nochmalZeigen(id){mut("archiv/"+id,null);}
 /* ============ Vorrat & Einkauf ============ */
 /* ---------- Neues aus den Rezeptquellen ---------- */
 function vNetz(){
-  if(!cfg.leser) return `<div class="empty"><b>Rezept-Leser fehlt</b>Trag ihn unter Mehr ein, dann holt die App die neuesten Rezepte aus deinen Lieblingsblogs.
+  if(!cfg.leser) return `<div class="empty"><b>Rezept-Leser fehlt</b>Trag ihn unter Mehr ein, dann liest die App eure Lieblingsblogs mit.
     <div style="margin-top:14px"><button class="btn" onclick="go('mehr')">Zu den Einstellungen</button></div></div>`;
-  if(feedStand.laden) return `<div class="empty"><b>Wird geholt …</b>Die Blogs werden gerade abgefragt.</div>`;
+  const neu=netzNeu(), alt=archivAuswahl(6);
+  if(feedStand.laden&&!neu.length) return `<div class="empty"><b>Wird geholt …</b>Die Blogs werden gerade abgefragt.</div>`;
   if(!feedStand.eintraege.length) return `<div class="empty"><b>Neues aus deinen Quellen</b>
-    Die App liest die aktuellen Beiträge deiner Rezeptblogs. Was dich anspringt, übernimmst du mit einem Tipp – samt Zutaten.
+    Die App liest die aktuellen Beiträge eurer Rezeptblogs und dazu ihr Archiv – dort steht, was längst aus dem Feed gefallen ist. Was dich anspringt, übernimmst du mit einem Tipp, samt Zutaten.
     <div class="row-btns" style="margin-top:14px;justify-content:center">
       <button class="btn btn-primary" onclick="feedsHolen()">Jetzt laden</button>
       <button class="btn" onclick="quellenVerwalten()">Quellen</button></div></div>`;
+
+  const karte=e=>{
+    const da=feedSchonDa(e.link);
+    const i=feedStand.eintraege.indexOf(e);
+    return `<div class="rec k-veg"><div class="rec-b">
+      <div class="rec-t">${esc(e.titel)}</div>
+      <div class="rec-m">${esc(e.quelle)}${e.datum?" · "+new Date(e.datum).toLocaleDateString("de-DE"):""}${da?" · schon in der Sammlung":""}</div>
+      ${e.text?`<p class="note" style="margin-top:6px">${esc(e.text).slice(0,140)}</p>`:""}
+      <div class="rec-tags"><a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13px">Original ansehen</a></div>
+    </div><button class="add-b" onclick="feedUebernehmen(${i})" aria-label="Übernehmen">${da?IKON.haken:IKON.plus}</button></div>`;
+  };
+  const stand=feedStand.geholt?"zuletzt geholt "+vorZeit(feedStand.geholt):"noch nicht geholt";
+  const archivZahl=feedStand.eintraege.filter(e=>e.art==="archiv").length;
   return `<div class="row-btns" style="margin-bottom:10px">
-      <button class="btn btn-s" onclick="feedsHolen()">Neu laden</button>
+      <button class="btn btn-s" onclick="feedsHolen()" ${feedStand.laden?"disabled":""}>${feedStand.laden?"Wird geholt …":"Neu laden"}</button>
       <button class="btn btn-s" onclick="quellenVerwalten()">Quellen</button>
-      <span class="rec-m" style="align-self:center">${feedStand.eintraege.length} Beiträge</span></div>
-    ${feedStand.fehler.length?`<p class="note" style="margin-bottom:10px">Kein Feed gefunden bei: ${feedStand.fehler.map(esc).join(", ")}</p>`:""}
-    ${feedStand.eintraege.map((e,i)=>{
-      const da=feedSchonDa(e.link);
-      return `<div class="rec k-veg"><div class="rec-b">
-        <div class="rec-t">${esc(e.titel)}</div>
-        <div class="rec-m">${esc(e.quelle)}${e.datum?" · "+new Date(e.datum).toLocaleDateString("de-DE"):""}${da?" · schon in der Sammlung":""}</div>
-        ${e.text?`<p class="note" style="margin-top:6px">${esc(e.text).slice(0,140)}</p>`:""}
-        <div class="rec-tags"><a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13px">Original ansehen</a></div>
-      </div><button class="add-b" onclick="feedUebernehmen(${i})" aria-label="Übernehmen">${da?IKON.haken:IKON.plus}</button></div>`;
-    }).join("")}`;
+      <span class="rec-m" style="align-self:center">${stand}</span></div>
+    ${feedStand.fehler.length?`<p class="note" style="margin-bottom:10px">Nichts zu holen bei: ${feedStand.fehler.map(esc).join(", ")}. Prüfe die Adresse unter „Quellen".</p>`:""}
+    ${neu.length?`<div class="sect"><h2>Frisch aus den Blogs</h2><span class="rec-m">${neu.length}</span></div>
+      ${neu.slice(0,15).map(karte).join("")}`:""}
+    ${alt.length?`<div class="sect"><h2>Vielleicht übersehen</h2><button class="btn btn-s" onclick="archivNeuMischen()">Andere zeigen</button></div>
+      <p class="note" style="margin:0 0 10px 3px">Ältere Beiträge aus dem Archiv derselben Seiten – ${archivZahl} kennt die App inzwischen. Die Auswahl wechselt täglich.</p>
+      ${alt.map(karte).join("")}`:""}`;
 }
+/* Wer nicht bis morgen warten will, bekommt sofort eine andere Auswahl. */
+let archivVersatz=0;
+function archivNeuMischen(){ archivVersatz++; render(); }
+const vorZeit=ts=>{
+  const min=Math.round((Date.now()-ts)/60000);
+  if(min<2) return "gerade eben";
+  if(min<60) return "vor "+min+" Minuten";
+  const std=Math.round(min/60);
+  if(std<24) return "vor "+std+(std===1?" Stunde":" Stunden");
+  const tage=Math.round(std/24);
+  return "vor "+tage+(tage===1?" Tag":" Tagen");
+};
 
 /* Welche Vorratsdinge kommen in den Gerichten dieser Woche überhaupt vor?
    Alles andere jede Woche abzufragen ist eine Wand aus Schaltern ohne Nutzen. */
@@ -4180,7 +4293,7 @@ function vEinkauf(){
         const namen=fuer.map(x=>R(x)).filter(Boolean);
         return `<div class="itemrow">
         <button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
-        <span class="box">${IKON.haken}</span><span class="it-n">${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
+        <span class="box">${IKON.haken}</span><span class="it-n">${esc(i.n)}${i.ang?`<span class="pill${istBio(i.ang)?" bio":""}" style="margin-left:7px;${istBio(i.ang)?"":"background:var(--sun-bg);color:var(--sun);border-color:var(--sun)"}" title="${esc(i.ang)}">${istBio(i.ang)?"Bio im Angebot":"Angebot"}</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
         <button class="woher" onclick="postenWoher('${id}')" aria-label="Wofür ist das?">
           <span>${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span>
           ${namen.length?`<span class="fuerwen">${namen.length===1?esc(namen[0].n.length>18?namen[0].n.slice(0,17)+"…":namen[0].n):namen.length+" Gerichte"}</span>`:""}
@@ -4195,7 +4308,8 @@ function vEinkauf(){
      Absätze übereinander, bevor der erste Posten zu sehen war. */
   const meta=[
     (S.listeInfo&&S.listeInfo.ausVorrat)?S.listeInfo.ausVorrat+" aus dem Vorrat gedeckt":"",
-    eintraege.filter(([,i])=>i.ang).length?eintraege.filter(([,i])=>i.ang).length+" im Prospekt":""
+    eintraege.filter(([,i])=>i.ang).length?eintraege.filter(([,i])=>i.ang).length+" im Prospekt":"",
+    eintraege.filter(([,i])=>i.ang&&istBio(i.ang)).length?eintraege.filter(([,i])=>i.ang&&istBio(i.ang)).length+" davon Bio":""
   ].filter(Boolean).join(" · ");
   return wahl+`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline">
       <b style="font-size:17px">${fertig} von ${ges} erledigt</b><span class="note">${kwPlus(planWoche)}</span></div>
@@ -4246,7 +4360,8 @@ function postenWoher(id){
   };
   openSheet(`<div class="grab"></div>
     <h2 style="font-size:20px">${esc(i.n)}</h2>
-    <p class="note" style="margin:6px 0 14px">${i.q?fmt(i.q,i.e)+" insgesamt":"ohne feste Menge"}${i.gekauft?" · "+fmt(i.gekauft,i.e)+" schon gekauft":""}${i.ang?" · steht im Prospekt":""}</p>
+    <p class="note" style="margin:6px 0 14px">${i.q?fmt(i.q,i.e)+" insgesamt":"ohne feste Menge"}${i.gekauft?" · "+fmt(i.gekauft,i.e)+" schon gekauft":""}${i.ang?(istBio(i.ang)?" · steht als Bio im Prospekt":" · steht im Prospekt"):""}</p>
+    ${i.ang?`<p class="note" style="margin:-8px 0 14px;${istBio(i.ang)?"color:var(--herb)":""}">${esc(i.ang)}</p>`:""}
     ${gerichte.length
       ? `<div class="sect"><h2>Wofür</h2></div>`+gerichte.map(r=>`<div class="meal">
           <div class="meal-main" onclick="closeSheet();detail('${r.id}')">
@@ -4288,6 +4403,7 @@ function vMehr(){
   const fehlt=Object.values(S.vorrat).filter(v=>!v.da).length;
   const vorrat=Object.keys(S.vorrat||{}).length;
   const prospekte=angeboteListe().length;
+  const bioDaZahl=bioAngebote(0).length;
   const blogs=Object.values(S.quellen||{}).filter(q=>q.an).length||QUELLEN_START.length;
   const eigene=Object.keys(S.eigene||{}).length;
   const arch=Object.keys(S.archiv||{}).length;
@@ -4308,7 +4424,7 @@ function vMehr(){
     <div class="sect"><h2>Verwalten</h2></div>
     <div class="zeilen">
       ${zeile("Vorrat",fehlt?fehlt+" fehlen":vorrat+" Dinge","mehrOeffnen('vorrat')",!!fehlt)}
-      ${zeile("Angebote",prospekte?prospekte+(prospekte===1?" Prospekt":" Prospekte"):"keins","mehrOeffnen('angebote')")}
+      ${zeile("Angebote",bioDaZahl?bioDaZahl+" Bio im Angebot":(prospekte?prospekte+(prospekte===1?" Prospekt":" Prospekte"):"keins"),"mehrOeffnen('angebote')")}
       ${zeile("Rezeptquellen",blogs+" Blogs","quellenVerwalten()")}
       ${zeile("Eigene Rezepte",eigene+" angelegt","mehrOeffnen('eigene')")}
       ${zeile("Aufräumen",aufraeum?aufraeum+" zu sichten":"nichts offen","mehrOeffnen('aufraeumen')",!!aufraeum)}
@@ -4382,6 +4498,13 @@ const MEHR_BLATT={
           const passt=[0,1,2].filter(w=>{const [v,bb]=wochenSpanne(w);return deckt(pr,v,bb);}).map(w=>kwPlus(w));
           return `<div class="ingline"><span><b>${esc(zeitraumText(pr))}</b><br><span class="note">${pr.items.length} Einträge${passt.length?" · "+passt.join(", "):" · keine Planwoche"}</span></span>
             <span><button class="btn btn-s" onclick="angebotWeg('${pr.id}');mehrZeigen()" aria-label="entfernen">${IKON.kreuz}</button></span></div>`;}).join("")}</div>`:"")
+      +(()=>{const bio=bioAngebote(0);
+        if(!bio.length) return angeboteAktiv(0).length
+          ? `<p class="note" style="margin-bottom:12px">Im Prospekt dieser Woche steht nichts in Bio.</p>` : "";
+        return `<div class="sect"><h2>Bio im Angebot</h2><span class="rec-m">${bio.length}</span></div>
+          <div class="card" style="margin-bottom:12px">${bio.slice(0,20).map(x=>
+            `<div class="ingline"><span>${esc(x)}</span><span class="pill bio">Bio</span></div>`).join("")}
+          ${bio.length>20?`<p class="note" style="margin-top:8px">und ${bio.length-20} weitere</p>`:""}</div>`;})()
       +`<button class="btn btn-wide btn-primary" onclick="angeboteBearbeiten()">Prospekt hinzufügen</button>
         ${l.length?`<button class="btn btn-wide" style="margin-top:6px" onclick="abgelaufeneWeg();mehrZeigen()">Abgelaufene löschen</button>`:""}`
       +blattFuss;
@@ -4485,6 +4608,7 @@ function closeSheet(){document.getElementById("sheet").innerHTML="";document.bod
 
 /* ============ Start ============ */
 lesenLokal();
+netzLesen();
 migrieren();
 render();
 if(!shareAufnehmen()){}

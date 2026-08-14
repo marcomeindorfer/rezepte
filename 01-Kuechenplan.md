@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 3.8**, Stand 14. August 2026. Datei rund 340 KB, 4503 Zeilen, 134 Rezepte
-und 48 Ideen. Die Testreihen unter `tests/` prüfen 459 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 3.9**, Stand 14. August 2026. Datei rund 345 KB, 134 Rezepte und 48 Ideen.
+Die Testreihen unter `tests/` prüfen 487 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -32,6 +32,7 @@ Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 | Sortiment Aldi Süd | Alle Zutaten daran ausgerichtet |
 | Beilagenvielfalt | Nudeln, Reis, Kartoffeln, Getreide, Brot, Hülsenfrüchte werden gestreut |
 | Protein | Ziel 80 g/Person/Tag, siehe Abschnitt 7 |
+| Möglichst Bio | Bio-Angebote werden überall eigens gekennzeichnet, siehe unten |
 
 ---
 
@@ -192,7 +193,9 @@ stehen** – ein Rezept, das man schon hat, ist keine Entdeckung. Drei Reiter:
   samt Schritten.
 - **Im Angebot** – dieselben Ideen, aber nur die, deren Zutaten im Prospekt dieser
   Woche stehen. Die Karte nennt den Treffer.
-- **Aus dem Netz** – wie bisher die neuesten Beiträge der hinterlegten Blogs.
+- **Aus dem Netz** – zwei Abschnitte: *Frisch aus den Blogs* (der Feed) und
+  *Vielleicht übersehen* (sechs ältere Beiträge aus dem Archiv derselben Seiten,
+  Auswahl wechselt täglich, „Andere zeigen" mischt sofort neu).
 
 **Übernehmen** legt eine Kopie unter `S.eigene` an (`src:"idee"`) und trägt sie in die
 Sammlung ein – ab da ist es ein Rezept wie jedes andere. **Nicht mein Ding** legt sie
@@ -202,6 +205,33 @@ Geschmack ändert.
 Das **Thema wechselt mit der Kalenderwoche**: `THEMEN[(kwNummer()-1) % 12]`. Zwölf
 Themen ergeben einen Zyklus von einem Vierteljahr. Über „Anderes Thema" lässt sich
 vorgreifen; die Wahl gilt bis zum nächsten Öffnen der App.
+
+#### Wie „Aus dem Netz" an die Beiträge kommt
+
+Der Worker beantwortet `/feed?url=…&archiv=1` in zwei Stufen:
+
+1. **Feed** – RSS oder Atom unter der Adresse selbst, sonst `/feed`, `/feed/`,
+   `/rss`, `/atom.xml`; findet sich nur HTML, wird der verlinkte Feed einmal
+   nachgefasst. Ergebnis: bis zu 40 Einträge, `art:"neu"`.
+2. **Archiv** – die Sitemap. Zuerst wird `robots.txt` nach `Sitemap:`-Zeilen
+   gelesen, sonst werden `/sitemap.xml`, `/sitemap_index.xml`, `/wp-sitemap.xml`
+   und `/post-sitemap.xml` probiert. Ein Sitemap-Index wird verfolgt, Unterkarten
+   mit *post*, *beitrag* oder *rezept* im Namen zuerst; Bild-, Seiten- und
+   Kategoriekarten bleiben liegen. Höchstens vier Abrufe und 400 Einträge je
+   Quelle. Ergebnis: `art:"archiv"`.
+
+Was in der Sitemap steht, ist längst nicht alles ein Rezept. `rezeptVerdacht(url)`
+wirft heraus, was sicher keins ist – Impressum, Datenschutz, Kategorie- und
+Tagseiten, Shop, Kurse, Newsletter, Gewinnspiele, reine Seitenzahlen und Slugs
+unter sechs Zeichen. Der Titel entsteht aus dem Slug: aus
+`kichererbsen-curry-mit-spinat` wird „Kichererbsen Curry mit Spinat".
+
+Die App holt **einmal in zwölf Stunden** von allein nach, sobald jemand den Reiter
+öffnet – der alte Stand bleibt derweil stehen, es wartet niemand auf das Netz.
+Der Bestand liegt unter `kuechenplan.v2.netz` im lokalen Speicher, **nicht in S**:
+Es ist ein Zwischenspeicher, den jedes Gerät selbst füllen kann, und er hat in der
+Übertragung nach Firebase nichts verloren. Doppelte fallen zweifach heraus, über
+die Adresse und über den Titel.
 
 Das frühere **Aufräumen** liegt seit 3.8 unter **Mehr → Aufräumen**. Es zeigt
 Sammlungsrezepte, die seit `FRIST.alt` = 60 Tagen dabei und nie oder seit
@@ -215,6 +245,17 @@ Jede Zeile hat zwei Ziele: links abhaken, rechts auf die **Menge** tippen zeigt,
 welchen Gerichten der Posten stammt und wie viel davon auf welches Gericht entfällt.
 Unter dem Fortschritt steht, wie viele Zutaten der Vorrat gedeckt hat – sonst wundert
 man sich, warum das Olivenöl fehlt, und kauft es sicherheitshalber doch.
+
+**Bio wird eigens gekennzeichnet.** Steht ein Posten als Bio im Prospekt, trägt die Zeile
+statt der bernsteinfarbenen Pille „Angebot" eine grüne „Bio im Angebot" – grün ist die
+Leitfarbe, also das, was wir wollen. Im Kopf steht „… · 2 davon Bio", unter
+**Mehr → Angebote** stehen alle Bio-Posten der Woche ganz oben, und die Übersichtszeile
+nennt ihre Zahl statt der Prospektzahl. Unter **Entdecken → Im Angebot** stehen Ideen mit
+Bio-Treffer vorn und nennen ihn zuerst.
+
+Erkannt wird am Wortanfang: `bio`, `öko`, dazu `demeter` und `naturland`. „Biomilch" und
+„Bio-Möhren" zählen also, „Biskuit" nicht. Die Regel steht als `istBio()` an genau einer
+Stelle – sonst liefe die Kennzeichnung an einem der fünf Orte auseinander.
 
 Reiter für den Wocheneinkauf und beliebig viele eigene Listen. Kopf mit Fortschritt.
 Laufplan: nummerierte Stationen entlang der Abteilungsreihenfolge. Jede Zeile trägt nur
