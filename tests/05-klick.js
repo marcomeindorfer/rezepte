@@ -94,8 +94,13 @@ t("Rezeptsuche mit Treffern und ohne", () => {
   A.suche = "";
 });
 t("Entdecken in allen Modi", () => {
-  ["neu", "alt", "netz"].forEach(m => ansichtSammeln("entdecken/" + m, () => { A.tab = "entdecken"; A.deckMode = m; }));
-  A.deckMode = "neu";
+  ["ideen", "angebote", "netz"].forEach(m => ansichtSammeln("entdecken/" + m, () => { A.tab = "entdecken"; A.ideenModus = m; }));
+  A.ideenModus = "ideen";
+});
+t("Jedes Thema rendert", () => {
+  A.tab = "entdecken"; A.ideenModus = "ideen";
+  A.THEMEN.forEach(th => ansichtSammeln("entdecken/thema/" + th.k, () => { A.themaWahl = th.k; }));
+  A.themaWahl = null;
 });
 t("Einkauf mit Wochenliste und Zusatzliste", () => {
   ansichtSammeln("einkauf/woche", () => { A.tab = "einkauf"; A.einkaufAnsicht = "woche"; });

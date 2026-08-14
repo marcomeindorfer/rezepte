@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme:light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#F7F6F2" media="(prefers-color-scheme:light)">
+<meta name="theme-color" content="#111110" media="(prefers-color-scheme:dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Küchenplan</title>
@@ -108,10 +108,29 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .rh.warn{background:var(--sun-bg)}
 .rh.warn b{color:var(--sun)}
 
+/* Thema der Woche über dem Ideenstrom */
+.themakarte{background:var(--card);border-radius:var(--r);padding:15px;margin-bottom:12px;box-shadow:var(--schatten);
+  border-left:3px solid var(--herb)}
+.themakarte .thema-k{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);font-weight:600}
+.themakarte b{display:block;font-size:19px;letter-spacing:-.02em;margin-top:3px}
+/* Der Titel einer Idee führt in die Einzelheiten – deshalb ein Knopf, kein Text */
+.ideen-t{display:block;width:100%;text-align:left;background:transparent;border:0;padding:0;
+  font-weight:600;font-size:17px;line-height:1.25;letter-spacing:-.02em;color:inherit}
+
 /* Tagesplan */
 .day{background:var(--card);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--schatten)}
 @media (prefers-color-scheme:dark){.day{border:0.5px solid var(--line)}}
-.day-h{display:flex;align-items:baseline;justify-content:space-between;padding:12px 15px 10px}
+/* Der Tageskopf ist ein Knopf über die volle Breite – zugeklappt ist er die
+   ganze Karte, deshalb muss die Antippfläche der Zeile entsprechen. */
+.day-h{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  padding:12px 15px;background:transparent;border:0;text-align:left;min-height:56px;color:inherit}
+.day-t{min-width:0;flex:1}
+.day-k{display:block;font-size:13px;color:var(--ink-3);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day-z{display:flex;align-items:center;gap:6px;flex:none;font-size:12px;color:var(--ink-3)}
+.chev{display:grid;place-items:center;width:20px;height:20px;transition:transform .18s}
+.chev svg{width:16px;height:16px}
+.chev.auf{transform:rotate(180deg)}
 .day.heute .day-h b{color:var(--herb)}
 .heutetag{font-size:11px;font-weight:600;background:var(--herb);color:#fff;padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:1px;letter-spacing:0}
 @media (prefers-color-scheme:dark){.heutetag{color:#00250C}}
@@ -339,6 +358,7 @@ const IKON={
   hoch:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
   runter:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
   plus:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  chevron:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg>',
   muell:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 4h4M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
   herz:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="fill:currentColor;stroke:none"><path d="M12 20.5l-1.5-1.4C5.2 14.4 2 11.5 2 8A5 5 0 0 1 12 5.8 5 5 0 0 1 22 8c0 3.5-3.2 6.4-8.5 11.3z"/></svg>'
 };
@@ -2296,31 +2316,6 @@ function extraPortion(id,d){
   mut("extra/"+id,{...e,p:Math.max(0,(e.p===0?0:(e.p||2))+d)});
 }
 
-/* ===== Symbole für Lebensmittel ===== */
-const SYMBOLE=[
- [/kartoffel|s(ü|ue)(ß|ss)kartoffel/i,"🥔"],[/m(ö|oe)hre|karotte/i,"🥕"],[/tomate/i,"🍅"],[/gurke/i,"🥒"],
- [/paprika|chili/i,"🫑"],[/zwiebel|schalotte|lauch|fr(ü|ue)hlingszwiebel/i,"🧅"],[/knoblauch/i,"🧄"],
- [/salat|rucola|spinat|gr(ü|ue)nkohl|kohl|brokkoli|rosenkohl/i,"🥬"],[/pilz|champignon/i,"🍄"],
- [/aubergine/i,"🍆"],[/zucchini|k(ü|ue)rbis/i,"🎃"],[/mais/i,"🌽"],[/avocado/i,"🥑"],[/brokkoli/i,"🥦"],
- [/apfel|birne/i,"🍎"],[/banane/i,"🍌"],[/beere|erdbeer/i,"🍓"],[/zitrone|limette/i,"🍋"],
- [/traube/i,"🍇"],[/pfirsich|nektarine|aprikose/i,"🍑"],[/melone/i,"🍉"],[/ananas/i,"🍍"],[/mango|kiwi|granatapfel|feige|dattel/i,"🥭"],
- [/h(ä|ae)hnchen|pute|huhn|geflügel/i,"🍗"],[/rind|hack|steak|schnitzel|leberk|salami/i,"🥩"],
- [/lachs|fisch|kabeljau|forelle|seelachs|thunfisch|garnele/i,"🐟"],[/ei\b|eier/i,"🥚"],
- [/milch|sahne|schmand|kefir|buttermilch/i,"🥛"],[/k(ä|ae)se|feta|mozzarella|halloumi|paneer|parmesan|gouda|burrata/i,"🧀"],
- [/joghurt|quark|frischk|ricotta/i,"🥣"],[/butter/i,"🧈"],[/tofu|kimchi|sauerkraut|miso/i,"🫙"],
- [/brot|br(ö|oe)tchen|baguette|ciabatta|toast|fladen|bagel|tortilla|wrap/i,"🍞"],
- [/nudel|pasta|spaghetti|gnocchi|udon|couscous/i,"🍝"],[/reis/i,"🍚"],
- [/linsen|bohnen|kichererbsen|erbse/i,"🫘"],[/n(ü|ue)sse|nuss|mandel|walnuss|cashew|erdnuss|kerne|sesam|leinsamen/i,"🥜"],
- [/(ö|oe)l$|olivenöl|rapsöl|essig/i,"🫒"],[/honig|sirup|zucker|schoko|kakao|keks/i,"🍯"],
- [/salz|pfeffer|gew(ü|ue)rz|curry|paprikapulver|zimt|kurkuma|kr(ä|ae)uter|petersilie|basilikum|minze|dill|thymian|rosmarin/i,"🌿"],
- [/hafer|m(ü|ue)sli|mehl|grie(ß|ss)|hirse|quinoa/i,"🌾"],[/wasser|saft|wein|bier|kaffee|tee/i,"🥤"],
- [/br(ü|ue)he|tomatenmark|kokosmilch|passierte|dose|soße|sosse|sojaso/i,"🥫"]
-];
-function symbolFuer(name){
-  for(const [re,s] of SYMBOLE) if(re.test(name)) return s;
-  return "🛒";
-}
-
 /* ===== Zusätzliche Einkaufslisten, etwa für die Drogerie ===== */
 const zusatzListen=()=>Object.entries(S.listen||{}).map(([id,l])=>({id,...l}));
 /* prompt() blockiert die ganze Seite und sieht in einer installierten App aus
@@ -2378,7 +2373,7 @@ function vZusatz(id){
       <button class="btn" onclick="zusatzPosten('${id}')">+</button></div></div>
     ${posten.length?`<div class="items" style="margin-top:8px">${posten.map(([iid,i])=>
       `<button class="item ${i.on?"on":""}" onclick="zusatzHaken('${id}','${iid}',${!i.on})">
-        <span class="box">${IKON.haken}</span><span class="it-n">${symbolFuer(i.n)} ${esc(i.n)}</span></button>`).join("")}</div>`
+        <span class="box">${IKON.haken}</span><span class="it-n">${esc(i.n)}</span></button>`).join("")}</div>`
       :`<div class="empty"><b>Noch nichts drauf</b>Trag oben ein, was du brauchst.</div>`}
     <div class="row-btns" style="margin:14px 0 8px">
       <button class="btn btn-s" onclick="zusatzAufraeumen('${id}')">Erledigte entfernen</button>
@@ -2454,9 +2449,9 @@ function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="3.7";
+const VERSION="3.8";
 const TAG=86400000;
-const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90};   /* Tage */
+const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90,idee:120};   /* Tage */
 let idZaehler=0;
 /* Zeitstempel allein reicht nicht: zwei Einträge derselben Millisekunde bekämen dieselbe Kennung */
 const neueId=(vor="x")=>vor+Date.now().toString(36)+(idZaehler++%1296).toString(36).padStart(2,"0");
@@ -2553,7 +2548,7 @@ function lesenLokal(){
 /* Bringt Stände älterer Versionen auf das aktuelle Format, ohne etwas zu verlieren */
 function migrieren(){
   let neu=false;
-  ["spaeter","archiv","geprueft","eigene","quellen","extra","listen"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
+  ["spaeter","archiv","geprueft","eigene","quellen","extra","listen","ideenWeg"].forEach(f=>{if(!S[f]){S[f]={};neu=true;}});
   if(!S.angebote||Array.isArray(S.angebote)){S.angebote={};neu=true;}
   /* Alter Stand: eine flache Liste ohne Zeitraum wird zu einem Prospekt */
   if(S.angebote&&Array.isArray(S.angebote.items)){
@@ -2883,7 +2878,6 @@ function render(){
   document.getElementById("title").textContent=ti;
   document.getElementById("view").innerHTML={woche:vWoche,rezepte:vRezepte,entdecken:vEntdecken,einkauf:vEinkauf,mehr:vMehr}[tab]();
   nav();
-  if(tab==="entdecken")deckInit();
 }
 
 /* ============ Wochenplan ============ */
@@ -2929,92 +2923,129 @@ function fruehstueckUebernehmen(){
   meldung("„"+R(quelle.r).n+"“ steht jetzt an allen sieben Tagen.","Rückgängig",()=>mut("plan",vorher));
 }
 
+/* ---------- Ein Tag im Plan ----------
+   Die sieben Tageskarten standen bis 3.7 alle offen: 21 Zeilen mit Portionswahl
+   und Löschknopf, bevor man am Ende der Seite den Einkaufsknopf erreichte. Jetzt
+   ist der Tag zugeklappt eine einzige Zeile mit dem, was daraufsteht; aufgeklappt
+   ist er unverändert. Was offen ist, merkt sich die Ansicht – wer ein Gericht
+   wählt, findet den Tag danach noch offen vor. */
+let tagOffen={};
+function tagUmschalten(k){ tagOffen[k]=!tagOffen[k]; render(); }
+function tagZeile(d){
+  const eintraege=["f","m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
+  const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
+  const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
+  const istHeute=planWoche===0&&d===heuteIdx();
+  const schluessel="w"+planWoche+"-"+d;
+  const offen=!!tagOffen[schluessel];
+  /* Zugeklappt zählt, was auf dem Tisch steht – nicht, wie viele Felder belegt sind */
+  const namen=eintraege.map(({e})=>{const r=e&&R(e.r);return r?r.n:null;}).filter(Boolean);
+  const kurz=namen.length?namen.join(" · "):"nichts geplant";
+  return `<div class="day${istHeute?" heute":""}">
+    <button class="day-h" onclick="tagUmschalten('${schluessel}')" aria-expanded="${offen}">
+      <span class="day-t"><b>${TAGE[d]}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b>
+        <span class="day-k">${esc(kurz)}</span></span>
+      <span class="day-z">${voll} von 3<i class="chev${offen?" auf":""}">${IKON.chevron}</i></span>
+    </button>
+    ${offen?eintraege.map(({mk,k,e})=>{
+      const r=e&&R(e.r);
+      if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
+        <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-e">+ Gericht wählen</span></button></div>`;
+      const [lbl,,dot]=KIND[r.k];
+      return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
+        <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
+          <span class="slot-n">${esc(r.n)}</span>
+          <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}</span></span></button>
+        <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
+        <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;
+    }).join("")+(S.still&&bl2>1?`<div class="warnrow">Zwei stark blähende Gerichte an einem Tag – in der Stillzeit gern auf zwei Tage verteilen.</div>`:""):""}
+  </div>`;
+}
+/* Hinweise, aus denen sich etwas tun lässt. Alles Übrige steht unter „Weiteres“ –
+   ein Absatz, der jede Woche gleich dasteht, ist keine Nachricht. */
+function wochenHinweise(){
+  const schnitt=proteinSchnitt(planWoche);
+  const offen=khOffen(planWoche);
+  const {belegt}=planStat();
+  const raus=[];
+  if(schnitt&&schnitt<PROTEINZIEL) raus.push({warn:true,t:`Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g.`});
+  if(belegt&&offen.length) raus.push({t:`Noch keine Beilage aus: ${offen.map(k=>KH[k]).join(", ")}.`});
+  if(wocheHatAngebote(planWoche)) raus.push({t:`Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.`});
+  return raus;
+}
 function vWoche(){
   const {z,belegt}=planStat();
-  const offen=khOffen(planWoche);
-  const wahl=`<div class="toggle" style="width:100%;margin-bottom:12px">
-    ${[0,1,2].map(w=>`<button style="flex:1" aria-pressed="${planWoche===w}" onclick="planWoche=${w};render()">${["Diese","Nächste","Übernächste"][w]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(w)}</span></button>`).join("")}</div>`;
-  /* Eine Karte statt vier Kästchen und drei grauen Absätzen. Oben steht der
-     Zustand („wie voll ist die Woche"), darunter die Mischung, dann nur die
-     Hinweise, aus denen sich etwas tun lässt, und zuletzt die Aktionen.
-     Was nichts kostet, wird nicht erwähnt: „kein Prospekt hinterlegt" stand
-     vorher jede Woche da und war nie eine Nachricht. */
   const schnitt=proteinSchnitt(planWoche);
   const knapp=schnitt&&schnitt<PROTEINZIEL;
-  const meta=[`${z.veg} vegetarisch`,`${z.fisch} Fisch`,`${z.fleisch} Fleisch`].join(" · ");
-  const hinweise=[
-    knapp?`<p class="note" style="color:var(--sun);margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g. Aus drei Mahlzeiten ist mehr kaum zu holen, ein Snack schließt die Lücke.</p>`:"",
-    (schnitt&&!knapp)?`<p class="note" style="margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel erreicht.</p>`:"",
-    wocheHatAngebote(planWoche)?`<p class="note" style="margin-top:6px">Angebote für ${kwPlus(planWoche)} liegen vor – passende Gerichte sind gekennzeichnet.</p>`:"",
-    (belegt&&offen.length)?`<p class="note" style="margin-top:6px">Noch keine Beilage aus: ${offen.map(k=>KH[k]).join(", ")}.</p>`:""
-  ].join("");
+  const ex=extraListe(planWoche);
+  const hinweise=wochenHinweise();
+  /* Der Wochenumschalter sitzt am Plan, nicht über der Seite: „Heute“ betrifft
+     immer die laufende Woche und wandert sonst mit weg. */
+  const wahl=`<div class="toggle" style="width:100%">
+    ${[0,1,2].map(w=>`<button style="flex:1" aria-pressed="${planWoche===w}" onclick="planWoche=${w};render()">${["Diese","Nächste","Übernächste"][w]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(w)}</span></button>`).join("")}</div>`;
+  const meta=belegt?[`${z.veg} vegetarisch`,z.fisch?`${z.fisch} Fisch`:"",z.fleisch?`${z.fleisch} Fleisch`:"",
+    schnitt?`Ø ${schnitt} g Protein`:""].filter(Boolean).join(" · "):"";
   const kopf=`<div class="card">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
       <b style="font-size:17px">${belegt} von 21 geplant</b>
       <span class="note">${kwPlus(planWoche)}</span></div>
     <div class="progress"><i style="width:${belegt/21*100}%"></i></div>
-    ${belegt?`<p class="note" style="margin-top:8px">${meta}</p>`:""}
-    ${hinweise}
-    ${knapp?`<button class="btn btn-s" style="margin-top:10px" onclick="proteinSnack()">Protein-Snack ergänzen</button>`:""}
+    ${meta?`<p class="note" style="margin-top:8px">${meta}</p>`:""}
+    ${knapp?`<p class="note" style="color:var(--sun);margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g.
+      <button class="btn btn-s" style="margin-left:6px" onclick="proteinSnack()">Snack ergänzen</button></p>`:""}
     <div class="row-btns" style="margin-top:12px;border-top:0.5px solid var(--line);padding-top:12px">
       <button class="btn btn-s${belegt?"":" btn-primary"}" onclick="autoWoche()">Woche vorschlagen</button>
-      ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Woche abschließen</button>`:""}
-      <button class="btn btn-s" onclick="wocheMehr()">Weiteres …</button>
+      ${belegt?`<button class="btn btn-s" onclick="wocheAbschliessen()">Abschließen</button>`:""}
+      <button class="btn btn-s" onclick="wocheMehr()">Weiteres${hinweise.length-(knapp?1:0)>0?" · "+(hinweise.length-(knapp?1:0)):""} …</button>
     </div></div>`;
 
-  const tage_html=TAGE.map((tn,d)=>{
-    const eintraege=["f","m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
-    const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
-    const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
-    const istHeute=planWoche===0&&d===heuteIdx();
-    return `<div class="day${istHeute?" heute":""}">
-      <div class="day-h"><b>${tn}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b><span>${voll?voll+" von 3":"offen"}${voll===3&&proteinTag(planWoche,d)<PROTEINZIEL?" · "+proteinTag(planWoche,d)+" g":""}</span></div>
-      ${eintraege.map(({mk,k,e})=>{
-        const r=e&&R(e.r);
-        if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
-          <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-e">+ Gericht wählen</span></button></div>`;
-        const [lbl,,dot]=KIND[r.k];
-        return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
-          <button class="pick" onclick="detail('${r.id}','${k}')"><span class="slot-m">
-            <span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s"><i class="dot ${dot}"></i>${lbl} · ${r.min} Min${e.p===0?'<span class="pill" style="background:var(--sea-bg);color:var(--sea);border-color:var(--sea)">Reste, nichts einkaufen</span>':`<span class="pill">${r.p} g Protein</span>`}</span></span></button>
-          <span class="mini"><button onclick="port('${k}',-1)" aria-label="weniger">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="port('${k}',1)" aria-label="mehr">+</button></span>
-          <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;
-      }).join("")}
-      ${S.still&&bl2>1?`<div class="warnrow">Zwei stark blähende Gerichte an einem Tag – in der Stillzeit gern auf zwei Tage verteilen.</div>`:""}
-    </div>`;
-  }).join("");
-
-  const hist=Object.entries(S.verlauf||{}).sort((a,b)=>b[0]-a[0]).slice(0,10)
-    .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main" onclick="detail('${r.id}')"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw} · ${KH[khVon(r)]}</div></div><button class="btn btn-s" onclick="einplanen('${r.id}')">Nochmal</button></div>`:"";}).join("");
-
-  return `${wahl}${heuteKarte()}${kopf}<div class="sect"><h2>Plan</h2></div>${tage_html}
-    ${(()=>{const ex=extraListe(planWoche);
-      return `<div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="extraWaehlen()">Hinzufügen</button></div>
-      ${ex.length?ex.map(e=>{const r=R(e.r);if(!r)return "";
-        return `<div class="slot" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-s);margin-bottom:7px">
-          <span class="slot-l">${TYP[typVon(r)].slice(0,6)}</span>
-          <button class="pick" onclick="detail('${r.id}')"><span class="slot-m"><span class="slot-n">${esc(r.n)}</span>
-            <span class="slot-s">${e.p===0?"Reste, nichts einkaufen":`${r.p} g Protein je Portion`}</span></span></button>
-          <span class="mini"><button onclick="extraPortion('${e.id}',-1)">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="extraPortion('${e.id}',1)">+</button></span>
-          <button class="btn btn-ghost btn-s" onclick="mut('extra/${e.id}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;}).join("")
-        :`<p class="note">Nichts zusätzlich geplant. Hier landen Dinge außerhalb des Wochenplans – zum Grillen mitbringen, Snacks, ein Kuchen.</p>`}`;})()}
-    ${belegt||extraListe(planWoche).length?`<button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
-      <p class="note" style="margin-top:9px">Vorher fragt die App kurz ab, was vom Vorrat noch da ist.</p>`:""}
-    ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}`;
+  return `${heuteKarte()}${kopf}
+    <div class="sect"><h2>Plan</h2>${belegt?`<button class="btn btn-s" onclick="alleTage(${[0,1,2,3,4,5,6].every(d=>tagOffen["w"+planWoche+"-"+d])?false:true})">${[0,1,2,3,4,5,6].every(d=>tagOffen["w"+planWoche+"-"+d])?"Alle zuklappen":"Alle aufklappen"}</button>`:""}</div>
+    ${wahl}
+    <div style="margin-top:12px">${TAGE.map((tn,d)=>tagZeile(d)).join("")}</div>
+    ${ex.length?`<div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="wocheMehr()">Ändern</button></div>
+      <p class="note" style="padding:0 3px">${ex.map(e=>{const r=R(e.r);return r?esc(r.n):"";}).filter(Boolean).join(" · ")}</p>`:""}
+    ${belegt||ex.length?`<button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
+      <p class="note" style="margin-top:9px">Vorher fragt die App kurz ab, was vom Vorrat noch da ist.</p>`:""}`;
 }
-/* Wie beim Einkauf: was man selten braucht, steht nicht dauerhaft über dem Plan. */
-function wocheMehr(){
+function alleTage(auf){
+  for(let d=0;d<7;d++) tagOffen["w"+planWoche+"-"+d]=auf;
+  render();
+}
+/* Wie beim Einkauf: was man selten braucht, steht nicht dauerhaft über dem Plan.
+   Seit 3.8 nimmt das Blatt auch auf, was vorher unter dem Plan hing – Hinweise,
+   zusätzliche Gerichte und der Rückblick. Auf der Seite selbst bleibt damit nur,
+   was heute zählt. Es zeichnet sich selbst neu, ohne zu schließen. */
+function wocheMehr(){ openSheet(wocheMehrKoerper()); }
+function wocheMehrZeigen(){ openSheet(wocheMehrKoerper(),true); }
+function wocheMehrKoerper(){
   const fruehstueckDa=[...Array(7)].some((_,d)=>{const e=S.plan["w"+planWoche+"-"+d+"-f"];return e&&R(e.r);});
-  const {belegt}=planStat();
-  openSheet(`<div class="grab"></div>
+  const {z,belegt}=planStat();
+  const hinweise=wochenHinweise();
+  const ex=extraListe(planWoche);
+  const hist=Object.entries(S.verlauf||{}).sort((a,b)=>b[0]-a[0]).slice(0,8)
+    .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main" onclick="closeSheet();detail('${r.id}')"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw} · ${KH[khVon(r)]}</div></div><button class="btn btn-s" onclick="closeSheet();einplanen('${r.id}')">Nochmal</button></div>`:"";}).join("");
+  return `<div class="grab"></div>
     <h2 style="font-size:20px">${kwPlus(planWoche)}</h2>
-    <p class="note" style="margin:6px 0 14px">${belegt} von 21 Mahlzeiten geplant.</p>
-    ${fruehstueckDa?`<button class="btn btn-wide" onclick="closeSheet();fruehstueckUebernehmen()">Frühstück für alle Tage übernehmen</button>
+    <p class="note" style="margin:6px 0 14px">${belegt} von 21 Mahlzeiten geplant · ${z.veg} vegetarisch, ${z.fisch} Fisch, ${z.fleisch} Fleisch.</p>
+    ${hinweise.length?`<div class="sect"><h2>Hinweise</h2></div>
+      ${hinweise.map(h=>`<p class="note"${h.warn?' style="color:var(--sun)"':""}>${h.t}</p>`).join("")}`:""}
+    <div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="closeSheet();extraWaehlen()">Hinzufügen</button></div>
+    ${ex.length?ex.map(e=>{const r=R(e.r);if(!r)return "";
+      return `<div class="slot" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-s);margin-bottom:7px">
+        <span class="slot-l">${TYP[typVon(r)].slice(0,6)}</span>
+        <button class="pick" onclick="closeSheet();detail('${r.id}')"><span class="slot-m"><span class="slot-n">${esc(r.n)}</span>
+          <span class="slot-s">${e.p===0?"Reste, nichts einkaufen":`${r.p} g Protein je Portion`}</span></span></button>
+        <span class="mini"><button onclick="extraPortion('${e.id}',-1);wocheMehrZeigen()">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="extraPortion('${e.id}',1);wocheMehrZeigen()">+</button></span>
+        <button class="btn btn-ghost btn-s" onclick="mut('extra/${e.id}',null,false);wocheMehrZeigen()" aria-label="entfernen">${IKON.kreuz}</button></div>`;}).join("")
+      :`<p class="note">Nichts zusätzlich geplant. Hier landen Dinge außerhalb des Wochenplans – zum Grillen mitbringen, Snacks, ein Kuchen.</p>`}
+    ${fruehstueckDa?`<div class="sect"><h2>Abkürzung</h2></div>
+      <button class="btn btn-wide" onclick="closeSheet();fruehstueckUebernehmen()">Frühstück für alle Tage übernehmen</button>
       <p class="note" style="margin-top:6px">Setzt das Frühstück des ersten belegten Tages auf alle sieben Tage.</p>`:""}
+    ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}
     <div class="sect"><h2>Von vorn</h2></div>
     <button class="btn btn-wide" onclick="if(confirm('Den Plan dieser Woche leeren? Die Einkaufsliste bleibt stehen.')){closeSheet();leereWoche()}">Plan dieser Woche leeren</button>
-    <button class="btn btn-wide btn-ghost" style="margin-top:14px" onclick="closeSheet()">Schließen</button>`);
+    <button class="btn btn-wide btn-ghost" style="margin-top:14px" onclick="closeSheet()">Schließen</button>`;
 }
 function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
 /* 0 Portionen heißt: wird von Resten gegessen und taucht nicht auf der Einkaufsliste auf */
@@ -3599,14 +3630,395 @@ function detail(id,slotK){
   openSheet(body());
 }
 
-/* ============ Entdecken ============ */
-let deckMode="neu";
+/* ===== Ideen: der Inspirationsbereich =====
+   Diese Rezepte gehören bewusst NICHT zu REZEPTE. Sie stehen weder in der
+   Rezeptliste noch im Wochenvorschlag, solange sie niemand übernommen hat –
+   Entdecken zeigt nur sie. Ein Rezept, das man schon hat, ist keine Entdeckung.
+   „Übernehmen" legt eine Kopie unter S.eigene an; ab da ist es ein Rezept wie
+   jedes andere und lässt sich einplanen, einkaufen und kochen.
+
+   Jede Woche steht ein anderes Thema oben. Die Reihenfolge ist fest, gewechselt
+   wird nach Kalenderwoche – nach zwölf Wochen fängt es von vorn an, dann aber
+   mit dem, was inzwischen übrig ist. */
+const THEMEN=[
+ {k:"ofen",       n:"Vom Blech",              t:"Alles auf ein Blech, einmal wenden, fertig. Wenig Abwasch, viel Röstaroma."},
+ {k:"onepot",     n:"Ein Topf",               t:"Alles kocht zusammen, die Stärke der Nudeln bindet die Soße."},
+ {k:"schnell",    n:"Unter 20 Minuten",       t:"Für Abende, an denen nichts mehr geht."},
+ {k:"vorkochen",  n:"Einmal kochen, zweimal essen", t:"Hält zwei Tage im Kühlschrank und schmeckt kalt so gut wie warm."},
+ {k:"suppe",      n:"Suppen und Eintöpfe",    t:"Ein Topf, der wärmt und satt macht – und am zweiten Tag besser ist."},
+ {k:"levante",    n:"Levante",                t:"Kichererbsen, Sesam, Zitrone, viele Kräuter."},
+ {k:"asien",      n:"Wok und Ingwer",         t:"Scharf angebraten, kurz gegart, viel Gemüse."},
+ {k:"mittelmeer", n:"Mittelmeer",             t:"Tomate, Olivenöl, Kräuter – wenige Zutaten, die etwas taugen."},
+ {k:"fruehstueck",n:"Frühstück und Brunch",   t:"Der Teil des Tages, der sonst jeden Morgen gleich aussieht."},
+ {k:"salat",      n:"Salat als Hauptgericht", t:"Sättigend gedacht, nicht als Beilage."},
+ {k:"protein",    n:"Proteinreich ohne Fleisch", t:"80 Gramm am Tag gehen auch vegetarisch – hier steckt viel in einer Portion."},
+ {k:"vorrat",     n:"Aus dem Vorrat",         t:"Wenn nichts Frisches mehr da ist und der Einkauf noch zwei Tage hin."}
+];
+const IDEEN=[
+/* ---------- Vom Blech ---------- */
+{id:"i_ofen1",n:"Blech-Halloumi mit Kichererbsen und Paprika",k:"veg",ma:["m","a"],m:ALL,min:35,p:29,bl:1,nut:["eisen","calcium","ballast"],thema:"ofen",
+ why:"Kichererbsen werden im Ofen außen knusprig, der Halloumi kommt erst zum Schluss dazu, damit er nicht ledrig wird. Ein Blech, zwei Zeitpunkte.",
+ z:[["Kichererbsen (Dose)",0.5,"Dose","tr"],["Paprika",1,"Stk","og"],["Rote Zwiebel",0.5,"Stk","og"],["Halloumi",90,"g","kr"],["Olivenöl",1.5,"EL","gw"],["Paprikapulver",1,"TL","gw"],["Zitrone",0.25,"Stk","og"],["Petersilie",0.25,"Bund","og"]],
+ s:["Ofen auf 220 °C vorheizen.","Kichererbsen abspülen und trocken tupfen, mit Paprika, Zwiebel, Öl und Paprikapulver auf dem Blech mischen.","20 Minuten backen.","Halloumi in Scheiben darauflegen, weitere 8 Minuten backen.","Mit Zitrone beträufeln, Petersilie darüber."]},
+{id:"i_ofen2",n:"Ofen-Kabeljau auf Tomaten und Oliven",k:"fisch",ma:["m","a"],m:ALL,min:35,p:33,bl:0,nut:["jod","omega3","b12"],thema:"ofen",
+ why:"Der Fisch liegt auf dem Gemüse und gart im Dampf der Tomaten, statt am Blech festzukleben. Oliven geben das Salz, ohne dass man nachsalzen muss.",
+ z:[["Kabeljaufilet",130,"g","ff"],["Cherrytomaten",180,"g","og"],["Oliven",30,"g","tr"],["Kartoffeln",200,"g","og"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1.5,"EL","gw"],["Oregano",1,"TL","gw"],["Zitrone",0.25,"Stk","og"]],
+ s:["Ofen auf 200 °C vorheizen.","Kartoffeln in dünne Scheiben schneiden, mit Tomaten, Oliven, Knoblauch und Öl 25 Minuten backen.","Fisch salzen, obenauf legen und 12 Minuten weitergaren.","Mit Zitrone und Oregano servieren."]},
+{id:"i_ofen3",n:"Blech-Gnocchi mit Tomaten und Mozzarella",k:"veg",ma:["m","a"],m:[5,6,7,8,9],min:30,p:24,bl:0,nut:["calcium"],thema:"ofen",
+ why:"Gnocchi aus dem Kühlregal kommen roh aufs Blech und werden außen knusprig – das kann kein Topf. Die Tomaten platzen auf und geben die Soße.",
+ z:[["Gnocchi",200,"g","kr"],["Cherrytomaten",150,"g","og"],["Zucchini",100,"g","og"],["Mozzarella",60,"g","kr"],["Olivenöl",1.5,"EL","gw"],["Basilikum",0.25,"Bund","og"],["Knoblauch",1,"Zehe","og"]],
+ s:["Ofen auf 220 °C vorheizen.","Gnocchi, Tomaten, Zucchini und Knoblauch mit Öl auf dem Blech mischen.","20 Minuten backen, einmal wenden.","Mozzarella zupfen, darüber geben, 5 Minuten weiterbacken.","Basilikum darüber."]},
+{id:"i_ofen4",n:"Hähnchenschenkel mit Zitrone und Rosmarinkartoffeln",k:"fleisch",ma:["m","a"],m:ALL,min:55,p:38,bl:0,nut:["eisen","zink","b12"],thema:"ofen",
+ why:"Der Schenkel ist das günstigste und geschmackvollste Stück am Hähnchen und wird im Ofen von allein zart. Die Kartoffeln garen im Bratensaft mit.",
+ z:[["Hähnchenschenkel",1,"Stk","ff"],["Kartoffeln",250,"g","og"],["Zitrone",0.5,"Stk","og"],["Rosmarin",0.5,"TL","gw"],["Olivenöl",1,"EL","gw"],["Knoblauch",2,"Zehe","og"]],
+ s:["Ofen auf 200 °C vorheizen.","Kartoffeln vierteln, mit Öl, Rosmarin und Knoblauch in die Form geben.","Schenkel salzen, obenauf legen, Zitronenscheiben dazwischen.","45 Minuten backen, bis die Haut braun ist."]},
+/* ---------- Ein Topf ---------- */
+{id:"i_pot1",n:"One-Pot-Nudeln mit Linsen und Spinat",k:"veg",ma:["m","a"],m:ALL,min:25,p:27,bl:2,nut:["eisen","folat","ballast"],thema:"onepot",
+ why:"Nudeln und Linsen garen zusammen in der Brühe, die Stärke bindet alles zu einer Soße. Ein Topf, kein Abgießen.",
+ z:[["Nudeln",90,"g","tr"],["Rote Linsen",40,"g","tr"],["Passierte Tomaten",150,"g","tr"],["Gemüsebrühe",300,"ml","gw"],["Blattspinat (TK)",80,"g","tk"],["Zwiebel",0.5,"Stk","og"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1,"EL","gw"],["Parmesan",15,"g","kr"]],
+ s:["Zwiebel und Knoblauch in Öl anschwitzen.","Nudeln, Linsen, Tomaten und Brühe zugeben, aufkochen.","12 Minuten offen köcheln, gelegentlich rühren.","Spinat unterrühren, 2 Minuten ziehen lassen, Parmesan darüber."]},
+{id:"i_pot2",n:"Kurkuma-Reistopf mit Kichererbsen",k:"veg",ma:["m","a"],m:ALL,min:30,p:22,bl:2,nut:["eisen","ballast","folat"],thema:"onepot",
+ why:"Ein gelber Topf, der nach wenig aussieht und nach viel schmeckt. Reis und Kichererbsen ziehen zusammen die Gewürze.",
+ z:[["Reis",70,"g","tr"],["Kichererbsen (Dose)",0.5,"Dose","tr"],["Möhren",100,"g","og"],["Zwiebel",0.5,"Stk","og"],["Kurkuma",1,"TL","gw"],["Kreuzkümmel",1,"TL","gw"],["Gemüsebrühe",250,"ml","gw"],["Naturjoghurt",60,"g","kr"],["Olivenöl",1,"EL","gw"]],
+ s:["Zwiebel und Möhre in Öl anbraten, Gewürze kurz mitrösten.","Reis und Kichererbsen zugeben, Brühe angießen.","Zugedeckt 18 Minuten quellen lassen.","Mit einem Klecks Joghurt servieren."]},
+{id:"i_pot3",n:"Tomaten-Feta-Nudeln aus einem Topf",k:"veg",ma:["m","a"],m:[5,6,7,8,9],min:20,p:23,bl:0,nut:["calcium"],thema:"onepot",
+ why:"Der Feta schmilzt am Ende in die heißen Nudeln und wird zur Soße. Kein Sahnebecher, trotzdem cremig.",
+ z:[["Nudeln",100,"g","tr"],["Cherrytomaten",180,"g","og"],["Feta",50,"g","kr"],["Knoblauch",1,"Zehe","og"],["Gemüsebrühe",280,"ml","gw"],["Olivenöl",1,"EL","gw"],["Basilikum",0.25,"Bund","og"]],
+ s:["Nudeln, Tomaten, Knoblauch, Öl und Brühe in den Topf geben.","Offen 10 bis 12 Minuten kochen, bis die Nudeln gar sind.","Topf vom Herd, Feta zerbröseln und unterrühren.","Basilikum darüber."]},
+{id:"i_pot4",n:"Kokos-Curry-Topf mit Kabeljau",k:"fisch",ma:["m","a"],m:ALL,min:25,p:32,bl:0,nut:["jod","omega3","b12"],thema:"onepot",
+ why:"Der Fisch gart in der Kokossoße, statt in der Pfanne zu zerfallen. Nach 6 Minuten ist er fertig – länger braucht er nicht.",
+ z:[["Kabeljaufilet",130,"g","ff"],["Kokosmilch",100,"ml","tr"],["Paprika",0.5,"Stk","og"],["Zuckerschoten",70,"g","og"],["Currypulver",1.5,"TL","gw"],["Ingwer",1,"TL","og"],["Reis",70,"g","tr"],["Limette",0.25,"Stk","og"]],
+ s:["Reis nach Packung kochen.","Curry und Ingwer kurz in der Pfanne anrösten, Kokosmilch und 80 ml Wasser angießen.","Gemüse 4 Minuten köcheln.","Fisch in Stücken hineinlegen, 6 Minuten ziehen lassen, mit Limette abschmecken."]},
+/* ---------- Unter 20 Minuten ---------- */
+{id:"i_kurz1",n:"Rührei-Wrap mit Avocado und Spinat",k:"veg",ma:["f","m","a"],m:ALL,min:12,p:26,bl:0,nut:["folat","b12","eisen"],thema:"schnell",
+ why:"In der Zeit, in der die Pfanne heiß wird, ist der Rest geschnitten. Funktioniert morgens wie abends.",
+ z:[["Eier",2,"Stk","kr"],["Weizentortilla",1,"Stk","bw"],["Avocado",0.5,"Stk","og"],["Blattspinat",30,"g","og"],["Frischkäse",20,"g","kr"],["Olivenöl",0.5,"EL","gw"]],
+ s:["Eier verquirlen, salzen und in Öl langsam stocken lassen.","Tortilla kurz in der trockenen Pfanne erwärmen.","Frischkäse aufstreichen, Spinat, Rührei und Avocado darauf.","Aufrollen und halbieren."]},
+{id:"i_kurz2",n:"Thunfisch-Bohnen-Salat mit Zitrone",k:"fisch",ma:["m","a"],m:ALL,min:10,p:33,bl:2,nut:["eisen","ballast","b12"],thema:"schnell",
+ why:"Zwei Dosen, eine Zitrone, fertig. Steht in zehn Minuten und macht bis abends satt.",
+ z:[["Thunfisch (Dose)",1,"Dose","tr"],["Weiße Bohnen (Dose)",0.5,"Dose","tr"],["Rote Zwiebel",0.25,"Stk","og"],["Zitrone",0.5,"Stk","og"],["Olivenöl",1.5,"EL","gw"],["Petersilie",0.25,"Bund","og"],["Cherrytomaten",100,"g","og"]],
+ s:["Bohnen abspülen, Thunfisch abtropfen lassen.","Zwiebel fein hobeln, mit Zitronensaft 2 Minuten ziehen lassen.","Alles mischen, mit Öl, Salz und Pfeffer abschmecken."]},
+{id:"i_kurz3",n:"Nudeln mit Brokkoli und Mandel-Bröseln",k:"veg",ma:["m","a"],m:ALL,min:18,p:22,bl:1,nut:["calcium","ballast","folat"],thema:"schnell",
+ why:"Der Brokkoli kocht die letzten Minuten bei den Nudeln mit, die gerösteten Mandeln geben den Biss, den sonst Speck liefern würde.",
+ z:[["Nudeln",100,"g","tr"],["Brokkoli",150,"g","og"],["Mandeln",20,"g","tr"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1.5,"EL","gw"],["Parmesan",20,"g","kr"],["Zitrone",0.25,"Stk","og"]],
+ s:["Nudeln kochen, Brokkoliröschen die letzten 4 Minuten mitkochen.","Mandeln hacken und in Öl mit Knoblauch goldbraun rösten.","Nudeln abgießen, etwas Kochwasser auffangen und untermischen.","Mandeln, Parmesan und Zitrone darüber."]},
+{id:"i_kurz4",n:"Halloumi im Fladenbrot mit Joghurt und Minze",k:"veg",ma:["m","a"],m:ALL,min:15,p:28,bl:0,nut:["calcium","b12"],thema:"schnell",
+ why:"Halloumi braucht vier Minuten in der Pfanne und keine weitere Vorbereitung. Der Joghurt mit Minze macht daraus ein Essen statt eines Snacks.",
+ z:[["Halloumi",90,"g","kr"],["Fladenbrot",70,"g","bw"],["Naturjoghurt",70,"g","kr"],["Minze",0.25,"Bund","og"],["Gurke",60,"g","og"],["Tomate",1,"Stk","og"],["Olivenöl",0.5,"EL","gw"]],
+ s:["Halloumi in Scheiben schneiden und in der trockenen Pfanne beidseitig braun braten.","Joghurt mit gehackter Minze, Öl und Salz verrühren.","Fladenbrot kurz erwärmen, mit Gurke, Tomate, Halloumi und Joghurt füllen."]},
+/* ---------- Einmal kochen, zweimal essen ---------- */
+{id:"i_prep1",n:"Bulgur-Bowl mit Ofengemüse und Feta",k:"veg",ma:["m","a"],m:ALL,min:40,p:24,bl:1,nut:["ballast","eisen","calcium"],thema:"vorkochen",
+ why:"Warm ein Abendessen, kalt am nächsten Tag ein Mittagessen, das keine Mikrowelle braucht. Das Gemüse zieht über Nacht in der Zitronenmarinade nach.",
+ z:[["Bulgur",70,"g","tr"],["Aubergine",120,"g","og"],["Paprika",1,"Stk","og"],["Rote Zwiebel",0.5,"Stk","og"],["Feta",40,"g","kr"],["Olivenöl",1.5,"EL","gw"],["Zitrone",0.5,"Stk","og"],["Petersilie",0.25,"Bund","og"],["Kreuzkümmel",1,"TL","gw"]],
+ s:["Ofen auf 220 °C, Gemüse mit Öl und Kreuzkümmel 25 Minuten backen.","Bulgur mit der doppelten Menge kochendem Wasser übergießen und 15 Minuten quellen lassen.","Alles mischen, mit Zitrone abschmecken.","Feta und Petersilie darüber."]},
+{id:"i_prep2",n:"Linsen-Bolognese auf Vorrat",k:"veg",ma:["m","a"],m:ALL,min:45,p:26,bl:2,nut:["eisen","ballast","folat"],thema:"vorkochen",
+ why:"Die doppelte Menge kostet dieselbe Arbeit und friert gut ein. Braune Linsen behalten Biss, wo rote zu Brei werden.",
+ z:[["Braune Linsen",70,"g","tr"],["Passierte Tomaten",200,"g","tr"],["Möhren",80,"g","og"],["Sellerie",50,"g","og"],["Zwiebel",0.5,"Stk","og"],["Tomatenmark",1,"EL","tr"],["Nudeln",90,"g","tr"],["Olivenöl",1,"EL","gw"],["Oregano",1,"TL","gw"]],
+ s:["Zwiebel, Möhre und Sellerie fein würfeln und in Öl 8 Minuten anschwitzen.","Tomatenmark mitrösten, Linsen und Tomaten zugeben, 250 ml Wasser angießen.","30 Minuten leise köcheln, bis die Linsen weich sind.","Mit Oregano, Salz und Pfeffer abschmecken, zu Nudeln servieren."]},
+{id:"i_prep3",n:"Ofen-Frittata mit Zucchini und Kräutern",k:"veg",ma:["f","m","a"],m:ALL,min:40,p:25,bl:0,nut:["b12","calcium","eisen"],thema:"vorkochen",
+ why:"Kalt aus dem Kühlschrank ein vollwertiges Frühstück, warm ein Abendessen. Hält drei Tage und lässt sich in der Hand essen.",
+ z:[["Eier",3,"Stk","kr"],["Kartoffeln",150,"g","og"],["Zucchini",100,"g","og"],["Zwiebel",0.5,"Stk","og"],["Parmesan",20,"g","kr"],["Olivenöl",1,"EL","gw"],["Petersilie",0.25,"Bund","og"]],
+ s:["Kartoffeln in dünne Scheiben schneiden und 8 Minuten in Öl anbraten, Zucchini und Zwiebel zugeben.","Eier mit Parmesan, Petersilie, Salz und Pfeffer verquirlen.","Über das Gemüse gießen und bei 180 °C 20 Minuten backen.","Auskühlen lassen, in Stücke schneiden."]},
+{id:"i_prep4",n:"Hähnchen-Reis-Bowl mit Sesam-Möhren",k:"fleisch",ma:["m","a"],m:ALL,min:35,p:37,bl:0,nut:["eisen","zink","b12"],thema:"vorkochen",
+ why:"Alle Teile getrennt gegart und erst auf dem Teller zusammengesetzt – so wird am zweiten Tag nichts matschig.",
+ z:[["Hähnchenbrust",120,"g","ff"],["Reis",70,"g","tr"],["Möhren",120,"g","og"],["Sesam",1,"TL","tr"],["Sojasoße",1,"EL","gw"],["Ingwer",1,"TL","og"],["Frühlingszwiebel",1,"Stk","og"],["Olivenöl",1,"EL","gw"]],
+ s:["Reis kochen.","Hähnchen in Streifen scharf anbraten, mit Sojasoße und Ingwer ablöschen.","Möhren in Stifte schneiden, 4 Minuten braten, Sesam darüber rösten.","Alles nebeneinander in die Schüssel, Frühlingszwiebel darüber."]},
+/* ---------- Suppen und Eintöpfe ---------- */
+{id:"i_suppe1",n:"Rote-Linsen-Suppe mit Kokosmilch",k:"veg",ma:["m","a"],m:WINTER,min:30,p:21,bl:2,nut:["eisen","folat","ballast"],thema:"suppe",
+ why:"Rote Linsen zerfallen von allein und binden die Suppe, ohne dass etwas püriert werden muss. Die Kokosmilch nimmt der Schärfe die Spitze.",
+ z:[["Rote Linsen",80,"g","tr"],["Kokosmilch",80,"ml","tr"],["Möhren",100,"g","og"],["Zwiebel",0.5,"Stk","og"],["Ingwer",1,"TL","og"],["Currypulver",1.5,"TL","gw"],["Gemüsebrühe",400,"ml","gw"],["Limette",0.25,"Stk","og"]],
+ s:["Zwiebel, Möhre und Ingwer anschwitzen, Curry mitrösten.","Linsen und Brühe zugeben, 20 Minuten köcheln.","Kokosmilch einrühren, mit Limette abschmecken."]},
+{id:"i_suppe2",n:"Kartoffel-Lauch-Suppe mit Röstbrot",k:"veg",ma:["m","a"],m:WINTER,min:30,p:18,bl:1,nut:["calcium","ballast"],thema:"suppe",
+ why:"Zwei Zutaten, die immer da sind, ergeben mit etwas Geduld eine Suppe, die nach mehr schmeckt. Das Röstbrot ersetzt die Sahne.",
+ z:[["Kartoffeln",250,"g","og"],["Lauch",120,"g","og"],["Gemüsebrühe",400,"ml","gw"],["Schmand",30,"g","kr"],["Vollkornbrot",40,"g","bw"],["Olivenöl",1,"EL","gw"],["Muskat",1,"Prise","gw"]],
+ s:["Lauch in Ringen in Öl weich dünsten, Kartoffelwürfel zugeben.","Mit Brühe aufgießen und 20 Minuten köcheln.","Grob pürieren, Schmand und Muskat einrühren.","Brot würfeln, in der Pfanne rösten und darüber geben."]},
+{id:"i_suppe3",n:"Minestrone mit weißen Bohnen",k:"veg",ma:["m","a"],m:ALL,min:35,p:22,bl:2,nut:["ballast","eisen","folat"],thema:"suppe",
+ why:"Der Eintopf für Gemüsereste: Was da ist, kommt hinein. Die Bohnen machen aus der Suppe eine Mahlzeit.",
+ z:[["Weiße Bohnen (Dose)",0.5,"Dose","tr"],["Möhren",80,"g","og"],["Sellerie",50,"g","og"],["Zucchini",80,"g","og"],["Passierte Tomaten",150,"g","tr"],["Nudeln",40,"g","tr"],["Gemüsebrühe",400,"ml","gw"],["Olivenöl",1,"EL","gw"],["Parmesan",15,"g","kr"]],
+ s:["Gemüse würfeln und in Öl 8 Minuten anschwitzen.","Tomaten und Brühe zugeben, 15 Minuten köcheln.","Nudeln und Bohnen zugeben, weitere 8 Minuten kochen.","Parmesan darüber."]},
+{id:"i_suppe4",n:"Tomaten-Fischsuppe mit Fenchel",k:"fisch",ma:["m","a"],m:WINTER,min:35,p:31,bl:0,nut:["jod","omega3","b12"],thema:"suppe",
+ why:"Eine Suppe ohne Sahne: Der Fenchel gibt die Süße, die Kartoffel die Bindung. Der Fisch kommt zuletzt und zieht nur noch nach.",
+ z:[["Kabeljaufilet",130,"g","ff"],["Fenchel",0.5,"Stk","og"],["Kartoffeln",150,"g","og"],["Zwiebel",0.5,"Stk","og"],["Gemüsebrühe",400,"ml","gw"],["Passierte Tomaten",80,"g","tr"],["Olivenöl",1,"EL","gw"],["Dill",0.25,"Bund","og"]],
+ s:["Zwiebel und Fenchel in Öl dünsten, Kartoffelwürfel zugeben.","Tomaten und Brühe angießen, 18 Minuten köcheln.","Fisch in Stücken einlegen, Herd ausschalten, 6 Minuten ziehen lassen.","Dill darüber."]},
+/* ---------- Levante ---------- */
+{id:"i_lev1",n:"Kichererbsen-Shakshuka",k:"veg",ma:["f","m","a"],m:ALL,min:25,p:27,bl:2,nut:["eisen","folat","b12"],thema:"levante",
+ why:"Die Eier garen in der Tomatensoße, die Kichererbsen machen aus dem Frühstücksgericht ein Abendessen. Eine Pfanne, direkt auf den Tisch.",
+ z:[["Eier",2,"Stk","kr"],["Kichererbsen (Dose)",0.5,"Dose","tr"],["Passierte Tomaten",180,"g","tr"],["Paprika",0.5,"Stk","og"],["Zwiebel",0.5,"Stk","og"],["Kreuzkümmel",1,"TL","gw"],["Paprikapulver",1,"TL","gw"],["Fladenbrot",60,"g","bw"],["Olivenöl",1,"EL","gw"]],
+ s:["Zwiebel und Paprika in Öl anbraten, Gewürze mitrösten.","Tomaten und Kichererbsen zugeben, 10 Minuten einkochen.","Zwei Mulden drücken, Eier hineingleiten lassen, zugedeckt 6 Minuten stocken lassen.","Mit Fladenbrot servieren."]},
+{id:"i_lev2",n:"Kichererbsen-Bratlinge mit Tahini-Joghurt",k:"veg",ma:["m","a"],m:ALL,min:30,p:26,bl:2,nut:["eisen","calcium","ballast"],thema:"levante",
+ why:"Aus der Dose statt aus getrockneten Kichererbsen – hält in der Pfanne zusammen, wenn man sie nur grob zerdrückt statt fein zu pürieren.",
+ z:[["Kichererbsen (Dose)",0.75,"Dose","tr"],["Zwiebel",0.5,"Stk","og"],["Knoblauch",1,"Zehe","og"],["Mehl",1,"EL","gw"],["Kreuzkümmel",1,"TL","gw"],["Naturjoghurt",80,"g","kr"],["Sesampaste",1,"EL","gw"],["Zitrone",0.5,"Stk","og"],["Petersilie",0.25,"Bund","og"],["Olivenöl",1.5,"EL","gw"]],
+ s:["Kichererbsen abtropfen lassen und mit der Gabel grob zerdrücken.","Zwiebel, Knoblauch, Petersilie, Mehl und Gewürze untermischen, Bratlinge formen.","In Öl je Seite 4 Minuten braten.","Joghurt mit Sesampaste und Zitrone verrühren, dazu reichen."]},
+{id:"i_lev3",n:"Linsen-Reis mit Röstzwiebeln",k:"veg",ma:["m","a"],m:ALL,min:40,p:23,bl:2,nut:["eisen","ballast","folat"],thema:"levante",
+ why:"Drei billige Zutaten, aus denen durch langsam geröstete Zwiebeln ein Festessen wird. Nimm dir die zwanzig Minuten für die Zwiebeln, daran hängt alles.",
+ z:[["Braune Linsen",70,"g","tr"],["Reis",70,"g","tr"],["Zwiebel",1.5,"Stk","og"],["Kreuzkümmel",1,"TL","gw"],["Zimt",1,"Prise","gw"],["Naturjoghurt",80,"g","kr"],["Olivenöl",2,"EL","gw"]],
+ s:["Linsen in Salzwasser 20 Minuten kochen, abgießen.","Zwiebeln in feine Ringe schneiden und in Öl bei mittlerer Hitze 20 Minuten goldbraun rösten.","Reis mit Kreuzkümmel und Zimt garen, mit den Linsen mischen.","Röstzwiebeln darüber, Joghurt dazu."]},
+{id:"i_lev4",n:"Ofen-Auberginen mit Sesampaste und Granatapfel",k:"veg",ma:["m","a"],m:[7,8,9,10],min:45,p:19,bl:1,nut:["ballast","calcium","eisen"],thema:"levante",
+ why:"Die Aubergine wird im Ofen cremig wie Butter. Sesampaste und Zitrone geben ihr die Säure, die sie allein nicht hat.",
+ z:[["Aubergine",1,"Stk","og"],["Sesampaste",1.5,"EL","gw"],["Naturjoghurt",60,"g","kr"],["Zitrone",0.5,"Stk","og"],["Granatapfelkerne",30,"g","og"],["Fladenbrot",70,"g","bw"],["Olivenöl",1.5,"EL","gw"],["Petersilie",0.25,"Bund","og"]],
+ s:["Aubergine halbieren, Schnittfläche einritzen, mit Öl bestreichen.","Bei 220 °C 35 Minuten backen, bis das Innere weich ist.","Sesampaste mit Joghurt, Zitrone und Salz verrühren.","Über die Auberginen geben, Granatapfel und Petersilie darüber, Brot dazu."]},
+/* ---------- Wok und Ingwer ---------- */
+{id:"i_asien1",n:"Wok-Nudeln mit Tofu und Brokkoli",k:"veg",ma:["m","a"],m:ALL,min:25,p:28,bl:1,nut:["eisen","calcium","zink"],thema:"asien",
+ why:"Der Tofu wird erst allein knusprig gebraten und kommt zuletzt zurück – sonst zerfällt er beim Rühren.",
+ z:[["Tofu",100,"g","kr"],["Mie-Nudeln",80,"g","tr"],["Brokkoli",120,"g","og"],["Möhren",70,"g","og"],["Sojasoße",1.5,"EL","gw"],["Ingwer",1,"TL","og"],["Knoblauch",1,"Zehe","og"],["Sesam",1,"TL","tr"],["Rapsöl",1.5,"EL","gw"]],
+ s:["Tofu würfeln, trocken tupfen und in heißem Öl rundum braun braten, herausnehmen.","Nudeln nach Packung garen.","Gemüse mit Ingwer und Knoblauch 4 Minuten scharf anbraten.","Nudeln, Tofu und Sojasoße zugeben, durchschwenken, Sesam darüber."]},
+{id:"i_asien2",n:"Erdnuss-Reisnudeln mit Möhre und Gurke",k:"veg",ma:["m","a"],m:[5,6,7,8,9],min:20,p:24,bl:0,nut:["eisen","zink","ballast"],thema:"asien",
+ why:"Ein kaltes Nudelgericht für heiße Tage. Die Erdnusssoße hält sich eine Woche im Glas und passt auch zu Salat.",
+ z:[["Reisnudeln",80,"g","tr"],["Erdnussmus",2,"EL","gw"],["Sojasoße",1,"EL","gw"],["Limette",0.5,"Stk","og"],["Möhren",80,"g","og"],["Gurke",80,"g","og"],["Erdnüsse",15,"g","tr"],["Ingwer",1,"TL","og"]],
+ s:["Reisnudeln nach Packung garen und kalt abschrecken.","Erdnussmus mit Sojasoße, Limettensaft, Ingwer und 3 EL warmem Wasser glatt rühren.","Möhre und Gurke in Stifte schneiden.","Alles mischen, Erdnüsse gehackt darüber."]},
+{id:"i_asien3",n:"Ingwer-Hähnchen mit Pak Choi",k:"fleisch",ma:["m","a"],m:ALL,min:25,p:36,bl:0,nut:["eisen","zink","b12"],thema:"asien",
+ why:"Ingwer und Knoblauch kommen erst in den letzten dreißig Sekunden dazu, damit sie duften statt zu verbrennen.",
+ z:[["Hähnchenbrust",120,"g","ff"],["Pak Choi",150,"g","og"],["Reis",70,"g","tr"],["Ingwer",2,"TL","og"],["Knoblauch",1,"Zehe","og"],["Sojasoße",1.5,"EL","gw"],["Rapsöl",1,"EL","gw"],["Frühlingszwiebel",1,"Stk","og"]],
+ s:["Reis kochen.","Hähnchen in Streifen schneiden und in sehr heißem Öl 4 Minuten braten.","Pak Choi zugeben, 2 Minuten mitbraten.","Ingwer und Knoblauch zugeben, mit Sojasoße ablöschen, Frühlingszwiebel darüber."]},
+{id:"i_asien4",n:"Gebratener Reis mit Ei und Erbsen",k:"veg",ma:["m","a"],m:ALL,min:20,p:23,bl:1,nut:["b12","ballast","folat"],thema:"asien",
+ why:"Das beste Gericht für Reis von gestern – frisch gekochter wird matschig. Wer keinen übrig hat, kocht ihn morgens und lässt ihn offen abkühlen.",
+ z:[["Reis",70,"g","tr"],["Eier",2,"Stk","kr"],["Erbsen (TK)",80,"g","tk"],["Möhren",60,"g","og"],["Frühlingszwiebel",1,"Stk","og"],["Sojasoße",1.5,"EL","gw"],["Sesamöl",1,"TL","gw"],["Rapsöl",1,"EL","gw"]],
+ s:["Kalten Reis mit den Fingern auflockern.","Eier in der Pfanne stocken lassen, herausnehmen und zerteilen.","Möhre und Erbsen 3 Minuten braten, Reis zugeben und ohne Rühren 2 Minuten anrösten.","Ei, Sojasoße und Sesamöl untermischen, Frühlingszwiebel darüber."]},
+/* ---------- Mittelmeer ---------- */
+{id:"i_med1",n:"Weiße Bohnen in Tomatensoße mit Feta",k:"veg",ma:["m","a"],m:ALL,min:30,p:25,bl:2,nut:["eisen","calcium","ballast"],thema:"mittelmeer",
+ why:"Der griechische Klassiker aus dem Ofen: Bohnen in Tomatensoße, oben Feta, der knapp Farbe nimmt. Kostet fast nichts.",
+ z:[["Weiße Bohnen (Dose)",0.75,"Dose","tr"],["Passierte Tomaten",180,"g","tr"],["Zwiebel",0.5,"Stk","og"],["Knoblauch",1,"Zehe","og"],["Feta",50,"g","kr"],["Olivenöl",1.5,"EL","gw"],["Oregano",1,"TL","gw"],["Vollkornbrot",50,"g","bw"]],
+ s:["Zwiebel und Knoblauch in Öl anschwitzen, Tomaten und Oregano zugeben.","Bohnen unterrühren, 10 Minuten köcheln.","In eine Form geben, Feta darauf zerbröseln, bei 200 °C 12 Minuten überbacken.","Mit Brot servieren."]},
+{id:"i_med2",n:"Zitronen-Zucchini-Pasta mit Ricotta",k:"veg",ma:["m","a"],m:[5,6,7,8,9],min:20,p:23,bl:0,nut:["calcium"],thema:"mittelmeer",
+ why:"Die Zucchini wird so lange gebraten, bis sie süß ist – nicht nur glasig. Ricotta und Nudelwasser ergeben eine Soße ohne Sahne.",
+ z:[["Nudeln",100,"g","tr"],["Zucchini",150,"g","og"],["Ricotta",60,"g","kr"],["Zitrone",0.5,"Stk","og"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1.5,"EL","gw"],["Basilikum",0.25,"Bund","og"],["Parmesan",15,"g","kr"]],
+ s:["Nudeln kochen, ein Glas Kochwasser aufheben.","Zucchini in Scheiben mit Knoblauch in Öl 10 Minuten braun braten.","Ricotta, Zitronenschale und Kochwasser zu einer Soße rühren.","Nudeln untermischen, Basilikum und Parmesan darüber."]},
+{id:"i_med3",n:"Auberginen-Auflauf mit Tomate und Mozzarella",k:"veg",ma:["m","a"],m:[7,8,9,10],min:50,p:24,bl:1,nut:["calcium","ballast"],thema:"mittelmeer",
+ why:"Die schnelle Fassung des Klassikers: Auberginen aus dem Ofen statt aus der Fritteuse, geschichtet mit Tomatensoße und Mozzarella.",
+ z:[["Aubergine",1,"Stk","og"],["Passierte Tomaten",200,"g","tr"],["Mozzarella",60,"g","kr"],["Parmesan",20,"g","kr"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1.5,"EL","gw"],["Oregano",1,"TL","gw"],["Basilikum",0.25,"Bund","og"]],
+ s:["Aubergine in Scheiben schneiden, mit Öl bestreichen und bei 220 °C 20 Minuten backen.","Tomaten mit Knoblauch und Oregano 10 Minuten einkochen.","Abwechselnd schichten, Mozzarella und Parmesan darauf.","20 Minuten bei 200 °C überbacken, Basilikum darüber."]},
+{id:"i_med4",n:"Sardinen-Pasta mit Fenchel und Zitrone",k:"fisch",ma:["m","a"],m:ALL,min:25,p:30,bl:0,nut:["omega3","calcium","b12"],thema:"mittelmeer",
+ why:"Sardinen aus der Dose sind das günstigste Omega-3, das es gibt. Fenchel und Zitrone nehmen ihnen alles Tranige.",
+ z:[["Sardinen (Dose)",1,"Dose","tr"],["Nudeln",100,"g","tr"],["Fenchel",0.5,"Stk","og"],["Zwiebel",0.5,"Stk","og"],["Zitrone",0.5,"Stk","og"],["Semmelbrösel",1,"EL","gw"],["Olivenöl",1.5,"EL","gw"],["Petersilie",0.25,"Bund","og"]],
+ s:["Nudeln kochen.","Fenchel und Zwiebel fein schneiden und in Öl 8 Minuten weich dünsten.","Sardinen zugeben und mit der Gabel zerteilen, Zitronensaft angießen.","Semmelbrösel in einer trockenen Pfanne rösten und mit der Petersilie darüber streuen."]},
+/* ---------- Frühstück und Brunch ---------- */
+{id:"i_fru1",n:"Protein-Porridge mit Skyr und Walnüssen",k:"veg",ma:["f"],m:ALL,min:10,p:30,bl:0,nut:["calcium","omega3","ballast"],thema:"fruehstueck",
+ why:"Der Skyr kommt erst nach dem Kochen dazu, sonst gerinnt er. So kommt das Frühstück auf dreißig Gramm Protein statt auf fünfzehn.",
+ z:[["Haferflocken",60,"g","tr"],["Milch",200,"ml","kr"],["Skyr",100,"g","kr"],["Walnüsse",15,"g","tr"],["Apfel",0.5,"Stk","og"],["Zimt",1,"Prise","gw"],["Honig",1,"TL","gw"]],
+ s:["Haferflocken mit Milch aufkochen und 5 Minuten quellen lassen.","Vom Herd nehmen, kurz abkühlen lassen, Skyr unterrühren.","Apfel würfeln, mit Walnüssen, Zimt und Honig darüber."]},
+{id:"i_fru2",n:"Herzhafter Haferbrei mit Ei",k:"veg",ma:["f"],m:ALL,min:15,p:26,bl:0,nut:["b12","eisen","ballast"],thema:"fruehstueck",
+ why:"Hafer muss nicht süß sein. Mit Brühe gekocht und einem weichen Ei obendrauf wird daraus ein Frühstück, das bis mittags trägt.",
+ z:[["Haferflocken",60,"g","tr"],["Gemüsebrühe",300,"ml","gw"],["Eier",1,"Stk","kr"],["Frühlingszwiebel",1,"Stk","og"],["Parmesan",15,"g","kr"],["Olivenöl",0.5,"EL","gw"]],
+ s:["Haferflocken in der Brühe 6 Minuten köcheln, bis es sämig ist.","Ei 6 Minuten kochen, schrecken und pellen.","Parmesan unterrühren, Ei halbiert obenauf, Frühlingszwiebel darüber."]},
+{id:"i_fru3",n:"Quarkpfannkuchen mit Beeren",k:"veg",ma:["f"],m:ALL,min:20,p:29,bl:0,nut:["calcium","b12","ballast"],thema:"fruehstueck",
+ why:"Ohne Mehl gebunden nur mit Quark, Ei und Haferflocken – schmeckt wie Sonntag und hat den Proteingehalt eines Mittagessens.",
+ z:[["Magerquark",150,"g","kr"],["Eier",2,"Stk","kr"],["Haferflocken",40,"g","tr"],["Beeren (TK)",80,"g","tk"],["Backpulver",0.5,"TL","gw"],["Rapsöl",0.5,"EL","gw"],["Honig",1,"TL","gw"]],
+ s:["Quark, Eier, Haferflocken und Backpulver glatt rühren, 5 Minuten stehen lassen.","In Öl bei mittlerer Hitze kleine Pfannkuchen backen, je Seite 3 Minuten.","Beeren kurz erwärmen und mit Honig darüber geben."]},
+{id:"i_fru4",n:"Skyr-Bowl mit Apfel, Zimt und Leinsamen",k:"veg",ma:["f"],m:ALL,min:5,p:27,bl:0,nut:["calcium","omega3","ballast"],thema:"fruehstueck",
+ why:"Fünf Minuten, kein Herd, und trotzdem kein Zuckerfrühstück. Die geschroteten Leinsamen sind der Unterschied zwischen satt und in einer Stunde wieder hungrig.",
+ z:[["Skyr",180,"g","kr"],["Apfel",1,"Stk","og"],["Leinsamen",1,"EL","tr"],["Walnüsse",15,"g","tr"],["Zimt",1,"Prise","gw"],["Honig",1,"TL","gw"]],
+ s:["Apfel grob raspeln.","Mit Skyr, Leinsamen und Zimt verrühren.","Walnüsse und Honig darüber."]},
+/* ---------- Salat als Hauptgericht ---------- */
+{id:"i_sal1",n:"Brotsalat mit Tomaten und Mozzarella",k:"veg",ma:["m","a"],m:[6,7,8,9],min:20,p:24,bl:0,nut:["calcium","ballast"],thema:"salat",
+ why:"Der beste Umgang mit Brot vom Vortag: Es saugt Tomatensaft und Öl auf und wird zur Hauptzutat. Die zwanzig Minuten Ziehzeit sind Pflicht.",
+ z:[["Vollkornbrot",80,"g","bw"],["Tomaten",200,"g","og"],["Mozzarella",70,"g","kr"],["Rote Zwiebel",0.25,"Stk","og"],["Basilikum",0.25,"Bund","og"],["Olivenöl",1.5,"EL","gw"],["Rotweinessig",1,"EL","gw"]],
+ s:["Brot würfeln und in der Pfanne ohne Fett rösten.","Tomaten grob schneiden, salzen und 10 Minuten stehen lassen, damit sie Saft ziehen.","Mit Öl, Essig und Zwiebel mischen, Brot unterheben.","20 Minuten ziehen lassen, Mozzarella und Basilikum darüber."]},
+{id:"i_sal2",n:"Fenchel-Orangen-Salat mit weißen Bohnen",k:"veg",ma:["m","a"],m:[11,12,1,2,3],min:15,p:21,bl:2,nut:["ballast","eisen","folat"],thema:"salat",
+ why:"Ein Salat für den Winter, wenn Tomaten nichts taugen: Fenchel und Orangen gibt es dann in gut. Die Bohnen machen ihn zum Abendessen statt zur Beilage.",
+ z:[["Fenchel",0.5,"Stk","og"],["Orange",1,"Stk","og"],["Weiße Bohnen (Dose)",0.5,"Dose","tr"],["Rote Zwiebel",0.25,"Stk","og"],["Olivenöl",1.5,"EL","gw"],["Zitrone",0.25,"Stk","og"],["Walnüsse",15,"g","tr"],["Petersilie",0.25,"Bund","og"]],
+ s:["Fenchel sehr fein hobeln, Orange filetieren und den Saft auffangen.","Bohnen abspülen und abtropfen lassen.","Alles mit Öl, Zitrone, Orangensaft, Salz und Pfeffer mischen.","10 Minuten ziehen lassen, Walnüsse und Petersilie darüber."]},
+{id:"i_sal3",n:"Bohnensalat mit Ei und Senfdressing",k:"veg",ma:["m","a"],m:ALL,min:20,p:25,bl:2,nut:["eisen","b12","ballast"],thema:"salat",
+ why:"Aus zwei Dosen und zwei Eiern in zwanzig Minuten. Das Senfdressing hält den Salat zwei Tage frisch, ohne dass er wässert.",
+ z:[["Kidneybohnen (Dose)",0.5,"Dose","tr"],["Weiße Bohnen (Dose)",0.5,"Dose","tr"],["Eier",2,"Stk","kr"],["Rote Zwiebel",0.25,"Stk","og"],["Senf",1,"TL","gw"],["Essig",1,"EL","gw"],["Olivenöl",1.5,"EL","gw"],["Petersilie",0.25,"Bund","og"]],
+ s:["Eier 8 Minuten kochen, schrecken und achteln.","Bohnen abspülen und gut abtropfen lassen.","Senf, Essig, Öl, Salz und Pfeffer verrühren, Bohnen und Zwiebel darin wenden.","Eier und Petersilie darauf verteilen."]},
+{id:"i_sal4",n:"Nudelsalat mit Pesto, Mozzarella und Rucola",k:"veg",ma:["m","a"],m:[5,6,7,8,9],min:20,p:24,bl:0,nut:["calcium","eisen"],thema:"salat",
+ why:"Der Salat, der auf jedem Grillabend zuerst leer ist. Der Rucola kommt erst am Ende dazu, damit er nicht zusammenfällt.",
+ z:[["Nudeln",100,"g","tr"],["Pesto",1.5,"EL","tr"],["Mozzarella",60,"g","kr"],["Cherrytomaten",120,"g","og"],["Rucola",30,"g","og"],["Pinienkerne",10,"g","tr"],["Zitrone",0.25,"Stk","og"]],
+ s:["Nudeln kochen, kalt abschrecken und gut abtropfen lassen.","Mit Pesto und Zitronensaft mischen.","Tomaten halbieren, Mozzarella zupfen, unterheben.","Kurz vor dem Essen Rucola und geröstete Pinienkerne zugeben."]},
+/* ---------- Proteinreich ohne Fleisch ---------- */
+{id:"i_pro1",n:"Tofu-Bowl mit Erdnusssoße",k:"veg",ma:["m","a"],m:ALL,min:30,p:32,bl:1,nut:["eisen","zink","calcium"],thema:"protein",
+ why:"Zweiunddreißig Gramm Protein ohne Fleisch: Tofu und Erdnussmus zusammen bringen mehr als eine Hähnchenbrust.",
+ z:[["Tofu",120,"g","kr"],["Reis",70,"g","tr"],["Brokkoli",120,"g","og"],["Möhren",70,"g","og"],["Erdnussmus",1.5,"EL","gw"],["Sojasoße",1,"EL","gw"],["Limette",0.25,"Stk","og"],["Rapsöl",1,"EL","gw"],["Sesam",1,"TL","tr"]],
+ s:["Tofu würfeln, trocken tupfen und in Öl rundum knusprig braten.","Reis kochen, Brokkoli und Möhre 5 Minuten dämpfen.","Erdnussmus mit Sojasoße, Limette und 3 EL Wasser verrühren.","Alles anrichten, Soße darüber, Sesam obenauf."]},
+{id:"i_pro2",n:"Soja-Bolognese",k:"veg",ma:["m","a"],m:ALL,min:30,p:34,bl:1,nut:["eisen","zink","ballast"],thema:"protein",
+ why:"Sojaschnetzel ziehen die Soße auf, wenn man sie vorher in Brühe einweicht statt in Wasser. Mehr Protein als jede Hackversion.",
+ z:[["Sojaschnetzel",40,"g","tr"],["Passierte Tomaten",200,"g","tr"],["Gemüsebrühe",200,"ml","gw"],["Möhren",60,"g","og"],["Zwiebel",0.5,"Stk","og"],["Tomatenmark",1,"EL","tr"],["Nudeln",90,"g","tr"],["Olivenöl",1,"EL","gw"],["Oregano",1,"TL","gw"]],
+ s:["Sojaschnetzel in heißer Brühe 10 Minuten einweichen, ausdrücken.","Zwiebel und Möhre anbraten, Tomatenmark mitrösten.","Schnetzel scharf anbraten, Tomaten zugeben und 15 Minuten köcheln.","Mit Oregano abschmecken, zu Nudeln servieren."]},
+{id:"i_pro3",n:"Ofenkartoffel mit Kräuterskyr und Kichererbsen",k:"veg",ma:["m","a"],m:ALL,min:55,p:29,bl:2,nut:["calcium","eisen","ballast"],thema:"protein",
+ why:"Die Kartoffel macht sich im Ofen von allein, in der Zeit ist der Rest fertig. Skyr statt Schmand bringt die Portion über achtundzwanzig Gramm Protein.",
+ z:[["Kartoffeln",300,"g","og"],["Skyr",150,"g","kr"],["Kichererbsen (Dose)",0.5,"Dose","tr"],["Schnittlauch",0.25,"Bund","og"],["Paprikapulver",1,"TL","gw"],["Olivenöl",1,"EL","gw"],["Zitrone",0.25,"Stk","og"]],
+ s:["Kartoffeln waschen, mehrfach einstechen und bei 200 °C 45 Minuten backen.","Kichererbsen mit Öl und Paprikapulver mischen und die letzten 20 Minuten mitbacken.","Skyr mit Schnittlauch, Zitrone, Salz und Pfeffer verrühren.","Kartoffeln aufschneiden, Skyr und Kichererbsen daraufgeben."]},
+{id:"i_pro4",n:"Linsenbratlinge mit Joghurtdip",k:"veg",ma:["m","a"],m:ALL,min:35,p:27,bl:2,nut:["eisen","ballast","calcium"],thema:"protein",
+ why:"Rote Linsen zerfallen beim Kochen und binden die Bratlinge von allein – es braucht kein Ei und keinen Käse.",
+ z:[["Rote Linsen",80,"g","tr"],["Haferflocken",30,"g","tr"],["Zwiebel",0.5,"Stk","og"],["Möhren",60,"g","og"],["Kreuzkümmel",1,"TL","gw"],["Naturjoghurt",100,"g","kr"],["Zitrone",0.25,"Stk","og"],["Olivenöl",1.5,"EL","gw"],["Petersilie",0.25,"Bund","og"]],
+ s:["Linsen 12 Minuten weich kochen, abgießen und abkühlen lassen.","Mit geriebener Möhre, Zwiebel, Haferflocken und Gewürzen mischen, 10 Minuten stehen lassen.","Bratlinge formen und in Öl je Seite 4 Minuten braten.","Joghurt mit Zitrone und Petersilie verrühren, dazu reichen."]},
+/* ---------- Aus dem Vorrat ---------- */
+{id:"i_vor1",n:"Thunfisch-Nudeln mit Tomate und Kapern",k:"fisch",ma:["m","a"],m:ALL,min:20,p:31,bl:0,nut:["b12","omega3","eisen"],thema:"vorrat",
+ why:"Alles aus dem Schrank, nichts Frisches nötig. Die Kapern sind das, was den Unterschied zu einer faden Dosensoße macht.",
+ z:[["Thunfisch (Dose)",1,"Dose","tr"],["Nudeln",100,"g","tr"],["Passierte Tomaten",180,"g","tr"],["Kapern",1,"EL","tr"],["Knoblauch",1,"Zehe","og"],["Olivenöl",1.5,"EL","gw"],["Oregano",1,"TL","gw"]],
+ s:["Nudeln kochen.","Knoblauch in Öl anschwitzen, Tomaten und Oregano zugeben, 10 Minuten einkochen.","Thunfisch und Kapern unterrühren, nur noch erwärmen.","Mit den Nudeln mischen."]},
+{id:"i_vor2",n:"Kichererbsen-Curry aus der Dose",k:"veg",ma:["m","a"],m:ALL,min:25,p:24,bl:2,nut:["eisen","ballast","folat"],thema:"vorrat",
+ why:"Drei Dosen und ein Löffel Curry. Das Gericht für den Abend, an dem der Kühlschrank leer ist und niemand mehr einkaufen geht.",
+ z:[["Kichererbsen (Dose)",0.75,"Dose","tr"],["Kokosmilch",100,"ml","tr"],["Passierte Tomaten",120,"g","tr"],["Currypulver",1.5,"TL","gw"],["Zwiebel",0.5,"Stk","og"],["Reis",70,"g","tr"],["Olivenöl",1,"EL","gw"]],
+ s:["Zwiebel in Öl anbraten, Curry mitrösten.","Tomaten, Kokosmilch und Kichererbsen zugeben.","15 Minuten köcheln lassen, salzen.","Mit Reis servieren."]},
+{id:"i_vor3",n:"Reispfanne mit Bohnen, Mais und Paprika",k:"veg",ma:["m","a"],m:ALL,min:25,p:22,bl:2,nut:["eisen","ballast","zink"],thema:"vorrat",
+ why:"Nach mexikanischer Art aus lauter Konserven. Der Reis wird scharf angebraten, bevor die Flüssigkeit dazukommt – das gibt den Röstton.",
+ z:[["Reis",70,"g","tr"],["Kidneybohnen (Dose)",0.5,"Dose","tr"],["Mais (Dose)",0.5,"Dose","tr"],["Paprika",0.5,"Stk","og"],["Passierte Tomaten",100,"g","tr"],["Paprikapulver",1,"TL","gw"],["Kreuzkümmel",1,"TL","gw"],["Olivenöl",1,"EL","gw"],["Käse",30,"g","kr"]],
+ s:["Reis in Öl 2 Minuten anrösten, Gewürze zugeben.","Tomaten und 200 ml Wasser angießen, 15 Minuten zugedeckt garen.","Bohnen, Mais und Paprika unterheben und erwärmen.","Käse darüber reiben."]},
+{id:"i_vor4",n:"Tomaten-Bohnen auf Toast mit Ei",k:"veg",ma:["f","m"],m:ALL,min:20,p:27,bl:2,nut:["eisen","ballast","b12"],thema:"vorrat",
+ why:"Die selbst gemachte Fassung der englischen Dosenbohnen – mit Tomatenmark, Senf und einem Löffel Sirup. Das Ei macht daraus eine Mahlzeit.",
+ z:[["Weiße Bohnen (Dose)",0.75,"Dose","tr"],["Passierte Tomaten",120,"g","tr"],["Tomatenmark",1,"EL","tr"],["Senf",0.5,"TL","gw"],["Ahornsirup",1,"TL","gw"],["Vollkornbrot",60,"g","bw"],["Eier",1,"Stk","kr"],["Olivenöl",0.5,"EL","gw"]],
+ s:["Tomatenmark in Öl anrösten, Tomaten, Senf und Sirup zugeben.","Bohnen unterrühren und 10 Minuten einkochen, salzen.","Brot toasten, Ei in der Pfanne braten.","Bohnen auf das Brot geben, Ei darauf."]}
+];
+
+/* ============ Entdecken ============
+   Bis 3.7 zeigte dieser Bereich Rezepte aus der mitgelieferten Sammlung, die man
+   noch nicht angenommen hatte. Das war Verwaltung, keine Entdeckung: Nach ein
+   paar Wochen war der Stapel durch und der Reiter tot. Jetzt kommen hier nur
+   Vorschläge her, die es in der Sammlung noch nicht gibt – aus dem Ideenpool,
+   passend zum Prospekt oder frisch aus den Blogs. Das Aussortieren alter
+   Sammlungsrezepte ist nach „Mehr → Aufräumen" gezogen, wo Pflege hingehört. */
+let ideenModus="ideen";        /* ideen | angebote | netz */
+let themaWahl=null;            /* von Hand gewähltes Thema, sonst das der Woche */
 const zuletztGekocht=id=>{const t=Object.entries(S.verlauf||{}).filter(([,v])=>v.r===id).map(([k])=>+k);return t.length?Math.max(...t):0;};
-/* Neue Vorschläge: noch nie bewertet, oder vor über 60 Tagen einmal weggewischt */
-const poolNeu=()=>RZ().filter(r=>!S.sammlung[r.id]&&!S.archiv[r.id]&&
-    (!S.spaeter[r.id]||Date.now()-S.spaeter[r.id]>FRIST.spaeter*TAG))
-  .sort((a,b)=>(b.m.includes(monat())-a.m.includes(monat()))||(S.still?a.bl-b.bl:0));
-/* Karteileichen: lange in der Sammlung, nie oder ewig nicht gekocht, zuletzt nicht bestätigt */
+
+/* Das Thema wechselt mit der Kalenderwoche. Zwölf Themen ergeben einen Zyklus
+   von einem Vierteljahr – lang genug, dass es sich nicht wiederholt anfühlt. */
+function kwNummer(d=new Date()){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));
+  const j=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return Math.ceil(((t-j)/86400000+1)/7);
+}
+const themaDerWoche=()=>THEMEN[(kwNummer()-1)%THEMEN.length];
+const themaAktiv=()=>THEMEN.find(t=>t.k===themaWahl)||themaDerWoche();
+const themaVon=k=>THEMEN.find(t=>t.k===k)||THEMEN[0];
+
+/* Eine Idee ist offen, solange sie weder übernommen noch weggelegt wurde.
+   Weggelegtes kommt nach der Frist wieder – Geschmack ändert sich. */
+const ideeOffen=i=>!!i&&!S.eigene[i.id]&&!S.sammlung[i.id]&&!S.archiv[i.id]&&
+  !((S.ideenWeg||{})[i.id]&&Date.now()-S.ideenWeg[i.id]<FRIST.idee*TAG);
+const ideeVon=id=>IDEEN.find(i=>i.id===id)||null;
+/* Erst das Thema, dann die Saison, dann der Rest – innerhalb dessen stabil
+   sortiert, damit die Liste beim Neuzeichnen nicht springt. */
+function ideenPool(thema){
+  const t=thema||themaAktiv().k;
+  return IDEEN.filter(ideeOffen).sort((a,b)=>
+    (b.thema===t)-(a.thema===t) ||
+    (b.m.includes(monat()))-(a.m.includes(monat())) ||
+    (S.still?a.bl-b.bl:0) ||
+    (a.id<b.id?-1:1));
+}
+const ideenZumThema=t=>ideenPool(t).filter(i=>i.thema===(t||themaAktiv().k));
+/* Ideen, für die diese Woche etwas im Prospekt steht. Der Treffer wird
+   mitgegeben, damit die Karte zeigen kann, worauf er beruht. */
+function ideenImAngebot(){
+  return IDEEN.filter(ideeOffen).map(i=>{
+    const treffer=(i.z||[]).map(([n])=>({n,a:zutatImAngebot(n,0)})).filter(x=>x.a);
+    return treffer.length?{idee:i,treffer}:null;
+  }).filter(Boolean).sort((a,b)=>b.treffer.length-a.treffer.length);
+}
+
+function ideeUebernehmen(id){
+  const i=ideeVon(id); if(!i) return;
+  /* Als eigenes Rezept ablegen: ab hier ist es ein Rezept wie jedes andere und
+     lässt sich einplanen, einkaufen und kochen. src bleibt als Herkunft stehen. */
+  const {thema,...rest}=i;
+  mut("eigene/"+id,{...rest,src:"idee",erstellt:Date.now()},false);
+  mut("sammlung/"+id,Date.now());
+  meldung("„"+i.n+"“ ist jetzt in deiner Sammlung.","Ansehen",()=>detail(id));
+}
+function ideeWeg(id){
+  const i=ideeVon(id); if(!i) return;
+  mut("ideenWeg/"+id,Date.now());
+  meldung("Weggelegt. In "+FRIST.idee+" Tagen fragen wir noch einmal.","Zurück",()=>mut("ideenWeg/"+id,null));
+}
+/* Ganze Idee ansehen, bevor man sie annimmt – Zutaten allein sagen wenig. */
+function ideeDetail(id){
+  const i=ideeVon(id); if(!i) return;
+  const [lbl,tag]=KIND[i.k];
+  openSheet(`<div class="grab"></div>
+    <h2 style="font-size:21px">${esc(i.n)}</h2>
+    <div class="rec-tags" style="margin:8px 0 12px"><span class="tag ${tag}">${lbl}</span>
+      <span class="tag t-neutral">${i.min} Min</span><span class="tag t-neutral">${i.p} g Protein</span>
+      <span class="tag t-neutral">${themaVon(i.thema).n}</span>
+      ${i.m.includes(monat())?'<span class="tag t-sun">Saison</span>':""}
+      ${S.still&&i.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
+    <p class="note">${esc(i.why)}</p>
+    <div class="sect"><h2>Zutaten je Portion</h2></div>
+    ${i.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span>${fmt(q,e)}</span></div>`).join("")}
+    <div class="sect"><h2>Zubereitung</h2></div>
+    <ol class="steps">${i.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
+    <button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="closeSheet();ideeUebernehmen('${i.id}')">In meine Sammlung</button>
+    <button class="btn btn-wide" style="margin-top:6px" onclick="closeSheet();ideeWeg('${i.id}')">Nicht mein Ding</button>
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button>`);
+}
+/* Eine Karte im Strom. Der Titel führt in die Einzelheiten, die beiden Knöpfe
+   entscheiden – wie im Stapel vorher, nur ohne Wischen und mit mehreren Ideen
+   im Blick. Inspiration heißt vergleichen können. */
+function ideenKarte(i,zusatz){
+  const [lbl,tag]=KIND[i.k];
+  return `<div class="rec k-${i.k}"><div class="rec-b">
+    <button class="ideen-t" onclick="ideeDetail('${i.id}')">${esc(i.n)}</button>
+    <div class="rec-m">${lbl} · ${i.min} Min · ${i.p} g Protein${i.m.includes(monat())?" · Saison":""}</div>
+    <p class="note" style="margin-top:6px">${esc(i.why)}</p>
+    ${zusatz||""}
+    <div class="ing" style="margin-top:8px"><b>Zutaten</b><br>${i.z.map(z=>esc(z[0])).join(" · ")}</div>
+    <div class="row-btns" style="margin-top:10px">
+      <button class="btn btn-s btn-primary" onclick="ideeUebernehmen('${i.id}')">${IKON.plus} Übernehmen</button>
+      <button class="btn btn-s" onclick="ideeWeg('${i.id}')">Nicht mein Ding</button>
+    </div></div></div>`;
+}
+function themaWaehlen(){
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Thema wählen</h2>
+    <p class="note" style="margin:6px 0 14px">Von allein wechselt es jede Woche. Hier kannst du vorgreifen – die Wahl gilt, bis du die App neu öffnest.</p>
+    ${THEMEN.map(t=>{const n=ideenZumThema(t.k).length;
+      return `<button class="zeile" onclick="themaWahl='${t.k}';closeSheet();render()">
+        <span class="zeile-n">${t.n}${t.k===themaDerWoche().k?" · diese Woche":""}</span>
+        <span class="zeile-w">${n?n+" Ideen":"gesichtet"}</span>
+        <span class="zeile-p" aria-hidden="true">›</span></button>`;}).join("")}
+    ${themaWahl?`<button class="btn btn-wide" style="margin-top:12px" onclick="themaWahl=null;closeSheet();render()">Zurück zum Thema der Woche</button>`:""}
+    <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button>`);
+}
+function vEntdecken(){
+  const kopf=`<div class="toggle" style="width:100%;margin-bottom:12px">
+      <button style="flex:1" aria-pressed="${ideenModus==="ideen"}" onclick="ideenModus='ideen';render()">Ideen</button>
+      <button style="flex:1" aria-pressed="${ideenModus==="angebote"}" onclick="ideenModus='angebote';render()">Im Angebot</button>
+      <button style="flex:1" aria-pressed="${ideenModus==="netz"}" onclick="ideenModus='netz';render()">Aus dem Netz</button></div>`;
+  if(ideenModus==="netz") return kopf+vNetz();
+  if(ideenModus==="angebote") return kopf+vIdeenAngebote();
+
+  const thema=themaAktiv();
+  const zumThema=ideenZumThema(thema.k);
+  const rest=ideenPool().filter(i=>i.thema!==thema.k);
+  const zeigen=zumThema.slice(0,6);
+  const auffuellen=zeigen.length<3?rest.slice(0,4-zeigen.length):[];
+  if(!zumThema.length&&!rest.length)
+    return kopf+`<div class="empty"><b>Alle Ideen gesichtet</b>
+      Du hast jede der ${IDEEN.length} Ideen entweder übernommen oder weggelegt. Weggelegtes kommt nach ${FRIST.idee} Tagen wieder.
+      <div style="margin-top:14px"><button class="btn" onclick="ideenModus='netz';render()">Aus dem Netz ansehen</button></div></div>`;
+  return kopf+`<div class="themakarte">
+      <div class="thema-k">Thema der Woche${themaWahl?" · selbst gewählt":""}</div>
+      <b>${thema.n}</b>
+      <p class="note" style="margin-top:4px">${thema.t}</p>
+      <div class="row-btns" style="margin-top:10px">
+        <button class="btn btn-s" onclick="themaWaehlen()">Anderes Thema</button>
+        <span class="rec-m" style="align-self:center">${zumThema.length} Ideen offen</span></div>
+    </div>
+    ${zeigen.map(i=>ideenKarte(i)).join("")}
+    ${auffuellen.length?`<div class="sect"><h2>Auch neu</h2></div>${auffuellen.map(i=>ideenKarte(i)).join("")}`:""}
+    ${zumThema.length>6?`<p class="note" style="margin-top:12px;text-align:center">Noch ${zumThema.length-6} weitere Ideen zu diesem Thema – sie rücken nach, sobald du oben entschieden hast.</p>`:""}`;
+}
+/* Ideen, für die diese Woche etwas günstig ist. Der Prospekt liegt ohnehin
+   schon eingelesen vor – das ist der Moment, in dem ein Vorschlag etwas wert ist. */
+function vIdeenAngebote(){
+  if(!angeboteAktiv(0).length)
+    return `<div class="empty"><b>Kein Prospekt für diese Woche</b>
+      Lies unter „Mehr → Angebote" den aktuellen Aldi-Prospekt ein. Danach stehen hier die Ideen, deren Zutaten gerade günstig sind.
+      <div style="margin-top:14px"><button class="btn btn-primary" onclick="mehrOeffnen('angebote')">Zu den Angeboten</button></div></div>`;
+  const treffer=ideenImAngebot();
+  if(!treffer.length)
+    return `<div class="empty"><b>Nichts Passendes im Prospekt</b>
+      Diese Woche trifft keine offene Idee auf ein Angebot. Sieh unter „Ideen" nach – oder nächste Woche wieder hier.</div>`;
+  return `<p class="note" style="margin-bottom:12px">${treffer.length} Idee${treffer.length===1?"":"n"}, deren Zutaten gerade im Prospekt stehen.</p>`
+    +treffer.slice(0,8).map(({idee,treffer:t})=>ideenKarte(idee,
+      `<p class="note" style="margin-top:6px;color:var(--sun)">Im Angebot: ${t.map(x=>esc(x.n)).join(", ")}</p>`)).join("");
+}
+
+/* ---------- Aufräumen: liegt jetzt unter „Mehr" ----------
+   Karteileichen: lange in der Sammlung, nie oder ewig nicht gekocht, zuletzt
+   nicht bestätigt. Das ist Pflege der eigenen Sammlung und hat mit Entdecken
+   nichts zu tun – hier wird nichts Neues gefunden, nur Altes aussortiert. */
 const poolAlt=()=>RZ().filter(r=>{
     const rein=S.sammlung[r.id]; if(!rein) return false;
     if(Date.now()-rein<FRIST.alt*TAG) return false;
@@ -3616,59 +4028,17 @@ const poolAlt=()=>RZ().filter(r=>{
     if(p&&Date.now()-p<FRIST.geprueft*TAG) return false;
     return true;
   }).sort((a,b)=>zuletztGekocht(a.id)-zuletztGekocht(b.id));
-const deckPool=()=>deckMode==="neu"?poolNeu():poolAlt();
-function vEntdecken(){
-  const nA=poolNeu().length, aA=poolAlt().length;
-  const kopf=`<div class="toggle" style="width:100%;margin-bottom:12px">
-      <button style="flex:1" aria-pressed="${deckMode==="neu"}" onclick="deckMode='neu';render()">Neu${nA?" · "+nA:""}</button>
-      <button style="flex:1" aria-pressed="${deckMode==="alt"}" onclick="deckMode='alt';render()">Aufräumen${aA?" · "+aA:""}</button>
-      <button style="flex:1" aria-pressed="${deckMode==="netz"}" onclick="deckMode='netz';render()">Aus dem Netz</button></div>`;
-  if(deckMode==="netz") return kopf+vNetz();
-  const pool=deckPool();
-  if(!pool.length)return kopf+(deckMode==="neu"
-    ? `<div class="empty"><b>Alles gesichtet</b>Du hast jeden Vorschlag bewertet. Weggewischte tauchen nach ${FRIST.spaeter} Tagen noch einmal auf, endgültig Aussortiertes findest du unter Mehr im Archiv.</div>`
-    : `<div class="empty"><b>Nichts zum Aufräumen</b>In deiner Sammlung liegt gerade keine Karteileiche. Hier landen Rezepte, die seit ${FRIST.alt} Tagen dabei sind und die ihr nie oder seit über ${FRIST.ungekocht} Tagen nicht gekocht habt.</div>`);
-  const r=pool[0],[lbl,tag]=KIND[r.k];
-  const g=zuletztGekocht(r.id);
-  const hinweis=deckMode==="neu"
-    ? `Nach rechts in die Sammlung, nach links zurückstellen. ${pool.length} Vorschläge offen.${S.spaeter[r.id]?" Dieses hattest du schon einmal weggewischt – noch einmal und es wandert ins Archiv.":""}`
-    : `Nach rechts behalten, nach links aussortieren. ${pool.length} Rezepte zur Durchsicht. ${g?"Zuletzt gekocht vor "+Math.round((Date.now()-g)/TAG)+" Tagen.":"Noch nie gekocht."}`;
-  return kopf+`<p class="note" style="margin-bottom:12px">${hinweis}</p>
-    <div class="deck"><div class="swipe" id="sw">
-      <div class="stamp stamp-y" id="sy">Merken</div><div class="stamp stamp-n" id="sn">Nein</div>
-      <div class="rec-tags" style="margin-bottom:12px"><span class="tag ${tag}">${lbl}</span><span class="tag t-neutral">${TYP[typVon(r)]}</span><span class="tag t-neutral">${r.min} Min</span>${r.src==="asana"?'<span class="tag t-sun">Eure Liste</span>':""}${r.m.includes(monat())?'<span class="tag t-sun">Saison</span>':""}${S.still&&r.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
-      <h3>${esc(r.n)}</h3><p class="why">${esc(r.why)}</p>
-      ${r.q?`<p style="margin-top:8px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:13.5px">Originalrezept öffnen</a></p>`:""}
-      <div class="ing"><b>Zutaten</b><br>${r.z.map(z=>esc(z[0])).join(" · ")}</div>
-    </div></div>
-    <div class="deck-btns"><button class="circ no" onclick="swipe(-1)" aria-label="${deckMode==="neu"?"Zurückstellen":"Aussortieren"}">${IKON.kreuz}</button>
-      <button class="circ yes" onclick="swipe(1)" aria-label="${deckMode==="neu"?"Merken":"Behalten"}">${IKON.herz}</button></div>`;
-}
-function swipe(d){
-  const p=deckPool(); if(!p.length) return;
-  const id=p[0].id, jetzt=Date.now();
-  if(deckMode==="neu"){
-    if(d>0){ mut("spaeter/"+id,null,false); mut("sammlung/"+id,jetzt); }
-    else if(S.spaeter[id]){ mut("spaeter/"+id,null,false); mut("archiv/"+id,jetzt); }   /* zweites Nein */
-    else mut("spaeter/"+id,jetzt);
-  }else{
-    if(d>0) mut("geprueft/"+id,jetzt);
-    else { mut("sammlung/"+id,null,false); mut("archiv/"+id,jetzt); }
-  }
+function aufraeumenBehalten(id){ mut("geprueft/"+id,Date.now(),false); mehrZeigen(); }
+function aufraeumenWeg(id){
+  const r=R(id);
+  mut("sammlung/"+id,null,false); mut("archiv/"+id,Date.now(),false);
+  mehrZeigen();
+  meldung("„"+(r?r.n:"Rezept")+"“ aussortiert.","Rückgängig",()=>{
+    mut("archiv/"+id,null,false); mut("sammlung/"+id,Date.now(),false); mehrZeigen();
+  });
 }
 function zurueckholen(id){mut("archiv/"+id,null,false);mut("sammlung/"+id,Date.now());}
 function nochmalZeigen(id){mut("archiv/"+id,null);}
-function deckInit(){
-  const c=document.getElementById("sw");if(!c)return;
-  let x0=null,dx=0;const sy=document.getElementById("sy"),sn=document.getElementById("sn");
-  c.addEventListener("pointerdown",e=>{x0=e.clientX;c.setPointerCapture(e.pointerId);});
-  c.addEventListener("pointermove",e=>{if(x0===null)return;dx=e.clientX-x0;
-    c.style.transform=`translateX(${dx}px) rotate(${dx/22}deg)`;sy.style.opacity=dx>40?1:0;sn.style.opacity=dx<-40?1:0;});
-  const end=()=>{if(x0===null)return;const d=dx;x0=null;dx=0;
-    if(Math.abs(d)>90){c.style.transition="transform .2s";c.style.transform=`translateX(${d>0?600:-600}px)`;setTimeout(()=>swipe(d>0?1:-1),160);}
-    else{c.style.transition="transform .18s";c.style.transform="";sy.style.opacity=0;sn.style.opacity=0;setTimeout(()=>c.style.transition="",200);}};
-  c.addEventListener("pointerup",end);c.addEventListener("pointercancel",end);
-}
 
 /* ============ Vorrat & Einkauf ============ */
 /* ---------- Neues aus den Rezeptquellen ---------- */
@@ -3810,7 +4180,7 @@ function vEinkauf(){
         const namen=fuer.map(x=>R(x)).filter(Boolean);
         return `<div class="itemrow">
         <button class="item ${i.on?"on":""}" onclick="posten('${id}',${!i.on})">
-        <span class="box">${IKON.haken}</span><span class="it-n"><span style="opacity:.85">${symbolFuer(i.n)}</span> ${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
+        <span class="box">${IKON.haken}</span><span class="it-n">${esc(i.n)}${i.ang?`<span class="pill" style="margin-left:7px;background:var(--sun-bg);color:var(--sun);border-color:var(--sun)" title="${esc(i.ang)}">Angebot</span>`:""}${i.gekauft&&!i.on?`<span class="pill" style="margin-left:7px">Nachkauf</span>`:""}</span></button>
         <button class="woher" onclick="postenWoher('${id}')" aria-label="Wofür ist das?">
           <span>${i.nach||!i.q?"nachfüllen":fmt(i.q,i.e)}</span>
           ${namen.length?`<span class="fuerwen">${namen.length===1?esc(namen[0].n.length>18?namen[0].n.slice(0,17)+"…":namen[0].n):namen.length+" Gerichte"}</span>`:""}
@@ -3921,6 +4291,7 @@ function vMehr(){
   const blogs=Object.values(S.quellen||{}).filter(q=>q.an).length||QUELLEN_START.length;
   const eigene=Object.keys(S.eigene||{}).length;
   const arch=Object.keys(S.archiv||{}).length;
+  const aufraeum=poolAlt().length;
   const b=basis();
   const zeile=(name,wert,ruf,warnung)=>`<button class="zeile" onclick="${ruf}">
     <span class="zeile-n">${name}</span>
@@ -3940,6 +4311,7 @@ function vMehr(){
       ${zeile("Angebote",prospekte?prospekte+(prospekte===1?" Prospekt":" Prospekte"):"keins","mehrOeffnen('angebote')")}
       ${zeile("Rezeptquellen",blogs+" Blogs","quellenVerwalten()")}
       ${zeile("Eigene Rezepte",eigene+" angelegt","mehrOeffnen('eigene')")}
+      ${zeile("Aufräumen",aufraeum?aufraeum+" zu sichten":"nichts offen","mehrOeffnen('aufraeumen')",!!aufraeum)}
       ${zeile("Archiv",arch?arch+" aussortiert":"leer","mehrOeffnen('archiv')")}
     </div>
 
@@ -3966,6 +4338,27 @@ const blattKopf=(titel,unter)=>`<div class="grab"></div><h2 style="font-size:20p
 const blattFuss=`<button class="btn btn-wide btn-ghost" style="margin-top:16px" onclick="mehrSchliessen()">Schließen</button>`;
 
 const MEHR_BLATT={
+  /* Aufräumen lag bis 3.7 unter „Entdecken". Dort war es fehl am Platz: Es zeigt
+     nur, was man schon hat. Hier steht es bei der übrigen Pflege – und meldet
+     sich über die Kennzahl, statt jede Woche einen Reiter zu belegen. */
+  aufraeumen(){
+    const alt=poolAlt();
+    return blattKopf("Aufräumen",
+      alt.length?`${alt.length} Rezept${alt.length===1?"":"e"} liegen seit über ${FRIST.alt} Tagen in der Sammlung, ohne dass ihr sie gekocht habt. Behalten legt sie für ${FRIST.geprueft} Tage zur Ruhe.`
+               :"In der Sammlung liegt gerade keine Karteileiche.")
+      +(alt.length?alt.map(r=>{
+        const g=zuletztGekocht(r.id);
+        const [lbl,tag]=KIND[r.k];
+        return `<div class="rec k-${r.k}"><div class="rec-b">
+          <button class="ideen-t" onclick="mehrSchliessen();detail('${r.id}')">${esc(r.n)}</button>
+          <div class="rec-m">${lbl} · ${r.min} Min · ${g?"zuletzt vor "+Math.round((Date.now()-g)/TAG)+" Tagen":"nie gekocht"}</div>
+          <div class="row-btns" style="margin-top:10px">
+            <button class="btn btn-s" onclick="aufraeumenBehalten('${r.id}')">Behalten</button>
+            <button class="btn btn-s" onclick="aufraeumenWeg('${r.id}')">Aussortieren</button>
+          </div></div></div>`;}).join("")
+        :`<p class="note">Hier landen Rezepte, die seit ${FRIST.alt} Tagen dabei sind und die ihr nie oder seit über ${FRIST.ungekocht} Tagen nicht gekocht habt.</p>`)
+      +blattFuss;
+  },
   vorrat(){
     const fehlt=Object.values(S.vorrat).filter(v=>!v.da).length;
     const gruppen=S.route.map(k=>({k,items:Object.entries(S.vorrat).filter(([,v])=>abteilungSicher(v.k)===k)})).filter(g=>g.items.length);

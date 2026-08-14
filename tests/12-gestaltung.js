@@ -99,18 +99,18 @@ t("Keine Schrift von einem fremden Server", () => {
   wahr(/-apple-system/.test(STIL), "Systemschrift fehlt");
 });
 
-t("Bedienzeichen sind Vektoren, keine Emoji", () => {
-  /* Lebensmittel-Emoji auf der Einkaufsliste sind Inhalt und ausdrücklich erlaubt –
-     sie stehen in SYMBOLE. Verboten sind Emoji als Knopfbeschriftung. */
-  const knoepfe = RUMPF.match(/aria-label="[^"]*">[^<$]*</g) || [];
-  const mitEmoji = knoepfe.filter(k => /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2700}-\u{27BF}]/u.test(k));
-  gleich(mitEmoji, [], "Emoji als Knopfbeschriftung");
+t("Es gibt überhaupt keine Emoji, nur Vektoren", () => {
+  /* Bis 3.7 trug jede Zeile der Einkaufsliste ein Lebensmittel-Emoji. Sie sahen auf
+     jedem Gerät anders aus, ließen sich nicht einfärben und trugen im Markt nichts
+     bei – der Name steht ohnehin daneben. Jetzt gilt die Regel ohne Ausnahme. */
+  const emoji = [...RUMPF].filter(c => c.codePointAt(0) > 0x1F000);
+  gleich(emoji.slice(0, 8), [], "Emoji im Markup");
   wahr(/const IKON=\{/.test(RUMPF), "Symbolsatz fehlt");
 });
 
-t("Die Lebensmittel-Emoji der Einkaufsliste bleiben erhalten", () => {
-  wahr(A.symbolFuer("Möhren").length > 0, "Möhren ohne Symbol");
-  wahr(/SYMBOLE/.test(RUMPF), "Symboltabelle fehlt");
+t("Die Einkaufszeile zeigt nur den Namen", () => {
+  wahr(!/symbolFuer/.test(RUMPF), "Symbolfunktion noch vorhanden");
+  wahr(!/const SYMBOLE=/.test(RUMPF), "Symboltabelle noch vorhanden");
 });
 
 t("Farben stehen in Variablen, nicht fest im Markup", () => {

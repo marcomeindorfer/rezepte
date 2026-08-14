@@ -81,10 +81,10 @@ t("Der Wochenvorschlag greift nicht darauf zurück", () => {
   const schnellIds = new Set(A.SCHNELL().map(r => r.id));
   gleich(geplant.filter(id => schnellIds.has(id)), [], "kein Schnellgericht vorgeschlagen");
 });
-t("Der Entdecken-Stapel zeigt sie nicht", () => {
+t("Entdecken und Aufräumen zeigen sie nicht", () => {
   frisch();
   const id = anlegen("Brot mit Käse", "");
-  wahr(A.poolNeu().every(r => r.id !== id), "nicht unter Neu");
+  wahr(A.ideenPool().every(i => i.id !== id), "nicht im Ideenstrom");
   wahr(A.poolAlt().every(r => r.id !== id), "nicht unter Aufräumen");
 });
 t("Die Resteküche schlägt sie nicht vor", () => {

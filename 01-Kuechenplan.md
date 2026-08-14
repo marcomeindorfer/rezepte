@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 3.3**, Stand 11. August 2026. Datei rund 272 KB, 3814 Zeilen, 134 Rezepte.
-Die Testreihen unter `tests/` prüfen 294 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 3.8**, Stand 14. August 2026. Datei rund 340 KB, 4503 Zeilen, 134 Rezepte
+und 48 Ideen. Die Testreihen unter `tests/` prüfen 459 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -13,6 +13,7 @@ Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 - Wochenplan mit **21 Feldern** (7 Tage × Frühstück, Mittag, Abend), für **drei Wochen im Voraus**.
 - Automatischer Wochenvorschlag nach festen Regeln.
 - Rezeptdatenbank mit 134 Rezepten, erweiterbar durch eigene, importierte und aus Blogs geholte.
+- Ideenpool mit 48 Vorschlägen, die nicht in der Sammlung stehen – der Inspirationsbereich.
 - Einkaufsliste, sortiert nach dem Laufweg durch den Aldi-Süd-Markt.
 - Aldi-Prospekte einlesen und Angebote im Vorschlag berücksichtigen.
 - Vorratshaltung, Reste-Tage, zusätzliche Gerichte außerhalb des Plans, weitere Listen (dm und Ähnliches).
@@ -52,12 +53,20 @@ Einzeldateien gebaut wurde. Diese Abschnitte findet man an ihren Kommentarköpfe
 | Komfort | Bildschirm wachhalten, Kochmodus, Einplanen-Raster, Liste teilen | `wachHalten` |
 | Quellen und PDF | pdf.js-Anbindung, Prospektauswertung, Blog-Feeds | `PDFJS_URL` |
 | Extras | Zusatzgerichte, weitere Listen, Symbole, Foto-Import | `extraSchluessel` |
+| Ideen | `THEMEN` (12 Wochenthemen) und `IDEEN` (48 Vorschläge) | `const THEMEN=` |
 | Hauptlogik | Zustand, Sync, alle Ansichten, Wochenvorschlag | `const KEY=` |
 
 Zum Ändern: In der `index.html` die Stelle per `str_replace` ersetzen. Die Datei ist groß,
 deshalb gezielt mit `grep -n` suchen statt sie ganz zu lesen.
 
 ---
+
+### Symbole
+
+`tools/icon.py` erzeugt `icon-192.png`, `icon-512.png` und `icon-512-maskable.png` neu:
+ein Topf mit Deckel und Dampf, weiß auf Kräutergrün. Die beiden „any"-Symbole haben
+abgerundete Ecken, das maskable ist randlos und hält das Motiv im inneren
+Sicherheitsbereich von 80 Prozent. Braucht Pillow, sonst nichts.
 
 ## 4. Datenmodell
 
@@ -71,6 +80,7 @@ S = {
   spaeter:   { rezeptId: zeitstempel },              // einmal weggewischt, kommt nach 30 Tagen wieder
   archiv:    { rezeptId: zeitstempel },              // zweimal weggewischt oder aussortiert
   geprueft:  { rezeptId: zeitstempel },              // im Aufräum-Stapel behalten, 90 Tage Ruhe
+  ideenWeg:  { ideeId: zeitstempel },                // weggelegte Idee, kommt nach 120 Tagen wieder
   eigene:    { rezeptId: rezeptObjekt },             // selbst angelegt, importiert oder Schnellgericht
   angebote:  { "p<datum>": {von,bis,items[],quelle,geholt} },   // ein Eintrag je Prospekt
   quellen:   { id: {n,u,an} },                       // Rezeptblogs für die Feed-Ansicht
@@ -104,8 +114,8 @@ S = {
   z: [[name, mengeProPortion, einheit, abteilung], ...],
   s: ["Schritt 1", ...],
   q: "https://…",             // optional: Originalquelle
-  src: "asana"|"eigen"|"schnell"  // "schnell" = ohne Rezept eingetragen, nicht in RZ()
-}
+  src: "asana"|"eigen"|"schnell"|"idee"  // "schnell" = ohne Rezept eingetragen, nicht in RZ()
+}                                        // "idee" = aus dem Ideenpool übernommen
 ```
 
 **Alle Mengen gelten für eine Portion** und werden beim Einplanen hochgerechnet. Das ist
@@ -142,14 +152,25 @@ Fleischgericht, landete auf der Einkaufsliste aber unter Sonstiges.
 ### Woche
 Ganz oben – nur für die laufende Woche – die **Heute-Karte**: die drei Mahlzeiten des
 heutigen Tages, jede mit einem Knopf direkt in den Kochmodus. Die Frage um 17 Uhr lautet
-nicht „wie sieht die Woche aus", sondern „was koche ich jetzt"; der Kochmodus lag dafür
-vorher drei Ebenen tief.
+nicht „wie sieht die Woche aus", sondern „was koche ich jetzt".
 
-Darunter der Umschalter für drei Wochen mit Kalenderwochen. Darüber vier Kennzahlen: Fisch, Fleisch,
-Vegetarisch, belegte Felder. Darunter Hinweise zu Protein und zum Prospekt der Woche.
-Sieben Tageskarten mit je drei Feldern, der heutige Tag hervorgehoben. Portionen pro
-Gericht einstellbar, **0 Portionen bedeutet Restetag** und erzeugt keine Einkäufe.
-Abschnitt „Zusätzlich" für Gerichte außerhalb des Plans.
+Darunter eine **Statuskarte**: belegte Felder, Fortschritt, eine Zeile mit der Mischung
+(vegetarisch / Fisch / Fleisch / Protein) und die drei Knöpfe *Woche vorschlagen*,
+*Abschließen*, *Weiteres*. Ein Hinweis steht nur dort, wenn sich daraus etwas tun lässt –
+fehlendes Protein mit dem Knopf „Snack ergänzen" daneben.
+
+Dann der Umschalter für drei Wochen und die **sieben Tageskarten, zugeklappt**. Eine Karte
+ist damit eine Zeile: Wochentag, was daraufsteht, „2 von 3". Ein Tipp klappt sie auf, dann
+stehen dort wie gewohnt die drei Mahlzeiten mit Portionswahl und Löschknopf. Was offen ist,
+merkt sich `tagOffen` – wer ein Gericht wählt, findet den Tag danach noch offen vor.
+*Alle aufklappen* schaltet alle sieben auf einmal.
+
+Vorher standen 21 Zeilen mit Portionswahl und Löschknopf zwischen der Heute-Karte und dem
+Einkaufsknopf. Was selten gebraucht wird, liegt jetzt unter **Weiteres**: Hinweise,
+zusätzliche Gerichte, „Frühstück für alle Tage übernehmen", „Zuletzt gekocht" und
+„Plan leeren". Auf der Seite selbst bleibt der Weg von *heute* zu *Einkaufsliste erstellen*.
+
+**0 Portionen bedeutet Restetag** und erzeugt keine Einkäufe.
 
 ### Rezepte
 Suchfeld, Filterreihe, Trefferliste. Karten zeigen bewusst **nur Art und Protein** –
@@ -161,14 +182,33 @@ Filter: Alle · Unter 25 Min · Darmfreundlich · Frühstück · Mittag · Abend
 Fleisch · Vegetarisch · Snacks · Desserts · Aus eurer Liste · Selbst angelegt · Alle Rezepte.
 
 ### Entdecken
-Drei Modi:
-- **Neu** – Wischstapel mit unbekannten Rezepten. Rechts merken, links zurückstellen.
-  Erstes Zurückstellen legt 30 Tage auf Eis, zweites archiviert.
-- **Aufräumen** – Rezepte aus der Sammlung, die seit 60 Tagen dabei und nie oder seit
-  120 Tagen nicht gekocht wurden. Rechts behalten (90 Tage Ruhe), links aussortieren.
-- **Aus dem Netz** – neueste Beiträge der hinterlegten Blogs, Übernahme mit einem Tipp.
+Der Inspirationsbereich. Er zeigt **nur Vorschläge, die noch nicht in der Sammlung
+stehen** – ein Rezept, das man schon hat, ist keine Entdeckung. Drei Reiter:
 
-Fristen: `FRIST = {spaeter:30, alt:60, ungekocht:120, geprueft:90}` (Tage).
+- **Ideen** – der Pool aus `IDEEN`: 48 Rezepte, die bewusst nicht Teil von `REZEPTE`
+  sind. Sie tauchen weder in der Rezeptliste noch im Wochenvorschlag auf, solange
+  niemand sie übernommen hat. Oben steht das **Thema der Woche**, darunter die Karten
+  dazu; jede mit Begründung, Zutaten und zwei Knöpfen. Der Titel öffnet die ganze Idee
+  samt Schritten.
+- **Im Angebot** – dieselben Ideen, aber nur die, deren Zutaten im Prospekt dieser
+  Woche stehen. Die Karte nennt den Treffer.
+- **Aus dem Netz** – wie bisher die neuesten Beiträge der hinterlegten Blogs.
+
+**Übernehmen** legt eine Kopie unter `S.eigene` an (`src:"idee"`) und trägt sie in die
+Sammlung ein – ab da ist es ein Rezept wie jedes andere. **Nicht mein Ding** legt sie
+für `FRIST.idee` = 120 Tage unter `S.ideenWeg` ab; danach kommt sie wieder, weil sich
+Geschmack ändert.
+
+Das **Thema wechselt mit der Kalenderwoche**: `THEMEN[(kwNummer()-1) % 12]`. Zwölf
+Themen ergeben einen Zyklus von einem Vierteljahr. Über „Anderes Thema" lässt sich
+vorgreifen; die Wahl gilt bis zum nächsten Öffnen der App.
+
+Das frühere **Aufräumen** liegt seit 3.8 unter **Mehr → Aufräumen**. Es zeigt
+Sammlungsrezepte, die seit `FRIST.alt` = 60 Tagen dabei und nie oder seit
+`FRIST.ungekocht` = 120 Tagen nicht gekocht wurden. Behalten legt sie für
+`FRIST.geprueft` = 90 Tage zur Ruhe, Aussortieren schiebt sie ins Archiv – mit
+Rücknahme. Das ist Pflege der eigenen Sammlung und gehört nicht in einen Bereich,
+der Neues zeigen soll.
 
 ### Einkauf
 Jede Zeile hat zwei Ziele: links abhaken, rechts auf die **Menge** tippen zeigt, aus
@@ -177,8 +217,10 @@ Unter dem Fortschritt steht, wie viele Zutaten der Vorrat gedeckt hat – sonst 
 man sich, warum das Olivenöl fehlt, und kauft es sicherheitshalber doch.
 
 Reiter für den Wocheneinkauf und beliebig viele eigene Listen. Kopf mit Fortschritt.
-Laufplan: nummerierte Stationen entlang der Abteilungsreihenfolge. Jede Zeile mit
-Lebensmittelsymbol, bei Treffer im Prospekt zusätzlich die Pille „Angebot".
+Laufplan: nummerierte Stationen entlang der Abteilungsreihenfolge. Jede Zeile trägt nur
+den Namen – die Lebensmittel-Emoji sind seit 3.8 raus: Sie sahen auf jedem Gerät anders
+aus, ließen sich nicht einfärben und standen ohnehin neben dem Namen, der dasselbe sagt.
+Bei einem Treffer im Prospekt kommt die Pille „Angebot" dazu.
 Knöpfe: Erledigte ausblenden, Teilen, Bildschirm anlassen, Reihenfolge anpassen.
 Eingabefeld für eigene Posten – **auch bei leerer Liste**, und diese Posten überleben
 jeden Neuaufbau.
@@ -186,7 +228,8 @@ jeden Neuaufbau.
 ### Mehr
 Seit 3.4 eine kurze Übersicht statt einer langen Rolle: Stillzeit-Modus und
 Standardportionen stehen direkt da (ein Tipp genügt), alles andere liegt hinter einer
-Zeile mit Kennzahl – Vorrat, Angebote, Rezeptquellen, eigene Rezepte, Archiv, Abgleich.
+Zeile mit Kennzahl – Vorrat, Angebote, Rezeptquellen, eigene Rezepte, **Aufräumen**,
+Archiv, Abgleich.
 Die Blätter kommen aus `MEHR_BLATT`, `mehrOeffnen(name)` öffnet, `mehrZeigen()` zeichnet
 nach einer Änderung neu, ohne das Blatt zu schließen oder die Rollposition zu verlieren.
 
