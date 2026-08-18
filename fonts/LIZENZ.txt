@@ -1,0 +1,25 @@
+Schriften in diesem Ordner
+==========================
+
+Inter
+  inter-latin.woff2, inter-latin-ext.woff2
+  Rasmus Andersson und Mitwirkende
+  https://github.com/rsms/inter
+  SIL Open Font License 1.1
+
+Instrument Serif
+  instrumentserif-latin.woff2, instrumentserif-latin-ext.woff2
+  Instrument (Rodrigo Fuenzalida, Jordan Egstad)
+  https://github.com/Instrument/instrument-serif
+  SIL Open Font License 1.1
+
+Beide Schriften dürfen frei verwendet, weitergegeben und mitgeliefert werden,
+auch in kommerziellen Projekten. Sie dürfen nur nicht für sich allein verkauft
+werden, und eine veränderte Fassung darf den Namen der Vorlage nicht tragen.
+Der vollständige Lizenztext steht unter https://openfontlicense.org
+
+Die Dateien sind die von Google Fonts ausgelieferten Teilmengen für Latein
+(inklusive Umlauten und ß) sowie Latein erweitert. Wer weitere Zeichensätze
+braucht – etwa Kyrillisch oder Griechisch –, lädt die entsprechenden woff2 aus
+derselben Quelle hierher und ergänzt in index.html einen @font-face-Block mit
+dem passenden unicode-range.
