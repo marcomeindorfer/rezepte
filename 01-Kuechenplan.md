@@ -439,8 +439,11 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 
 ---
 
-## 10. Rezepte hinzufügen: fünf Wege
+## 10. Rezepte hinzufügen: sechs Wege
 
+0. **Einwerfen** – das Feld ganz oben im Formular. Der ganze Block einer beliebigen Quelle
+   kommt hinein, roh und unsortiert; die App trennt Zutaten, Zubereitung, Dauer, Portionen
+   und Titel und legt das Ergebnis im Prüfblatt vor. Siehe Abschnitt 10a.
 1. **Entdecken** – aus den 134 mitgelieferten wischen.
 2. **Teilen aus dem Browser** – Küchenplan im Android-Teilen-Menü wählen. Das Formular
    öffnet sich vorbefüllt und holt Zutaten automatisch, wenn der Rezept-Leser hinterlegt ist.
@@ -455,6 +458,80 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 
 Beim Abruf über den Rezept-Leser wird **automatisch auf eine Portion heruntergerechnet**,
 außer bei Backwerk (`BACKWERK`-Regex: Kuchen, Torte, Brot, Muffin, Auflauf, Gratin …).
+
+---
+
+## 10a. Einwerfen: unordentliche Quellen einordnen
+
+Link und Foto setzen voraus, dass die Quelle sich benimmt. TikTok-Beschreibungen,
+Blognotizen und Abgetipptes tun das nicht. Deshalb steht am Anfang des Formulars ein Feld,
+in das der ganze Block darf. `textEinordnen()` macht daraus eine Liste aus
+`{t, art, grund}` mit `art` = `zutat`, `schritt` oder `weg`, plus `funde` mit Titel,
+Portionen und Minuten. Übernommen wird nichts ohne das Prüfblatt.
+
+Die Reihenfolge der Entscheidungen:
+
+1. **Säubern** – Bildzeichen raus, Erkennungsfehler reparieren, umgebrochene Sätze wieder
+   zusammenziehen, doppelte Zeilen entfernen.
+2. **Kopfbereich abgrenzen** – er endet an der ersten Überschrift **oder an der ersten
+   Zutatenzeile**. Vorher endete er nur an der Überschrift; bei Videobeschreibungen, deren
+   Zutaten vor der Zubereitungs-Überschrift stehen, landete damit die komplette
+   Zutatenliste im Müll. Das war der Grund, warum TikTok praktisch nie funktioniert hat.
+3. **Überschriften erkennen** – `ZUTAT_UEBER_RE` und `SCHRITT_UEBER_RE`. Sie kennen auch
+   „Ihr braucht", „Das brauchst du", „Und so geht's", „Los geht's". Eine Überschrift ist
+   das verlässlichste Signal im ganzen Text und schlägt jede Punktwertung.
+4. **Kopfdaten auswerten und verwerfen** – Zeiten werden gesammelt statt beim ersten
+   Treffer festgeschrieben: Gesamtzeit schlägt alles, sonst zählt die Summe aus
+   Vorbereitung und Kochen. `ZEIT_FREI` fängt zusätzlich „Dauert bei mir 15 Minuten" –
+   aber nur ohne Kochverb, sonst wäre „20 min köcheln lassen" die Gesamtdauer.
+5. **Müll aussortieren** – mit Begründung, die im Prüfblatt kursiv danebensteht:
+   Hashtags, Werbung, Bewertungen, Brotkrumen-Navigation, Nährwerte, Mengen-Umrechner
+   („1x 2x 3x"), Aufrufe aus sozialen Netzen, Kontonamen.
+6. **Titel wählen** – aus dem Kopfbereich, wobei Nähe zu den Zutaten mehr zählt als Länge.
+   Sonst gewinnt die Brotkrumenzeile oder der Blogname. `titelSaeubern()` nimmt dem Titel
+   Bildzeichen und angehängte Aufrufe: „CREAMY GNOCCHI 🍝 speichern nicht vergessen!!"
+   wird zu „CREAMY GNOCCHI".
+7. **Rest einordnen** – im Zweifel über `zeilenUrteil()`, das Menge, Einheit, Satzlänge,
+   Satzende, Kochverb und bekannte Zutatennamen gegeneinander abwägt.
+8. **Fließtext nachbehandeln** – gibt es danach *keine einzige* Zutat, sucht
+   `fliesstextZerlegen()` einen Satz mit „brauchst du" und trennt ab dort an Kommas und
+   „und". Nur wenn mindestens zwei Teile eine Menge tragen, sonst zerpflückt die Regel
+   jeden beliebigen Satz. Die restlichen Sätze werden zu einzelnen Schritten.
+
+### Mengen in Worten
+
+`mengeLesen()` versteht neben Ziffern auch, wie im Alltag gesprochen wird:
+Zahlwörter (`WORTZAHL`: ein bis zwölf), halbe Mengen („ein halber Bund" → 0,5) und
+unbestimmte Angaben (`VAGE_RE`: etwas, einige, ein paar, nach Belieben, je). Die
+unbestimmten tragen keine Zahl, verschwinden aber aus dem Namen – sonst stünde
+„etwas Kreuzkümmel" als Zutatenname auf der Einkaufsliste. Dazu kennt `EINH` jetzt die
+Maße, die in Videos vorkommen: Schuss, Spritzer, Schluck, Päckchen, Beutel, Flasche,
+Tube, Topf, Netz, Rispe, Knolle, Stiel, Kugel, Portion.
+
+Bei der **Einordnung** zählen Wortmengen schwächer als Ziffern und nur, wenn die Zeile
+nicht wie ein Satz endet: „Eine Stunde ruhen lassen." fängt genauso an wie „Eine Zwiebel",
+ist aber ein Schritt.
+
+### Mehrere Zutaten in einer Zeile
+
+`zutatZeileTeilen()` trennt „Salz Pfeffer Muskat" in drei Zutaten. Der Prüfstein ist die
+Abteilung: `katFuer()` liefert für echte Zutaten ein Fach und für Zusätze wie
+„festkochend", „edelsüß" oder „gehackt" nur den Sammelposten. Getrennt wird nur, wenn
+**jeder** Teil ein eigenes Fach hat, höchstens zwei Wörter lang ist und keine Menge trägt.
+Ohne Trennzeichen – also allein an Leerzeichen – braucht es zusätzlich drei Teile, sonst
+zerfiele „Feta Käse" in zwei Zutaten. Im Prüfblatt steht „aus einer Zeile getrennt"
+daneben, damit der Eingriff sichtbar bleibt.
+
+Nicht getrennt werden deshalb: `Kartoffeln festkochend`, `Petersilie, gehackt`,
+`Tomaten in Scheiben`, `Öl zum Braten`, `Rote Bete`, `200 g Salz und Pfeffer`.
+
+Geprüft wird das gegen vier echte Quellenformen in `tests/15-einwerfen.js`:
+Videobeschreibung, Blogseite, abgetippte Notiz, Fließtext aus einer Nachricht.
+
+**Was die Einordnung nicht kann:** Sie versteht den Text nicht, sie wertet Signale aus.
+Eine Zutatenzeile ohne Menge und ohne bekannten Namen („Handvoll Kräuter, was da ist")
+kann als Schritt landen. Deshalb gibt es das Prüfblatt, und deshalb ist es kein Dialog,
+den man wegklicken kann.
 
 ---
 
@@ -488,8 +565,8 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
 
 ## 12. Bekannte Grenzen
 
-- **Instagram und TikTok** liefern ohne Anmeldung keine Inhalte. Dafür bleibt
-  „Rezepttext einfügen".
+- **Instagram und TikTok** liefern ohne Anmeldung keine Inhalte. Dafür gibt es das
+  Einwurffeld: Beschreibung kopieren, hineinwerfen, Prüfblatt bestätigen.
 - **YouTube Shorts** nennen selten Zutaten in der Beschreibung.
 - **Bilder aus Google Takeout** und Prospektbilder werden nicht übernommen.
 - **Texterkennung aus Fotos** funktioniert bei gedruckten Seiten mit gutem Licht ordentlich,

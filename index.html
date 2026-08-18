@@ -73,6 +73,11 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .card{background:var(--card);border:0;border-radius:var(--r);padding:15px;box-shadow:var(--schatten)}
 @media (prefers-color-scheme:dark){.card{border:0.5px solid var(--line)}}
 .card+.card{margin-top:10px}
+/* Das Einwurffeld steht bewusst vor allen anderen Feldern: der kürzeste Weg
+   von „irgendwo kopiert" zu einem fertigen Rezept. */
+.einwurf{background:var(--sea-bg);border-radius:var(--r);padding:13px 14px;margin:12px 0 4px}
+.einwurf b{display:block;font-size:15.5px;font-weight:650}
+.einwurf textarea{background:var(--card)}
 .sect{margin:26px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 3px}
 .sect h2{font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
 .btn{background:var(--fill);border:0;box-shadow:none;border-radius:var(--r-s);padding:12px 16px;font-weight:500;font-size:16px;min-height:44px;transition:opacity .12s,transform .12s}
@@ -1175,7 +1180,12 @@ const EINH={g:"g",gr:"g",gramm:"g",kg:"kg",ml:"ml",l:"l",liter:"l",el:"EL",esslo
  prise:"Prise",prisen:"Prise",blatt:"Blatt","blätter":"Blatt",packung:"Packung",pck:"Packung",
  scheibe:"Scheibe",scheiben:"Scheibe",tasse:"Tasse",schale:"Schale",
  stange:"Stange",stangen:"Stange",kopf:"Kopf",glas:"Glas",becher:"Becher",
- zweig:"Zweig",zweige:"Zweig",handvoll:"Handvoll",msp:"Msp",wuerfel:"Würfel","würfel":"Würfel"};
+ zweig:"Zweig",zweige:"Zweig",handvoll:"Handvoll",msp:"Msp",wuerfel:"Würfel","würfel":"Würfel",
+ /* Maße, die in Notizen und Videobeschreibungen stehen, in keiner Norm aber im Alltag */
+ schuss:"Schuss",spritzer:"Spritzer",schluck:"Schluck",messerspitze:"Msp",
+ "päckchen":"Packung",paeckchen:"Packung",beutel:"Beutel",flasche:"Flasche",tube:"Tube",
+ topf:"Topf",netz:"Netz",rispe:"Rispe",knolle:"Knolle",stiel:"Stiel",stiele:"Stiel",
+ kugel:"Kugel",kugeln:"Kugel",portion:"Portion",portionen:"Portion",dosen:"Dose"};
 
 function katFuer(name){
   const idx=KAT_INDEX(), a=slug(name);
@@ -1188,9 +1198,29 @@ function katFuer(name){
    landet „½ TL Zimt“ ungeteilt als Zutatenname auf der Einkaufsliste. */
 const BRUCH={"½":.5,"⅓":1/3,"⅔":2/3,"¼":.25,"¾":.75,"⅕":.2,"⅖":.4,"⅗":.6,"⅘":.8,"⅙":1/6,"⅚":5/6,"⅛":.125,"⅜":.375,"⅝":.625,"⅞":.875};
 /* Liest „200“, „1,5“, „½“, „1 ½“, „1/2“, „1 1/2“ und „1-2“ (davon den unteren Wert) */
+/* Mengen in Worten. Im Kochbuch steht „200 g", im Video steht „eine Handvoll"
+   und in der Notiz „zwei Zwiebeln". Ohne diese Tabelle blieb die ganze Zeile
+   der Zutatenname – auf der Einkaufsliste stand dann „zwei Zwiebeln" statt
+   zweimal Zwiebel. */
+const WORTZAHL={ein:1,eine:1,einen:1,einem:1,eines:1,zwei:2,drei:3,vier:4,"fünf":5,fuenf:5,
+  sechs:6,sieben:7,acht:8,neun:9,zehn:10,elf:11,"zwölf":12,zwoelf:12,ein_halb:0.5};
+/* Unbestimmte Angaben tragen keine Zahl, gehören aber auch nicht in den Namen */
+const VAGE_RE=/^\s*(etwas|einige|ein paar|ein wenig|reichlich|nach belieben|nach bedarf|nach geschmack|je)\s+/i;
+const HALB_RE=/^\s*(ein(e|en)?\s+halbe(r|s|n)?|halbe(r|s|n)?)\s+/i;
 function mengeLesen(text){
   let rest=text, menge=0, gefunden=false;
   const weg=n=>{rest=rest.slice(n).replace(/^\s*/,"");};
+  /* „etwas Kreuzkümmel" wird zu Kreuzkümmel ohne Menge, „je 100 g" zu 100 g */
+  const vage=rest.match(VAGE_RE);
+  if(vage) rest=rest.slice(vage[0].length);
+  const halb=rest.match(HALB_RE);
+  if(halb){ menge=0.5; rest=rest.slice(halb[0].length); gefunden=true;
+    return {menge,rest,gefunden}; }
+  const wort=rest.match(/^([A-Za-zÄÖÜäöüß]+)\s+/);
+  if(wort&&WORTZAHL[wort[1].toLowerCase()]!==undefined){
+    menge=WORTZAHL[wort[1].toLowerCase()]; rest=rest.slice(wort[0].length); gefunden=true;
+    return {menge,rest,gefunden};
+  }
   const m=rest.match(/^(\d+(?:[.,]\d+)?)/);
   if(m){
     const nach=rest.slice(m[0].length);
@@ -1288,6 +1318,29 @@ function aufEinePortion(){
   formZeigen(true);
 }
 /* Ohne Worker: kompletten Rezepttext einfügen und automatisch aufteilen */
+/* ===== Einwerfen: der ganze Rezeptblock in ein Feld =====
+   Der übliche Weg führt über Link oder Foto. Beide setzen voraus, dass die
+   Quelle sich benimmt. TikTok-Beschreibungen, Blognotizen und Abgetipptes tun
+   das nicht. Deshalb steht am Anfang des Formulars ein Feld, in das der ganze
+   Block darf – roh, mit Hashtags, Werbung und Bildzeichen. Sortiert wird
+   danach, und nichts wandert ungesehen ins Rezept. */
+function einwurfFeld(){
+  /* Nur solange nichts erfasst ist – nach dem Übernehmen wäre es Ballast.
+     Wieder aufrufbar bleibt es über den Knopf „Text einwerfen". */
+  if(nf.id||nf.zText.trim()||nf.sText.trim()) return "";
+  return `<div class="einwurf">
+    <b>Rezept irgendwo kopiert?</b>
+    <p class="note" style="margin:5px 0 9px">Wirf den ganzen Block hier hinein – Videobeschreibung, Blogseite, abgetippte Notiz, egal wie unordentlich. Zutaten, Zubereitung, Dauer und Portionen werden getrennt und dir zur Kontrolle vorgelegt.</p>
+    <textarea id="nfroh" rows="4" placeholder="Ihr braucht:&#10;500 g Gnocchi&#10;200 ml Sahne&#10;&#10;Und so geht's:&#10;Gnocchi anbraten, mit Sahne ablöschen …">${esc(nf.roh||"")}</textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:8px" onclick="einwurfAuswerten()">Text einordnen</button>
+  </div>`;
+}
+function einwurfAuswerten(){
+  nfLesen();
+  const t=(nf.roh||"").trim();
+  if(t.length<12){ nf.status="Da steht noch zu wenig zum Einordnen."; formZeigen(true); return; }
+  pruefStart(t);
+}
 function textEinfuegen(){
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">Rezepttext einfügen</h2>
     <p class="note" style="margin:8px 0 12px">Kopier den Rezeptteil der Seite oder die Videobeschreibung hier hinein. Die App ordnet jede Zeile ein und zeigt dir das Ergebnis zur Kontrolle, bevor etwas übernommen wird.</p>
@@ -1344,25 +1397,47 @@ const MUELL=[
   [/(©|\ball rights\b|isbn|foto\s*:|fotos\s*:|bild\s*:|rezept von|abbildung)/i,     "Bildnachweis oder Impressum"],
   [/^(guten appetit|viel spa(ß|ss)|lass es dir schmecken|bon app)/i, "Grußformel"],
   [/^(werbung|anzeige|gesponsert)/i,                                 "Werbung"],
-  [/^(drucken|speichern|teilen|merken|kommentare?|bewertung|jetzt bewerten|zum rezept springen)\b/i, "Knopfbeschriftung der Webseite"]
+  [/^(drucken|speichern|teilen|merken|kommentare?|bewertung|jetzt bewerten|zum rezept springen)\b/i, "Knopfbeschriftung der Webseite"],
+  /* Was aus sozialen Netzen mitkommt: Hashtag-Zeilen, Aufrufe, Umrechner-Knöpfe */
+  [/^\s*#[\wÄÖÜäöüß]/,                                               "Hashtags"],
+  [/^\s*(1\s*x\s*)?2\s*x\s*3\s*x\s*$/i,                             "Mengen-Umrechner der Webseite"],
+  [/^\s*(speichern|abonnier|folgt|folge|like|kommentier|teil(t|e) das|swipe|link in bio)/i, "Aufruf aus dem sozialen Netz"],
+  [/^\s*\d+([.,]\d+)?\s*(von|\/)\s*\d+\s*(bewertung|sterne|rezension)/i, "Bewertung"],
+  [/^\s*(startseite|home|rezepte)\s*[»›>|]/i,                        "Brotkrumen-Navigation"],
+  [/[»›]\s*\w+\s*[»›]/,                                             "Brotkrumen-Navigation"]
 ];
 /* Angaben, die wir auswerten und danach nicht mehr brauchen */
 const KOPFDATEN=[
-  [/(zubereitungs|arbeits|gesamt|koch|back|gar|ruhe|wart)zeit/i, "Zeitangabe"],
+  [/(zubereitungs|vorbereitungs|arbeits|gesamt|koch|back|gar|ruhe|wart)zeit/i, "Zeitangabe"],
   [/^\s*(schwierigkeit|niveau|level)\b/i,                        "Schwierigkeitsgrad"],
   [/^\s*f(ü|ue)r\s+\d+\s*(personen|portionen|st(ü|ue)ck)/i,      "Portionsangabe"],
   [/^\s*\d+\s*(personen|portionen)\b/i,                          "Portionsangabe"],
-  [/^\s*(zutaten\s+f(ü|ue)r|ergibt)\b/i,                         "Portionsangabe"]
+  /* Blogs schreiben die Zahl gern hinter das Wort: „Portionen 4 Portionen" */
+  [/^\s*(portionen|personen|menge|ergibt)\b/i,                    "Portionsangabe"],
+  [/^\s*(zutaten\s+f(ü|ue)r)\b/i,                                "Portionsangabe"]
 ];
+/* Zeitangaben mitten im Text, wie sie in Videobeschreibungen stehen:
+   „Dauert bei mir 15 Minuten", „in 20 Minuten fertig". Nur ohne Kochverb –
+   „20 min köcheln lassen" ist ein Schritt und nicht die Gesamtdauer. */
+const ZEIT_FREI=/(dauert|fertig in|geht in|in nur|braucht nur|ready in)\D{0,14}(\d{1,3})\s*(min|minuten)/i;
 /* Wortstämme plus höchstens vier Buchstaben Endung. Ohne diese Grenze hielte
    die Erkennung „Kochkarussell“ oder „Backpapier“ für eine Handlungsanweisung. */
 const KOCHVERB=/\b(schneid|hack|w(ü|ue)rfel|raspel|reib|sch(ä|ae)l|wasch|putz|erhitz|anbrat|brat|koch|gar|d(ü|ue)nst|schmor|back|r(ü|ue)hr|verr(ü|ue)hr|vermeng|vermisch|misch|untermeng|zugeb|hinzuf(ü|ue)g|abgie(ß|ss)|abtropf|w(ü|ue)rz|abschmeck|servier|anricht|garnier|bestreu|betr(ä|ae)ufel|einweich|marinier|knet|ausroll|beleg|(ü|ue)berback|p(ü|ue)rier|karamellisier|abl(ö|oe)sch|k(ö|oe)chel|simmer|halbier|viertel|entkern|anschwitz|glasier|wend|verteil)[a-zäöüß]{0,4}\b/i;
 const EINHEIT_RE=/\b(g|gr|gramm|kg|ml|l|liter|el|essl(ö|oe)ffel|tl|teel(ö|oe)ffel|stk|st(ü|ue)ck|dose|dosen|bund|zehe|zehen|prise|prisen|blatt|bl(ä|ae)tter|packung|pck|scheibe|scheiben|tasse|glas|kopf|stange|stangen|becher|zweig|zweige|handvoll|msp|schale|w(ü|ue)rfel)\b/i;
 const MENGE_RE=/^\s*(\d+[.,]?\d*|½|¼|¾|⅓|⅔|einige|etwas|je|ca\.?\s*\d+)/i;
+/* Mengen in Worten zählen schwächer als Ziffern: „Eine Stunde ruhen lassen."
+   fängt genauso an wie „Eine Zwiebel". Unterschieden wird über den Schlusspunkt
+   – eine Zutatenzeile endet nicht wie ein Satz. */
+const WORTMENGE_RE=/^\s*(ein(e|en|em|es)?|zwei|drei|vier|f(ü|ue)nf|sechs|sieben|acht|neun|zehn|elf|zw(ö|oe)lf|halbe(r|s|n)?|ein paar|ein wenig|reichlich)\s+\S/i;
+const MENGE_ODER_WORT=z=>MENGE_RE.test(z)||WORTMENGE_RE.test(z);
 
 /* Häufige Verwechslungen der Texterkennung, nur dort angewandt, wo sie eindeutig sind */
+/* Bildzeichen tragen nie Information, die ins Rezept gehört – und sie
+   verfälschen jede Längenmessung. Deshalb fliegen sie überall raus. */
+const EMOJI=/[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{20E3}]/gu;
 function ocrReparieren(z){
   return z
+    .replace(EMOJI,"")
     .replace(/[|¦]/g," ")
     .replace(/(\d)\s*[9q]\b/g,"$1 g")            /* "250 9" ist fast immer "250 g" */
     .replace(/\b([EJ])[lI1]\b/g,"EL").replace(/\bT[lI1]\b/g,"TL")
@@ -1383,7 +1458,9 @@ function zeilenBinden(zeilen){
     const letzte=raus[raus.length-1];
     const offen=letzte&&letzte.length>25&&!/[.!?:]$/.test(letzte);
     const passt=offen&&(/^[a-zäöüß(]/.test(z)||HAENGT.test(letzte));
-    const neueZutat=MENGE_RE.test(z)||/^\d+[.)]\s/.test(z);
+    /* Ohne die Wortmengen hielt die Bindung „ein Schuss Olivenöl" für die
+       Fortsetzung der Zeile davor und klebte zwei Zutaten zusammen. */
+    const neueZutat=MENGE_ODER_WORT(z)||/^\d+[.)]\s/.test(z);
     if(passt&&!neueZutat) raus[raus.length-1]=letzte+" "+z; else raus.push(z);
   });
   return raus;
@@ -1396,6 +1473,7 @@ function zeilenUrteil(z){
     return Object.keys(idx).some(k=>k.length>4&&t.includes(k)); })();
   let zut=0, schr=0;
   if(MENGE_RE.test(z)) zut+=3;
+  if(!satzende&&WORTMENGE_RE.test(z)) zut+=2;
   if(EINHEIT_RE.test(z.slice(0,18))) zut+=2;
   if(woerter<=6) zut+=1;
   if(!satzende) zut+=1;
@@ -1409,7 +1487,90 @@ function zeilenUrteil(z){
   return {zut,schr};
 }
 /* Ergebnis: eine Liste aus {t, art, grund}. art ist "zutat", "schritt" oder "weg". */
-const UEBERSCHRIFT_RE=/^(zutaten|ingredients|einkaufsliste|du brauchst|man nehme|zubereitung|anleitung|schritte|so geht|so wird|und so|instructions|method)\b/i;
+/* Die Überschriften, an denen sich alles ausrichtet. Videobeschreibungen
+   schreiben selten „Zutaten" – dort steht „Ihr braucht" oder „Das brauchst du".
+   Fehlte die Formulierung, landeten sämtliche Zutaten im Kopfbereich und damit
+   im Müll. Genau daran ist der TikTok-Fall gescheitert. */
+const ZUTAT_UEBER_RE=/^\s*(zutaten(liste)?|ingredients|einkaufsliste|(das |was )?(du |ihr |man )?(braucht|brauchst|ben(ö|oe)tigst|ben(ö|oe)tigt)( ihr| du| man)?|man nehme|daf(ü|ue)r brauchst du)\b\s*:?\s*$/i;
+const SCHRITT_UEBER_RE=/^\s*(zubereitung|anleitung|schritte|zubereiten|ablauf|los geht.?s|(und )?so geht.?s|so wird.?s|so geht|so wird|und so|schritt f(ü|ue)r schritt|instructions|method|directions)\b\s*:?\s*$/i;
+const UEBERSCHRIFT_RE=new RegExp(ZUTAT_UEBER_RE.source+"|"+SCHRITT_UEBER_RE.source,"i");
+/* Der Titel darf Bildzeichen und angehängte Aufrufe verlieren, ohne dass die
+   ganze Zeile deshalb im Müll landet: „CREAMY GNOCCHI speichern nicht
+   vergessen!!" soll „CREAMY GNOCCHI" ergeben. */
+function titelSaeubern(z){
+  return String(z||"")
+    .replace(/\s*[|·–—-]?\s*(speichern nicht vergessen|unbedingt speichern|rezept speichern|link in bio|folgt? mir\b.*|abonniert\b.*)\s*[!.]*\s*$/i,"")
+    /* Und das nackte „speichern!!" am Ende, das in Kurzvideos überall steht.
+       Nur wenn davor noch etwas übrig bleibt – sonst hieße das Rezept nichts. */
+    .replace(/\s+(speichern|merken|abspeichern)\s*[!.]*\s*$/i,(m,w,i,ganz)=>i>2?"":m)
+    .replace(/[!?]{2,}\s*$/,"")
+    .replace(/^[\s\-–—•*·:]+|[\s\-–—•*·:]+$/g,"")
+    .replace(/\s{2,}/g," ")
+    .trim();
+}
+/* Steht alles in einem Fließtext, gibt es keine Zeile, die für sich eine Zutat
+   wäre. Dann hilft nur der Anlauf: „… brauchst du 300 g Spaghetti, 150 g
+   Pancetta, 3 Eier und Pfeffer." Ab dem Auslöser wird an Kommas und „und"
+   getrennt. Nur wenn mindestens zwei Teile eine Menge tragen – sonst zerlegt
+   die Regel jeden beliebigen Satz. */
+const BRAUCHT_RE=/(brauchst du|braucht ihr|brauchen wir|ben(ö|oe)tigst du|ben(ö|oe)tigt ihr|ihr braucht|du brauchst|man braucht|zutaten\s*:)/i;
+function fliesstextZerlegen(liste){
+  if(liste.some(x=>x.art==="zutat")) return liste;
+  const raus=[];
+  liste.forEach(x=>{
+    if(x.art!=="schritt"||!BRAUCHT_RE.test(x.t)){ raus.push(x); return; }
+    const saetze=x.t.match(/[^.!?]+[.!?]*/g)||[x.t];
+    const rest=[], gefunden=[];
+    saetze.forEach(satz=>{
+      const pos=satz.search(BRAUCHT_RE);
+      if(pos<0){ rest.push(satz.trim()); return; }
+      const nach=satz.slice(pos).replace(BRAUCHT_RE,"").replace(/^[\s:]+/,"").replace(/[.!?]\s*$/,"");
+      const teile=nach.split(/\s*,\s*|\s+und\s+|\s+sowie\s+/i).map(t=>t.trim()).filter(Boolean);
+      const mitMenge=teile.filter(t=>MENGE_RE.test(t)).length;
+      if(mitMenge>=2&&teile.every(t=>t.split(/\s+/).length<=6)){
+        teile.forEach(t=>gefunden.push(t));
+        const vor=satz.slice(0,pos).trim();
+        if(vor.length>18) rest.push(vor);
+      } else rest.push(satz.trim());
+    });
+    gefunden.forEach(t=>raus.push({t,art:"zutat",grund:""}));
+    const uebrig=rest.filter(Boolean).join(" ").trim();
+    /* Im Fließtext steckt die Zubereitung als Satzfolge in einer einzigen Zeile.
+       Hier – und nur hier, wo die Vorlage ohnehin keine Zeilen hatte – wird je
+       Satz ein Schritt daraus. */
+    if(uebrig){
+      const saetze=(uebrig.match(/[^.!?]+[.!?]*/g)||[uebrig]).map(t=>t.trim()).filter(t=>t.length>12);
+      if(gefunden.length&&saetze.length>1) saetze.forEach(t=>raus.push({...x,t}));
+      else raus.push({...x,t:uebrig});
+    }
+  });
+  return raus;
+}
+
+/* „Salz Pfeffer Muskat" ist eine Zeile und drei Zutaten. Trennen ist heikel:
+   „Kartoffeln festkochend" und „Petersilie, gehackt" dürfen gerade nicht
+   auseinanderfallen. Der Prüfstein ist die Abteilung – `katFuer` liefert für
+   echte Zutaten ein Fach und für Zusätze wie „festkochend" oder „gehackt" nur
+   den Sammelposten. Getrennt wird nur, wenn jeder Teil ein eigenes Fach hat.
+   Ohne Trennzeichen, also allein an Leerzeichen, braucht es zusätzlich drei
+   Teile – sonst zerfiele „Feta Käse" in zwei Zutaten. */
+function zutatZeileTeilen(z){
+  const roh=String(z||"").trim();
+  if(roh.length<5) return null;
+  if(mengeLesen(roh).gefunden) return null;          /* mit Menge bleibt es eine Zutat */
+  const trenner=/\s*[,;&\/]\s*|\s+und\s+|\s+sowie\s+/i;
+  let teile=roh.split(trenner).map(t=>t.trim()).filter(Boolean);
+  let mindest=2;
+  if(teile.length<2){ teile=roh.split(/\s+/); mindest=3; }
+  if(teile.length<mindest) return null;
+  const eigen=teile.every(t=>{
+    if(t.split(/\s+/).length>2) return false;
+    if(mengeLesen(t).gefunden) return false;
+    return katFuer(t)!=="so"||KAT_INDEX()[slug(t)]!==undefined;
+  });
+  return eigen?teile:null;
+}
+
 function textEinordnen(roh){
   let zeilen=String(roh||"").split(/\r?\n/).map(ocrReparieren).filter(Boolean);
   zeilen=zeilenBinden(zeilen);
@@ -1417,19 +1578,32 @@ function textEinordnen(roh){
   zeilen=zeilen.filter((z,i)=>i===0||slug(z)!==slug(zeilen[i-1]));
 
   const funde={portionen:0,minuten:0,titel:""};
-  /* Alles vor der ersten Überschrift ist Kopfbereich: Blogname, Titel, Zeitangaben.
-     Nur wenn später ein Zutaten- oder Zubereitungsteil folgt, darf er verworfen werden –
-     sonst stünden bei Texten ohne Überschriften die Zutaten dort drin. */
-  const kopfEnde=zeilen.findIndex(z=>UEBERSCHRIFT_RE.test(z));
+  /* Zeiten werden gesammelt statt beim ersten Treffer festgeschrieben: Eine
+     Gesamtzeit schlägt alles, sonst zählt die Summe aus Vorbereitung und
+     Kochen, und erst wenn beides fehlt, gilt die einzelne Angabe. */
+  const zeit={gesamt:0,teile:[],einzeln:0};
+
+  /* Eine Zeile, die für sich schon eine Zutat ist: kurze Zeile mit Menge und
+     ohne Kochverb. Sie beendet den Kopfbereich – auch ohne Überschrift. */
+  const istZutatZeile=z=>MENGE_ODER_WORT(z)&&z.split(/\s+/).length<=9&&!KOCHVERB.test(z)&&!/[.!?]$/.test(z);
+  /* Der Kopfbereich endet an der ersten Überschrift ODER an der ersten Zutat.
+     Vorher wurde alles bis zur ersten Überschrift verworfen – bei Texten, deren
+     Zutaten vor der Zubereitungs-Überschrift stehen, war damit die halbe
+     Zutatenliste weg. */
+  let kopfEnde=zeilen.findIndex(z=>UEBERSCHRIFT_RE.test(z)||istZutatZeile(z));
   const hatAbschnitte=kopfEnde>=0;
   let titelIdx=-1;
   if(hatAbschnitte){
     let best=-1;
-    zeilen.slice(0,Math.min(kopfEnde,6)).forEach((z,i)=>{
+    zeilen.slice(0,Math.min(kopfEnde,8)).forEach((z,i)=>{
       if(MENGE_RE.test(z)||KOCHVERB.test(z)) return;
-      if(z.length<5||z.length>60) return;
       if(MUELL.some(([re])=>re.test(z))||KOPFDATEN.some(([re])=>re.test(z))) return;
-      const wert=z.length+(/-/.test(z)?6:0);
+      const sauber=titelSaeubern(z);
+      if(sauber.length<5||sauber.length>70) return;
+      if(/:$/.test(z)) return;
+      /* Je näher an den Zutaten, desto eher ist es der Titel und nicht der
+         Name des Blogs – deshalb zählt die Nähe mehr als die Länge. */
+      const wert=i*10+Math.min(sauber.length,40)/10+(/-/.test(sauber)?2:0);
       if(wert>best){best=wert;titelIdx=i;}
     });
   }
@@ -1437,19 +1611,30 @@ function textEinordnen(roh){
   let modus=null;
   zeilen.forEach((z,i)=>{
     /* Abschnittsüberschriften sind das verlässlichste Signal im ganzen Text */
-    if(/^(zutaten|ingredients|einkaufsliste|du brauchst|man nehme)\b\s*:?\s*$/i.test(z)){modus="zutat";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
-    if(/^(zubereitung|anleitung|schritte|so geht|so wird|und so|instructions|method)\b/i.test(z)){modus="schritt";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
+    if(ZUTAT_UEBER_RE.test(z)){modus="zutat";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
+    if(SCHRITT_UEBER_RE.test(z)){modus="schritt";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
     if(/^(tipp|hinweis|variante|notiz|quelle|aufbewahrung|meal prep|n(ä|ae)hrwerte)\b/i.test(z)){modus="weg";liste.push({t:z,art:"weg",grund:"Überschrift"});return;}
     if(/^f(ü|ue)r (die|den|das)\b/i.test(z)&&z.length<45){modus="zutat";liste.push({t:z,art:"weg",grund:"Zwischenüberschrift"});return;}
 
     for(const [re,grund] of KOPFDATEN){
       if(re.test(z)){
-        const mp=z.match(/(\d+)\s*(personen|portionen|st(ü|ue)ck)/i); if(mp&&!funde.portionen) funde.portionen=+mp[1];
-        const mz=z.match(/(\d+)\s*(min|minuten)/i); if(mz&&!funde.minuten) funde.minuten=+mz[1];
-        const ms=z.match(/(\d+)\s*(std|stunden?|h)\b/i); if(ms&&!funde.minuten) funde.minuten=+ms[1]*60;
+        const mp=z.match(/(\d+)\s*(personen|portionen|st(ü|ue)ck)/i)||z.match(/(?:portionen|personen)\D{0,3}(\d+)/i);
+        if(mp&&!funde.portionen) funde.portionen=+mp[1];
+        const mz=z.match(/(\d+)\s*(min|minuten)/i);
+        const ms=z.match(/(\d+)\s*(std|stunden?|h)\b/i);
+        const minuten=mz?+mz[1]:(ms?+ms[1]*60:0);
+        if(minuten){
+          if(/gesamtzeit/i.test(z)) zeit.gesamt=minuten;
+          else if(/(zubereitungs|vorbereitungs|arbeits|koch|back|gar)zeit/i.test(z)) zeit.teile.push(minuten);
+          else if(!zeit.einzeln) zeit.einzeln=minuten;
+        }
         liste.push({t:z,art:"weg",grund}); return;
       }
     }
+    /* „Dauert bei mir 15 Minuten" – die Angabe aus Videobeschreibungen */
+    const zf=!KOCHVERB.test(z)&&z.length<60&&z.match(ZEIT_FREI);
+    if(zf){ if(!zeit.einzeln) zeit.einzeln=+zf[2]; liste.push({t:z,art:"weg",grund:"Zeitangabe"}); return; }
+
     let raus=null;
     for(const [re,grund] of MUELL) if(re.test(z)){raus=grund;break;}
     /* Sehr kurze Bruchstücke ohne Menge sind fast immer Erkennungsfehler */
@@ -1458,12 +1643,12 @@ function textEinordnen(roh){
     if(raus){liste.push({t:z,art:"weg",grund:raus});return;}
 
     if(hatAbschnitte&&i<kopfEnde){
-      if(i===titelIdx){ funde.titel=z; liste.push({t:z,art:"weg",grund:"Titel"}); return; }
+      if(i===titelIdx){ funde.titel=titelSaeubern(z); liste.push({t:z,art:"weg",grund:"Titel"}); return; }
       liste.push({t:z,art:"weg",grund:"Kopfzeile"}); return;
     }
     /* Ohne Überschriften: die erste Zeile ist der Titel, wenn direkt danach eine Menge folgt */
     if(!hatAbschnitte&&i===0&&!MENGE_RE.test(z)&&!KOCHVERB.test(z)&&z.length<60&&MENGE_RE.test(zeilen[1]||"")){
-      funde.titel=z; liste.push({t:z,art:"weg",grund:"Titel"}); return;
+      funde.titel=titelSaeubern(z); liste.push({t:z,art:"weg",grund:"Titel"}); return;
     }
     if(modus==="weg"){liste.push({t:z,art:"weg",grund:"steht unter Tipps"});return;}
     if(modus==="zutat"&&!/^\d+[.)]\s/.test(z)){liste.push({t:z,art:"zutat",grund:""});return;}
@@ -1472,7 +1657,16 @@ function textEinordnen(roh){
     const u=zeilenUrteil(z);
     liste.push({t:z,art:u.schr>u.zut?"schritt":"zutat",grund:""});
   });
-  return {liste,funde};
+  funde.minuten=zeit.gesamt||zeit.teile.reduce((a,b)=>a+b,0)||zeit.einzeln;
+  /* Zum Schluss die Sammelzeilen auftrennen. Im Prüfblatt steht der Grund
+     daneben, damit sichtbar bleibt, dass hier etwas geschehen ist. */
+  const fertig=[];
+  fliesstextZerlegen(liste).forEach(x=>{
+    const teile=x.art==="zutat"?zutatZeileTeilen(x.t):null;
+    if(teile) teile.forEach(t=>fertig.push({t,art:"zutat",grund:"aus einer Zeile getrennt"}));
+    else fertig.push(x);
+  });
+  return {liste:fertig,funde};
 }
 
 /* ===== Prüfblatt: nichts wird ungesehen übernommen ===== */
@@ -1500,6 +1694,8 @@ function pruefBlatt(){
     return `<div class="sect"><h2>${titel}</h2><span class="zahl">${eintraege.length}</span></div>
       <div class="card" style="padding:4px 0;margin-bottom:12px">${eintraege.map(([x,i])=>zeile(x,i)).join("")}</div>`;
   };
+  /* „1 Schritte" liest sich wie ein Fehler und ist einer */
+  const mz=(n,ein,viele)=>n+" "+(n===1?ein:viele);
   const f=pruef.funde;
   const gefunden=[f.titel?`Titel „${f.titel}“`:"",f.portionen?`${f.portionen} Portionen`:"",f.minuten?`${f.minuten} Minuten`:""].filter(Boolean);
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">Erkannten Text prüfen</h2>
@@ -1509,7 +1705,7 @@ function pruefBlatt(){
     <button class="btn btn-s" onclick="pruefWegZeigen()">${pruef.zeigeWeg?"Aussortiertes ausblenden":`Aussortiertes anzeigen (${anzahl("weg")})`}</button>
     ${pruef.zeigeWeg?`<p class="note" style="margin:10px 0 6px">Diese Zeilen bleiben draußen. Kursiv steht der Grund.</p>
       <div class="card" style="padding:4px 0;margin-bottom:12px">${z.map((x,i)=>[x,i]).filter(([x])=>x.art==="weg").map(([x,i])=>zeile(x,i)).join("")}</div>`:""}
-    <button class="btn btn-primary btn-wide" style="margin-top:12px" onclick="pruefUebernehmen()">${anzahl("zutat")} Zutaten und ${anzahl("schritt")} Schritte übernehmen</button>
+    <button class="btn btn-primary btn-wide" style="margin-top:12px" onclick="pruefUebernehmen()">${mz(anzahl("zutat"),"Zutat","Zutaten")} und ${mz(anzahl("schritt"),"Schritt","Schritte")} übernehmen</button>
     <button class="btn btn-wide" style="margin-top:6px" onclick="pruefRohtext()">Text von Hand nachbessern</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="formZeigen()">Abbrechen</button>`, true);
 }
@@ -1533,7 +1729,7 @@ function pruefUebernehmen(){
   if(f.minuten){ nf.min=f.minuten; nf.minAuto=false; }
   if(f.portionen>1) nf.port=f.portionen;
   const unklar=parseZutaten(nf.zText).filter(x=>x[3]==="so").length;
-  nf.status=zut.length+" Zutaten und "+schr.length+" Schritte übernommen."
+  nf.status=zut.length+(zut.length===1?" Zutat":" Zutaten")+" und "+schr.length+(schr.length===1?" Schritt":" Schritte")+" übernommen."
     +(f.portionen>1?" Die Mengen gelten laut Vorlage für "+f.portionen+" Portionen – der Knopf oben rechnet sie auf eine herunter.":"")
     +(unklar?" "+unklar+" Zutat"+(unklar>1?"en":"")+" ohne Abteilung, bitte prüfen.":"");
   pruef=null;
@@ -1644,7 +1840,7 @@ function schaetzungAuffrischen(){
 /* ===== Formular ===== */
 let nf=null;
 function neuesRezept(vorgabe){
-  nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",
+  nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",roh:"",
       pAuto:true,minAuto:true,...(vorgabe||{})};
   formZeigen();
 }
@@ -1652,7 +1848,7 @@ function rezeptBearbeiten(id){
   const r=R(id); if(!r) return;
   nf={id,n:r.n,q:r.q||"",k:r.k,kFest:!!r.kFest,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
       zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
-      sText:(r.s||[]).join("\n"),port:1,status:"",pAuto:false,minAuto:false};
+      sText:(r.s||[]).join("\n"),port:1,status:"",roh:"",pAuto:false,minAuto:false};
   formZeigen();
 }
 function nfLesen(){
@@ -1663,6 +1859,7 @@ function nfLesen(){
   if(feld("nfmin")){ const m=+g("nfmin")||0; if(m&&m!==nf.min) nf.minAuto=false; if(m) nf.min=m; }
   if(feld("nfp")){ const p=+g("nfp"); if(p!==nf.p&&g("nfp")!=="") nf.pAuto=false; if(g("nfp")!=="") nf.p=p; }
   nf.zText=g("nfz"); nf.sText=g("nfs");
+  if(document.getElementById("nfroh")) nf.roh=g("nfroh");
   schaetzungAuffrischen();
 }
 function nfSet(feld,wert){
@@ -1678,13 +1875,14 @@ function formZeigen(behalten){
   const zut=parseZutaten(nf.zText), unklar=zut.filter(z=>z[3]==="so").length;
   openSheet(`<div class="grab"></div>
     <h2 style="font-size:20px">${nf.id?"Rezept bearbeiten":"Eigenes Rezept"}</h2>
+    ${einwurfFeld()}
     <label class="fl" for="nfn">Name</label>
     <input type="text" id="nfn" value="${esc(nf.n)}" placeholder="Auberginen-Pasta">
     <label class="fl" for="nfq">Link zum Originalrezept (optional)</label>
     <input type="text" id="nfq" value="${esc(nf.q)}" placeholder="https://...">
     <div class="row-btns" style="margin-top:8px">
       <button class="btn btn-s${cfg.leser?" btn-primary":""}" onclick="ausLinkHolen()">Aus Link holen</button>
-      <button class="btn btn-s" onclick="textEinfuegen()">Rezepttext einfügen</button>
+      <button class="btn btn-s" onclick="textEinfuegen()">Text einwerfen</button>
       <button class="btn btn-s" onclick="fotoAufnehmen()">Foto aufnehmen</button>
       <button class="btn btn-s" onclick="fotoWaehlen()">Bild auswählen</button>
       ${nf.port>1?`<button class="btn btn-s" onclick="aufEinePortion()">Von ${nf.port} auf 1 Portion rechnen</button>`:""}
