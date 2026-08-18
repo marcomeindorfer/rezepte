@@ -1,4 +1,4 @@
-/* Testumgebung für Marco's brain.
+/* Testumgebung für Küchenplan.
    Lädt den <script>-Block aus index.html in eine nachgebaute Browser-Umgebung.
    Alle Bezeichner der obersten Ebene werden anschließend unter globalThis.A
    erreichbar gemacht – als Getter/Setter, damit auch veränderliche Werte
@@ -42,16 +42,8 @@ function neuesElement(tag) {
     click() {}, focus() {}, blur() {}, select() {}, scrollIntoView() {},
     querySelector: () => null, querySelectorAll: () => [],
     closest: () => null, remove() {}, contains: () => false,
-    parentNode: null, parentElement: null, nextSibling: null, previousSibling: null,
     getBoundingClientRect: () => ({ top: 0, left: 0, width: 300, height: 40, bottom: 40, right: 300 })
   };
-  /* Ein Elternknoten mit denselben Fähigkeiten – Handler wie
-     „this.parentNode.querySelectorAll(…)" laufen sonst ins Leere. */
-  el.parentNode = { querySelectorAll: () => [], querySelector: () => null,
-    appendChild(k) { return k; }, removeChild(k) { return k; },
-    setAttribute() {}, getAttribute: () => null, children: [], style: {},
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false } };
-  el.parentElement = el.parentNode;
   return el;
 }
 var document = {

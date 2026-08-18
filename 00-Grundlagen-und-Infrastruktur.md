@@ -180,67 +180,37 @@ Die Liste der gemischten Felder wird **automatisch aus `leer()` abgeleitet**
 Eine handgepflegte Liste hatte `listen`, `extra`, `quellen` und `angebote` vergessen, die
 dadurch bei jedem Abgleich auf leer zurückgesetzt wurden.
 
-### Die Warteschlange (überarbeitet)
+### Die Warteschlange (seit Küchenplan 3.1 überarbeitet)
 
-Jede Änderung geht durch `einreihen()` in die Warteschlange und von dort der Reihe nach
-über `flush()` zur Datenbank. Drei Eigenschaften, die vorher fehlten und je einen echten
-Datenverlust verursacht haben:
+Jede Änderung geht durch `einreihen()` in die Warteschlange und von dort der Reihe
+nach über `flush()` zur Datenbank. Drei Eigenschaften, die vorher fehlten und je
+einen echten Datenverlust verursacht haben:
 
-- **Ein Eintrag verlässt die Schlange erst nach bestätigtem Erfolg.** Vorher nahm `flush()`
-  die ganze Schlange heraus; brach die Verbindung beim zweiten Eintrag ab, waren alle
-  folgenden ersatzlos weg.
-- **Je Pfad wartet nur der jüngste Stand.** Vorher stauten sich hunderte überholte Fassungen
-  desselben Pfades, bis der Deckel bei 500 die ältesten verwarf – womöglich noch ungesendete
-  andere Pfade.
-- **Dauerhafte Fehler werden erkannt und gemeldet.** Bei 401/403 (Regeln) oder 404 (falsche
-  URL) hört die App auf zu senden und schreibt den Grund im Klartext unter „Mehr".
-
-### Zeitstempel bei jeder Änderung
-
-Beim Zusammenführen entscheidet der Zeitstempel, welche Fassung gewinnt. Wer nur ein
-einzelnes Feld schreibt, ohne einen zu hinterlassen, macht seine Änderung angreifbar: Die
-alte Fassung kann durch ein anderes Feld (etwa `fertig`) den jüngeren Stempel tragen und
-gewinnen. Deshalb führt **jede** Änderung einen reinen Abgleichsstempel `ts` mit, und
-`stempel()` nimmt den **jüngsten** aller Zeitstempel statt des erstbesten.
+- **Ein Eintrag verlässt die Schlange erst nach bestätigtem Erfolg.** Vorher nahm
+  `flush()` die ganze Schlange heraus und arbeitete sie ab; brach die Verbindung
+  beim zweiten Eintrag ab, waren alle folgenden ersatzlos weg.
+- **Je Pfad wartet nur der jüngste Stand.** Vorher stauten sich beim Abhaken
+  hunderte überholte Fassungen desselben Pfades, bis der Deckel bei 500 die
+  ältesten – und damit womöglich noch ungesendete andere Pfade – verwarf.
+- **Dauerhafte Fehler werden erkannt und gemeldet.** Antwortet die Datenbank mit
+  401/403 (Regeln) oder 404 (falsche URL), hört die App auf zu senden und schreibt
+  den Grund im Klartext unter „Mehr“. Vorher lief sie stumm weiter.
 
 ### Selbstheilung
 
 - Bricht die Verbindung ab, wird mit wachsendem Abstand neu versucht, gedeckelt bei
   30 Sekunden – außer bei einem dauerhaften Fehler, da hilft Wiederholen nicht.
 - Alle 30 Sekunden und beim Zurückkehren aus dem Hintergrund prüft `syncPruefen()`.
-- Ereignisse aus der Leitung werden abgesichert gelesen: ein einzelnes kaputtes `put`
-  darf die Verbindung nicht lahmlegen.
+- Ereignisse aus der Leitung werden abgesichert gelesen: ein einzelnes kaputtes
+  `put` darf die Verbindung nicht lahmlegen.
 - Statuswerte: `lokal`, `verbindet`, `live`, `wartet`, `getrennt`, `verweigert`, `fehlt`.
 
-### Grabsteine: gelöscht bleibt gelöscht
+### Bekannte Grenze
 
-Früher konnten Löschungen zurückkehren. Löschte man auf Gerät A etwas, während B offline
-war, brachte B es beim Verbinden zurück – B wusste nur „ich habe hier etwas, das drüben
-fehlt", und eine Abwesenheit kann gegen einen vorhandenen Eintrag nichts ausrichten. Genau
-so ist eine gelöschte Notiz mehrfach wieder aufgetaucht.
-
-Seitdem hinterlässt jedes Löschen eine Notiz über sich selbst, in `S.tot`:
-
-```
-tot: { "notizen:nab12cd": 1755500000000 }     Kennung mit Doppelpunkt, Zeitpunkt
-```
-
-- Der Schlüssel trägt statt `/` einen `:`, weil Firebase-Pfade sonst eine Ebene tiefer gingen.
-- Beim Zusammenführen fällt jeder Eintrag heraus, dessen Grabstein **echt jünger** ist als
-  sein jüngster Zeitstempel. Bei Gleichstand bleibt der Eintrag: fälschlich behalten ist der
-  harmlosere der beiden Irrtümer.
-- Ohne Grabstein wird nichts gelöscht – Einträge aus alten Fassungen tragen gar keinen
-  Zeitstempel, sonst wären sie alle betroffen.
-- Wird derselbe Eintrag wirklich wieder angelegt („Rückgängig"), bekommt er einen frischen
-  Stempel, ist damit jünger als der Grabstein, und der Grabstein wird gelöst und mitgeteilt.
-- Kommt trotzdem ein gelöschter Eintrag über die Leitung, wird er nicht aufgenommen, sondern
-  die Löschung geht noch einmal an die Gegenseite.
-- Nach **90 Tagen** räumt `totAufraeumen()` den Grabstein weg. Bis dahin hat ihn jedes Gerät
-  gesehen; der Datenbestand wächst also nicht dauerhaft.
-
-Wichtig für neuen Code: **Nie eine ganze Sammlung überschreiben, um darin zu löschen.**
-`mut("aufgaben", restOhneEinige)` erzeugt keinen Grabstein und überschreibt nebenbei alles,
-was das andere Gerät gerade angelegt hat. Einzeln löschen, dann stimmt beides.
+**Löschungen können zurückkehren.** Löschst du auf Gerät A etwas, während B offline ist,
+bringt B es beim Verbinden zurück – B weiß nur „ich habe hier etwas, das drüben fehlt".
+Die Alternative wären Grabsteine, die den Datenbestand dauerhaft aufblähen. Bewusste
+Entscheidung: Eine wiederauftauchende Aufgabe ist ärgerlich, eine verschwundene wäre schlimmer.
 
 ---
 
@@ -302,42 +272,59 @@ Das Attribut zwingt das Gerät, sofort die Kamera zu öffnen. Wer aus der Galeri
 kommt nicht heran. **Lösung:** Attribut weglassen, dann bietet das System Kamera, Galerie
 und Dateien an.
 
+### Bruchzeichen in Rezeptmengen
+
+`½ TL Zimt` lief durch den Zutatenparser, ohne dass eine Zahl erkannt wurde – die
+ganze Zeile landete als Zutatenname auf der Einkaufsliste. Dasselbe bei `1 ½`,
+`1/2` und `1-2`. **Lösung:** `mengeLesen()` versteht Bruchzeichen, Bruchschreibweise
+mit Schrägstrich, gemischte Brüche und Bereichsangaben (davon den unteren Wert).
+
+### CSS-Variablen, die es nicht gibt, fallen lautlos aus
+
+`var(--gold)` war an zwei Stellen im Einsatz, aber nirgends definiert – die
+„Angebot"-Pille in der Einkaufsliste verlor dadurch ihre Farbe, ohne dass etwas
+kaputt aussah. **Lösung:** korrekt auf `--sun` gezeigt, plus eine Prüfung, die
+jede benutzte Variable gegen die definierten abgleicht.
+
+### Deutsche Beugung in Wortlisten
+
+Die Sperrliste für Angebotswörter pflegte Paare von Hand: „fein"/„feine",
+„deutscher"/„deutsche" – und übersah „frische". **Lösung:** Vor dem Vergleich die
+Adjektivendung abschneiden (`angebotStamm()`), statt jede Form aufzuzählen.
+
 ### Die Suche nach oben durch `parentNode` endet im Nichts
 
 Beim Ziehen und Ablegen lief die Suche nach der Zeile bis zum `document`, das kein
 `getAttribute` besitzt. **Lösung:** Existenz der Methode prüfen und Tiefe begrenzen.
 
-### Ein Neuzeichnen mitten im Ziehen tauscht das Element unter dem Finger
-
-`render()` ersetzt `#view` vollständig. Läuft es während eines Zugs – weil eine Meldung
-ausläuft, das andere Gerät etwas schickt oder eine Minute vergeht –, hängt der Zug an einem
-Element, das nicht mehr im Dokument steht: Er lässt sich nicht mehr abschließen und
-hinterlässt Klassen an Zeilen, die es nicht mehr gibt. **Lösung:** `dndSperre` setzt
-`render()` für die Dauer des Zugs aus und merkt sich das Versäumte in `dndNachholen`.
-
-### Zwei Stellen, die denselben Namen ausrechnen, driften auseinander
-
-Der Griff einer Notiz nennt den Kasten, in dem gezogen wird. Die Kartenfunktion rechnete
-diesen Namen selbst noch einmal aus – und kam bei „Eigene Reihenfolge" auf `nbox_heute`,
-während die Liste dort ungruppiert in `nbox` steht. Der Griff zeigte ins Leere, Ziehen tat
-nichts mehr, und zwar genau ab dem ersten erfolgreichen Zug, weil der die Sortierung
-umstellt. **Lösung:** Der Kasten wird übergeben, nicht zweimal hergeleitet.
-
 ---
 
 ## 7. Wie getestet wird
 
-Getestet wird mit einem **nachgebauten Browser**: `localStorage`, `document.getElementById`,
-`EventSource` und `fetch` werden durch Attrappen ersetzt, dann wird der Skriptteil der
-`index.html` ausgewertet. Ausgeführt wird das mit **JavaScriptCore**, das auf jedem Mac unter
-`/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc` liegt – es muss
-nichts installiert werden. Aufruf: `./tests/run.sh`.
+Es gibt keinen Browser in der Entwicklungsumgebung. Getestet wird mit einem
+**nachgebauten Browser**: `localStorage`, `document.getElementById`, `EventSource` und
+`fetch` werden durch Attrappen ersetzt, dann wird der Skriptteil der `index.html`
+ausgewertet.
 
-**Der nachgebaute Browser ersetzt den echten nicht.** JavaScriptCore hat eine ungültige
-Zeichenklasse in einem regulären Ausdruck anstandslos geschluckt, während Chrome die ganze
-Datei mit einem `SyntaxError` verwarf – die App startete dort überhaupt nicht mehr, obwohl
-alle Prüfungen grün waren. Seitdem prüft eine Testreihe zusätzlich, dass keine wörtlichen
-Steuerzeichen im Quelltext stehen, und am Ende wird die App einmal im Browser geöffnet.
+Ausgeführt wird das mit **JavaScriptCore**, das auf jedem Mac unter
+`/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc` liegt –
+es muss nichts installiert werden, Node ist nicht nötig. Im Küchenplan liegen die
+Reihen unter `tests/`:
+
+```sh
+./tests/run.sh              # alle Reihen, aktuell 214 Prüfungen
+./tests/run.sh 02           # nur eine Reihe
+LAEUFE=500 ./tests/run.sh   # mehr Durchläufe für den Wochenvorschlag
+```
+
+Zwei Dinge, die sich in der Testumgebung selbst gerächt haben und dort jetzt
+laut scheitern statt still falsch zu messen:
+
+- `let a=1, b=2` deklariert **zwei** Namen. Wer beim Einsammeln der Bezeichner nur
+  den ersten nimmt, misst später an einer Attrappe statt an der echten Variablen –
+  die Warteschlange sah dadurch scheinbar leer aus, obwohl sie volllief.
+- Heißt eine Hilfsvariable des Tests wie eine Funktion der App (`quellen`),
+  überschreibt die App sie beim Laden. Die Testumgebung prüft das jetzt und bricht ab.
 
 Bewährt haben sich vier Arten von Prüfungen:
 
@@ -371,10 +358,6 @@ Geschwindigkeit auf dem Gerät.
   kurze Rückfrage.
 - **Ehrliche Leermeldungen.** Wenn nichts gefunden wurde, steht das da, samt Grund – statt
   ersatzweise etwas Falsches anzuzeigen.
-- **Mitgelieferte Schriften.** Inter und Instrument Serif liegen als woff2 im Ordner
-  `fonts` und stehen im Service Worker, werden also mitinstalliert. Kein Aufruf nach außen,
-  offline vollständig da, auf jedem Gerät dasselbe Bild. Beide unter der SIL Open Font
-  License, siehe `fonts/LIZENZ.txt`. Wer die Dateien vergisst hochzuladen, bekommt die
-  Systemschrift – die App bleibt benutzbar, sieht aber anders aus.
+- **Systemschriften.** Keine Webfonts, weil sie offline fehlen würden.
 - **Dunkler Modus** über `prefers-color-scheme` in beiden Apps.
 - **Farben** über CSS-Variablen, nie fest im Markup.

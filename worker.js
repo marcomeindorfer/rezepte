@@ -37,11 +37,13 @@ export default {
       if (!q) return json({ fehler: "Kein url-Parameter angegeben." }, 400);
       const adr = adressePruefen(q);
       if (adr.fehler) return json({ fehler: adr.fehler }, 400);
-      return json(await feed(adr.url));
+      /* archiv=1 sucht zusätzlich die Sitemap ab – dort stehen auch Beiträge,
+         die längst aus dem Feed gefallen sind. */
+      return json(await feed(adr.url, anfrage.searchParams.get("archiv") === "1"));
     }
 
     const ziel = anfrage.searchParams.get("url");
-    if (!ziel) return json({ status: "Der Rezept-Leser läuft.", routen: ["/?url=…", "/angebote?tage=14", "/feed?url=…"] });
+    if (!ziel) return json({ status: "Der Rezept-Leser läuft.", routen: ["/?url=…", "/angebote?tage=14", "/feed?url=…&archiv=1"] });
 
     const geprueft = adressePruefen(ziel);
     if (geprueft.fehler) return json({ fehler: geprueft.fehler }, 400);
@@ -247,24 +249,134 @@ function feedZerlegen(xml) {
     };
   }).filter(e => e.link);
 }
-async function feed(adresse) {
+async function feed(adresse, mitArchiv) {
   const roh = adresse.toString().replace(/\/$/, "");
   /* Viele Blogs geben unter der Startseite HTML zurück und den Feed erst unter /feed */
   const kandidaten = [adresse.toString(), roh + "/feed", roh + "/feed/", roh + "/rss", roh + "/atom.xml"];
-  let letzterFehler = "";
+  let letzterFehler = "", ausFeed = [], quelle = "";
   for (const k of kandidaten) {
     try {
       const res = await fetch(k, { headers: { ...UA, Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8" }, cf: { cacheTtl: 1800 } });
       if (!res.ok) { letzterFehler = "Fehler " + res.status; continue; }
       const xml = (await res.text()).slice(0, MAX_ZEICHEN);
       const eintraege = feedZerlegen(xml);
-      if (eintraege.length) return { eintraege: eintraege.slice(0, 30), quelle: k };
+      if (eintraege.length) { ausFeed = eintraege.slice(0, 40).map(e => ({ ...e, art: "neu" })); quelle = k; break; }
       /* HTML statt Feed: den verlinkten Feed suchen und einmal nachfassen */
       const verweis = xml.match(/<link[^>]+type="application\/(?:rss|atom)\+xml"[^>]*href="([^"]+)"/i);
       if (verweis && !kandidaten.includes(verweis[1])) kandidaten.push(new URL(verweis[1], k).toString());
     } catch (e) { letzterFehler = "nicht erreichbar"; }
   }
-  return { eintraege: [], fehler: "Unter dieser Adresse war kein Rezept-Feed zu finden" + (letzterFehler ? " (" + letzterFehler + ")" : "") + "." };
+
+  let ausArchiv = [];
+  if (mitArchiv) {
+    try { ausArchiv = await archiv(adresse); } catch (e) { ausArchiv = []; }
+  }
+  /* Was schon im Feed steht, muss nicht zweimal kommen */
+  const bekannt = new Set(ausFeed.map(e => norm(e.link)));
+  ausArchiv = ausArchiv.filter(e => !bekannt.has(norm(e.link)));
+
+  const alle = ausFeed.concat(ausArchiv);
+  if (!alle.length) {
+    return { eintraege: [], fehler: "Unter dieser Adresse war weder ein Rezept-Feed noch eine lesbare Sitemap zu finden" + (letzterFehler ? " (" + letzterFehler + ")" : "") + "." };
+  }
+  return { eintraege: alle, quelle: quelle || adresse.toString(), neu: ausFeed.length, archiv: ausArchiv.length };
+}
+const norm = u => String(u || "").replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+
+/* ---------- Archiv über die Sitemap ----------
+   Der Feed einer Seite reicht meist zwei bis drei Monate zurück. Alles davor ist
+   für den Leser unsichtbar, obwohl es genau das ist, was man noch nicht kennt.
+   Sitemaps führen dagegen jeden Beitrag – deshalb der zweite Weg. */
+const SITEMAP_STD = ["/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml", "/sitemap-index.xml", "/post-sitemap.xml"];
+const MAX_SITEMAPS = 4;        /* Obergrenze, damit ein Aufruf nicht ausufert */
+const MAX_ARCHIV = 400;
+
+async function archiv(adresse) {
+  const basis = adresse.origin || (adresse.protocol + "//" + adresse.host);
+  const gesehen = new Set();
+  let offen = [];
+
+  /* robots.txt nennt die Sitemap oft selbst und spart das Raten */
+  try {
+    const res = await fetch(basis + "/robots.txt", { headers: UA, cf: { cacheTtl: 86400 } });
+    if (res.ok) {
+      const txt = (await res.text()).slice(0, 20000);
+      for (const m of txt.matchAll(/^\s*sitemap:\s*(\S+)/gim)) offen.push(m[1]);
+    }
+  } catch (e) { /* ohne robots.txt wird geraten */ }
+  if (!offen.length) offen = SITEMAP_STD.map(p => basis + p);
+
+  const eintraege = [];
+  let geholt = 0;
+  while (offen.length && geholt < MAX_SITEMAPS && eintraege.length < MAX_ARCHIV) {
+    const url = offen.shift();
+    if (!url || gesehen.has(url)) continue;
+    gesehen.add(url);
+    let xml;
+    try {
+      const res = await fetch(url, { headers: UA, cf: { cacheTtl: 86400 } });
+      if (!res.ok) continue;
+      geholt++;
+      xml = (await res.text()).slice(0, MAX_ZEICHEN);
+    } catch (e) { continue; }
+
+    if (/<sitemapindex/i.test(xml)) {
+      /* Ein Index verweist auf Unterkarten. Die mit Beiträgen zuerst –
+         Seiten-, Kategorie- und Bilderkarten tragen keine Rezepte. */
+      const kinder = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]);
+      const wichtig = kinder.filter(k => /post|beitrag|rezept|recipe|article/i.test(k));
+      const rest = kinder.filter(k => !wichtig.includes(k) && !/image|bild|page|seite|category|kategorie|tag|author/i.test(k));
+      offen = wichtig.concat(rest, offen);
+      continue;
+    }
+    for (const block of xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+      const loc = (block[1].match(/<loc>\s*([^<\s]+)\s*<\/loc>/i) || [])[1];
+      if (!loc || !rezeptVerdacht(loc)) continue;
+      const mod = (block[1].match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i) || [])[1];
+      const zeit = mod ? Date.parse(mod) : NaN;
+      eintraege.push({
+        titel: titelAusAdresse(loc), link: loc,
+        datum: Number.isNaN(zeit) ? 0 : zeit, text: "", art: "archiv"
+      });
+      if (eintraege.length >= MAX_ARCHIV) break;
+    }
+  }
+  return eintraege;
+}
+
+/* Was in einer Sitemap steht, ist längst nicht alles ein Rezept. Diese Liste
+   wirft heraus, was sicher keins ist – lieber ein Beitrag zu viel als eine
+   Sammlung voller Impressumsseiten. */
+const KEIN_REZEPT = /\/(impressum|datenschutz|kontakt|agb|widerruf|ueber-?mich|about|autor|author|team|shop|produkt|product|warenkorb|cart|kasse|checkout|kurs|coaching|ebook|buch|newsletter|gewinnspiel|podcast|video|kategorie|category|tag|schlagwort|thema|archiv|seite|page|suche|search|login|konto|merkliste|faq|presse|werbung|kooperation|jobs)(\/|$|-)/i;
+const LISTENSEITE = /\/(rezepte|recipes|blog|artikel)\/?$/i;
+function rezeptVerdacht(url) {
+  let pfad;
+  try { pfad = new URL(url).pathname; } catch { return false; }
+  if (pfad === "/" || pfad === "") return false;
+  if (KEIN_REZEPT.test(pfad)) return false;
+  if (LISTENSEITE.test(pfad)) return false;
+  const teile = pfad.replace(/^\/|\/$/g, "").split("/");
+  const letztes = teile[teile.length - 1] || "";
+  if (letztes.length < 6) return false;                 /* zu kurz für einen Rezeptnamen */
+  if (/^\d+$/.test(letztes)) return false;              /* reine Seitenzahlen */
+  /* Rezept-Slugs bestehen meist aus mehreren Wörtern. Ein einzelnes darf durch,
+     wenn es lang genug ist – „schokokuchen" ist ein Rezept, „blog" nicht. */
+  if (!/-/.test(letztes) && letztes.length < 10) return false;
+  return true;
+}
+/* „kichererbsen-curry-mit-spinat" wird zu „Kichererbsen Curry mit Spinat".
+   Ohne Titel wäre die Karte im Archiv nicht zu lesen. */
+function titelAusAdresse(url) {
+  let pfad;
+  try { pfad = new URL(url).pathname; } catch { return url; }
+  const teile = pfad.replace(/^\/|\/$/g, "").split("/");
+  let slug = teile[teile.length - 1] || "";
+  slug = slug.replace(/\.(html?|php)$/i, "").replace(/^\d{4}-\d{2}-\d{2}-/, "");
+  const worte = slug.split("-").filter(Boolean)
+    .filter(w => !/^\d+$/.test(w) || w.length === 4);   /* Nummern raus, Jahreszahlen dürfen bleiben */
+  if (!worte.length) return url;
+  const KLEIN = new Set(["mit", "und", "im", "in", "aus", "auf", "der", "die", "das", "vom", "von", "zum", "zur", "fuer", "für", "ohne", "am", "an"]);
+  return worte.map((w, i) => (i > 0 && KLEIN.has(w.toLowerCase())) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 /* ---------- Seite ohne strukturierte Daten ---------- */

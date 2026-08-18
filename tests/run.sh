@@ -1,5 +1,5 @@
 #!/bin/sh
-# Führt alle Prüfungen des Marco's brain aus – ohne Browser, ohne Installation.
+# Führt alle Prüfungen des Küchenplans aus – ohne Browser, ohne Installation.
 # Genutzt wird JavaScriptCore, das auf jedem Mac bereits vorhanden ist.
 #
 #   ./tests/run.sh              alle Testreihen
