@@ -159,6 +159,94 @@ t("Eigener Posten mit Zutatennamen wird nicht doppelt geführt", () => {
   gleich(treffer.length, 1, "nur einmal Möhren");
 });
 
+t("Beim Ergänzen darf eine Menge daneben stehen", () => {
+  frisch();
+  document.getElementById("mi").value = "Möhren";
+  document.getElementById("mm").value = "500 g";
+  A.manuell();
+  const i = finde("Möhren");
+  wahr(i, "Posten fehlt");
+  gleich(i.q, 500, "Menge nicht übernommen");
+  gleich(i.e, "g", "Einheit nicht übernommen");
+  wahr(!i.nach, "sollte nicht als „nachfüllen“ dastehen");
+});
+t("Die Menge darf auch im Namensfeld stehen", () => {
+  frisch();
+  document.getElementById("mi").value = "2 Dosen Kichererbsen";
+  document.getElementById("mm").value = "";
+  A.manuell();
+  const i = finde("Kichererbsen");
+  wahr(i, "Posten fehlt");
+  gleich(i.q, 2); gleich(i.e, "Dose");
+});
+t("Ohne Menge bleibt es beim Nachfüllen", () => {
+  frisch();
+  document.getElementById("mi").value = "Taschentücher";
+  document.getElementById("mm").value = "";
+  A.manuell();
+  wahr(finde("Taschentücher").nach, "ohne Menge gehört „nachfüllen“ hin");
+});
+
+gruppe("Einen einzelnen Posten ändern");
+function einPosten() {
+  mitRezepten([testRezept("t1", [["Möhren", 100, "g", "og"]])]);
+  A.S.plan = { "w0-0-m": { r: "t1", p: 2 } };
+  A.listeBauen();
+  return Object.keys(A.S.liste).find(k => A.S.liste[k].n === "Möhren");
+}
+t("Name, Menge, Einheit und Abteilung lassen sich ändern", () => {
+  const id = einPosten();
+  A.postenBearbeiten(id);
+  document.getElementById("pbn").value = "Möhren, groß";
+  document.getElementById("pbq").value = "1,5";
+  document.getElementById("pbe").value = "kg";
+  document.getElementById("pbk").value = "so";
+  A.postenSpeichern(id);
+  const i = A.S.liste[id];
+  gleich(i.n, "Möhren, groß"); gleich(i.q, 1.5); gleich(i.e, "kg"); gleich(i.k, "so");
+  wahr(i.bearbeitet, "die Änderung ist nicht als solche vermerkt");
+});
+t("Eine geleerte Menge macht daraus wieder ein Nachfüllen", () => {
+  const id = einPosten();
+  A.postenBearbeiten(id);
+  document.getElementById("pbn").value = "Möhren";
+  document.getElementById("pbq").value = "";
+  document.getElementById("pbe").value = "";
+  A.postenSpeichern(id);
+  wahr(A.S.liste[id].nach, "ohne Menge gehört „nachfüllen“ hin");
+});
+t("Ohne Namen wird nichts gespeichert", () => {
+  const id = einPosten();
+  A.postenBearbeiten(id);
+  document.getElementById("pbn").value = "   ";
+  A.postenSpeichern(id);
+  gleich(A.S.liste[id].n, "Möhren", "der alte Name muss stehen bleiben");
+});
+t("Geändertes überlebt den Neuaufbau der Liste", () => {
+  const id = einPosten();
+  A.postenBearbeiten(id);
+  document.getElementById("pbn").value = "Möhren";
+  document.getElementById("pbq").value = "3";
+  document.getElementById("pbe").value = "Bund";
+  document.getElementById("pbk").value = "og";
+  A.postenSpeichern(id);
+  A.listeBauen();
+  const i = A.S.liste[id];
+  gleich(i.q, 3, "die eigene Menge wurde überschrieben");
+  gleich(i.e, "Bund");
+});
+t("Ein Posten lässt sich entfernen", () => {
+  const id = einPosten();
+  A.postenEntfernen(id);
+  wahr(!A.S.liste[id], "der Posten steht noch da");
+});
+t("Eine falsche Angebotsmarkierung lässt sich abnehmen", () => {
+  const id = einPosten();
+  A.S.liste[id] = { ...A.S.liste[id], ang: "Möhrenschäler" };
+  A.postenAngebotWeg(id);
+  gleich(A.S.liste[id].ang, "", "der Hinweis steht noch da");
+});
+
 gruppe("Robustheit");
 t("Fehlende Liste nach einem Abgleich lässt die App nicht stürzen", () => {
   mitRezepten([testRezept("t1", [["Möhren", 100, "g", "og"]])]);
@@ -182,14 +270,49 @@ t("Rezept ohne Zutaten nach dem Abgleich stürzt nicht ab", () => {
 });
 
 gruppe("Angebote");
-t("Die Zutat darf das Angebotswort enthalten, nicht umgekehrt", () => {
+t("Verglichen wird am Wortende, weil dort die Bedeutung steht", () => {
   wahr(A.angebotPasst("lauch", "lauch"), "Lauch trifft Lauch");
   wahr(A.angebotPasst("lauch", "porree_lauch"), "Teil der Zutat trifft");
-  wahr(!A.angebotPasst("gartenschlauch", "lauch"), "Gartenschlauch trifft Lauch nicht");
+  wahr(A.angebotPasst("rispentomaten", "tomaten"), "Rispentomaten sind Tomaten");
+  wahr(A.angebotPasst("nuesse", "haselnuesse"), "Haselnüsse sind Nüsse");
+  wahr(!A.angebotPasst("brot", "brokkoli"), "kurze Wörter treffen einander nicht");
 });
-t("Wortstamm-Vergleich greift ab sechs Buchstaben", () => {
-  wahr(A.angebotPasst("haehnchenbrustfilet", "haehnchenschenkel"), "gleicher Stamm trifft");
-  wahr(!A.angebotPasst("brot", "brokkoli"), "kurze Wörter nicht über den Stamm");
+/* Der eigentliche Fehler: ein Prospekt hat rund 950 Zeilen, davon etwa 100
+   Lebensmittel. Der Rest ist Haushaltsware mit Lebensmittelnamen im Wort. Über
+   den früheren Vergleich der ersten sechs Buchstaben traf davon jedes einzelne
+   – und damit stand in der Einkaufsliste jede Woche alles im Angebot. */
+t("Küchengeräte machen aus einer Zutat kein Angebot", () => {
+  wahr(!A.angebotPasst("zwiebelschneider", "zwiebel"), "Zwiebelschneider ist keine Zwiebel");
+  wahr(!A.angebotPasst("kartoffelschaeler", "kartoffeln"), "Kartoffelschäler sind keine Kartoffeln");
+  wahr(!A.angebotPasst("butterdose", "butter"), "Butterdose ist keine Butter");
+  wahr(!A.angebotPasst("tomatenmesser", "tomatenmark"), "Tomatenmesser ist kein Tomatenmark");
+  wahr(!A.angebotPasst("vollkorn", "vollkornmehl"), "Vollkorn-Toastbrot ist kein Vollkornmehl");
+  gleich(A.angebotWorte("Gartenschlauch 20 m"), [], "Haushaltsware fällt ganz weg");
+  wahr(!A.angebotWorte("Zahnpasta Complete").includes("zahnpasta"), "Zahnpasta ist keine Pasta");
+});
+t("Ein Wortende, das in die Irre führt, zählt nur ganz", () => {
+  wahr(!A.angebotPasst("knoblauch", "lauch"), "Knoblauch ist kein Lauch");
+  wahr(!A.angebotPasst("milch", "kokosmilch"), "Kokosmilch ist keine Milch");
+  wahr(A.angebotPasst("knoblauch", "knoblauch"), "ganz gleich trifft weiterhin");
+});
+t("Zuschnitte von Fleisch und Fisch treffen ihre Zutat", () => {
+  wahr(A.angebotPasst("haehnchenbrustfilet", "haehnchenbrust"), "Filet trifft die Brust");
+  wahr(A.angebotPasst("lachsfilet", "lachs"), "Lachsfilet trifft Lachs");
+  wahr(!A.angebotPasst("haehnchenbrustfilet", "haehnchenschenkel"), "ein anderer Teil trifft nicht");
+});
+t("Ein ganzer Prospekt markiert nur, was wirklich drinsteht", () => {
+  frisch();
+  const heute = new Date(), spaet = new Date(Date.now() + 6 * 86400000);
+  const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const items = A.prospektZeilen([
+    "Zwiebelschneider", "Kartoffelschäler", "Butterdose Porzellan", "Tomatenmesser",
+    "Gartenschlauch 20 m", "Zahnpasta Complete", "Vollkorn-Toastbrot", "Möhren 1 kg"
+  ]);
+  A.S.angebote = { p1: { von: iso(heute), bis: iso(spaet), items, quelle: "Prospekt", geholt: Date.now() } };
+  A.planWoche = 0;
+  const markiert = ["Zwiebel", "Kartoffeln", "Butter", "Tomatenmark", "Lauch", "Pasta", "Dinkel-Vollkornmehl", "Möhren"]
+    .filter(z => A.zutatImAngebot(z, 0));
+  gleich(markiert, ["Möhren"], "es soll nur treffen, was wirklich im Prospekt steht");
 });
 t("Markenfüllwörter lösen keinen Treffer aus", () => {
   const worte = A.angebotWorte("Meine Bio Gold Frische Möhren");
@@ -235,6 +358,12 @@ t("Stückzahlen werden auf halbe gerundet", () => {
 t("Große Grammmengen werden auf 5 gerundet", () => {
   gleich(A.fmt(233, "g"), "235 g");
   gleich(A.fmt(12, "g"), "12 g");
+});
+t("Bei Kilo und Liter bleibt die Nachkommastelle stehen", () => {
+  gleich(A.fmt(1.5, "kg"), "1,5 kg");
+  gleich(A.fmt(0.5, "l"), "0,5 l");
+  gleich(A.fmt(2, "kg"), "2 kg", "ganze Zahlen bleiben ganz");
+  gleich(A.fmt(1.5, "g"), "2 g", "bei Gramm wird weiter gerundet");
 });
 t("Prisen sind immer mindestens eine", () => {
   gleich(A.fmt(0.2, "Prise"), "1 Prise");

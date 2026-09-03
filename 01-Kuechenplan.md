@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 3.9**, Stand 14. August 2026. Datei rund 345 KB, 134 Rezepte und 48 Ideen.
-Die Testreihen unter `tests/` prüfen 487 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 4.0**, Stand 3. September 2026. Datei rund 396 KB, 134 Rezepte und 48 Ideen.
+Die Testreihen unter `tests/` prüfen 562 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -52,6 +52,7 @@ Einzeldateien gebaut wurde. Diese Abschnitte findet man an ihren Kommentarköpfe
 | Eigene Rezepte | Formular, Zutatenparser, Teilen-Aufnahme, Import/Export | `KAT_INDEX` |
 | Vielfalt und Angebote | `KH`, `khVon()`, Angebotszeiträume, `imAngebot()` | `const KH=` |
 | Komfort | Bildschirm wachhalten, Kochmodus, Einplanen-Raster, Liste teilen | `wachHalten` |
+| Buchseiten | Spalten, Zeilen, Trennstriche, Kopfdaten aus Fotos | `function wortZeilen` |
 | Quellen und PDF | pdf.js-Anbindung, Prospektauswertung, Blog-Feeds | `PDFJS_URL` |
 | Extras | Zusatzgerichte, weitere Listen, Symbole, Foto-Import | `extraSchluessel` |
 | Ideen | `THEMEN` (12 Wochenthemen) und `IDEEN` (48 Vorschläge) | `const THEMEN=` |
@@ -360,6 +361,27 @@ Besonderheiten:
 - **Angebotsmarkierung** wird beim Bauen eingefroren, gilt also für die Woche, für die
   eingekauft wurde.
 
+### Einen einzelnen Posten ändern (4.0)
+
+Die Menge rechts am Posten öffnet das Blatt „Wofür“, und dort steht jetzt
+**„Ändern oder entfernen“**. `postenBearbeiten(id)` zeigt Name, Menge, Einheit und
+Abteilung; `postenSpeichern()` schreibt zurück, `postenEntfernen()` nimmt den Posten
+von der Liste. Steht eine Angebotsmarkierung daran, die nicht stimmt, nimmt
+`postenAngebotWeg()` sie ab, ohne den Prospekt anzufassen.
+
+Geänderte Posten tragen **`bearbeitet: true`**. `listeBauen()` fragt das ab und lässt
+Name, Menge, Einheit und Abteilung dann stehen – sonst wäre jede Korrektur beim nächsten
+Aufbau der Liste wieder weg. Eine geleerte Menge setzt `nach` zurück, der Posten steht
+also wieder als „nachfüllen“ da.
+
+### Von Hand ergänzen, mit Menge (4.0)
+
+Die Zeile zum Ergänzen (`ergaenzenZeile()`, an zwei Stellen derselbe Baustein) hat neben
+dem Namen ein **Mengenfeld**. Vorher trug jeder von Hand ergänzte Posten `q: 0` und
+`nach: true` – in der Liste stand deshalb ausnahmslos „nachfüllen“, was im Markt nichts
+half. Gelesen wird mit `parseZutat()`, demselben Parser wie im Rezeptformular. Damit
+funktioniert beides: die Menge im eigenen Feld oder mitgetippt als „500 g Möhren“.
+
 ---
 
 ## 9. Aldi-Angebote
@@ -388,13 +410,43 @@ Links der Form `/produkt/<name>-<artikelnummer>`.
 
 Prospekt öffnen, Produkte abtippen, Zeitraum setzen. Preise dürfen dranbleiben.
 
-### Abgleich
+### Abgleich (in 4.0 neu gefasst)
 
 `imAngebot(rezept, woche)` und `zutatImAngebot(name, woche)` vergleichen **wortweise**:
 Angebotswörter ab vier Buchstaben, abzüglich einer Sperrliste mit Markenfüllwörtern
-(„meine", „bio", „gold", „frisch" …). Getroffen wird nur in einer Richtung – die Zutat
-darf das Angebotswort enthalten, nicht umgekehrt – plus Wortstamm-Vergleich ab sechs
-Buchstaben, damit „Hähnchenbrustfilet" auch Hähnchenschenkel findet.
+(„meine", „bio", „gold", „frisch" …) und beschreibenden Wörtern, die auf beiden Seiten
+vorkommen („saure", „gehackte", „rote").
+
+**Was vorher schiefging.** Getroffen wurde, wenn die Zutat das Angebotswort irgendwo
+enthielt – oder wenn die ersten sechs Buchstaben übereinstimmten. Ein Prospekt hat rund
+950 Zeilen, davon etwa 100 Lebensmittel; der Rest ist Haushaltsware, und die trägt
+Lebensmittelnamen im Wort. Über die ersten sechs Buchstaben traf davon jedes einzelne:
+Zwiebelschneider fand Zwiebeln, Kartoffelschäler Kartoffeln, Butterdose Butter,
+Tomatenmesser Tomatenmark. Ergebnis: **es stand jede Woche alles im Angebot** – die
+Markierung sagte nichts mehr aus.
+
+**Wie es jetzt entschieden wird.** Deutsche Zusammensetzungen tragen ihre Bedeutung
+hinten. „Rispentomaten" sind Tomaten, „Tomatenmesser" sind keine. Verglichen wird
+deshalb nur noch am Wortende (`angebotPasst`):
+
+1. **Gleich oder einfache Mehrzahl** – „Möhre" trifft „Möhren".
+2. **Wortende** – das kürzere Wort steht am Ende des längeren: „Haselnüsse" trifft
+   „Nüsse", „Bitterschokolade" trifft „Schokolade", „Vollmilch" trifft „Milch".
+3. **Zuschnitt** – der einzige Fall, in dem von vorn verglichen wird, und nur, wenn der
+   Rest genau ein Zuschnitt ist: „Hähnchenbrustfilet" trifft „Hähnchenbrust",
+   „Lachsfilet" trifft „Lachs" (`ANG_SCHNITT`).
+
+Zwei Listen halten die Ausnahmen:
+
+- `ANG_KEIN_ESSEN` wirft ganze Wörter raus, bevor verglichen wird – Haushalts- und
+  Drogerieware, deren Wortende in die Irre führt: „Gartenschlauch" endet auf „lauch",
+  „Zahnpasta" auf „pasta". Dieselbe Rangfolge wendet `katFuer()` an: Drogerie vor allem.
+- `ANG_NUR_GANZ` sind Wörter, deren Wortende lügt: Knoblauch ist kein Lauch, Kokosmilch
+  keine Milch, Schnittlauch kein Lauch. Sie zählen nur bei voller Übereinstimmung.
+
+Bewusst aufgegeben: „Hähnchenbrustfilet" findet **nicht** mehr „Hähnchenschenkel". Ein
+anderer Teil desselben Tiers ist kein Angebot für dieses Rezept, und die alte Regel dafür
+war genau die, die alles andere kaputt gemacht hat.
 
 Der Zeitraum eines Prospekts wird gegen die Kalenderwoche der Planwoche geprüft
 (`wochenSpanne(w)`, `deckt()`). Jede Woche sieht nur ihren Prospekt.
@@ -453,8 +505,9 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 4. **Von Hand** – Formular mit Freitext für Zutaten (`200 g Möhren` je Zeile). Der Parser
    erkennt Menge, Einheit und Abteilung; das Abteilungswissen stammt aus 173 Zutaten der
    mitgelieferten Rezepte plus Wortlisten.
-5. **Aus Bild** – tesseract.js erkennt Text aus einem Foto oder Bildschirmfoto. Der Text
-   landet zur Korrektur in einem Feld und wird dann in Zutaten und Zubereitung aufgeteilt.
+5. **Aus Bild** – tesseract.js erkennt Text aus einem Foto oder Bildschirmfoto. Bei
+   abfotografierten Kochbuchseiten wird die Seite vorher aufbereitet, siehe Abschnitt 10b.
+   Das Ergebnis geht wie jede andere Quelle ins Prüfblatt.
 
 Beim Abruf über den Rezept-Leser wird **automatisch auf eine Portion heruntergerechnet**,
 außer bei Backwerk (`BACKWERK`-Regex: Kuchen, Torte, Brot, Muffin, Auflauf, Gratin …).
@@ -535,6 +588,139 @@ den man wegklicken kann.
 
 ---
 
+## 10b. Fotos von Kochbuchseiten (4.0)
+
+Bis 3.9 hieß der Weg: Bild auf 1800 Pixel verkleinern, tesseract darüberlaufen lassen,
+den Text nehmen, wie er kommt. Bei einem Bildschirmfoto reicht das. Bei einer
+abfotografierten Buchseite reicht es nicht, und zwar aus vier Gründen zugleich: Die Seite
+liegt quer, der eigene Schatten liegt darüber, sie hat zwei Spalten, und jede zweite
+Zeile ist getrennt. Was herauskam, war Wortsalat – daran ist der Nusskuchen gescheitert.
+
+### Die fünf Schritte
+
+1. **Seite freistellen** (`seitenAusschnitt`). Auf dem Foto ist die Seite selten allein;
+   ringsum liegen Tisch, Sofa, Hand. Diese Fläche kostet Auflösung, und Auflösung ist bei
+   der Texterkennung fast alles. Beim Beispielfoto (4032 × 2268) füllt die Seite 83 Prozent
+   der Breite – ohne Zuschnitt bleiben für die Schrift 18 Bildpunkte Höhe, mit Zuschnitt
+   sind es 30. Die Seite ist der helle, zusammenhängende Bereich. **Die Schwelle darf
+   dabei nicht am hellsten Bildpunkt hängen:** Ein einziger Lichtreflex auf dem Papier
+   setzt sie auf 255, und dann fällt die schattige Hälfte der Seite als „Hintergrund" weg.
+   Gemessen wird deshalb am 10.- und 90.-Perzentil der Helligkeit.
+2. **Beleuchtung ausgleichen** (`bildEbnen`). Ein Foto einer Buchseite hat fast immer
+   einen Helligkeitsverlauf: Fensterlicht auf der einen Seite, der eigene Schatten auf
+   der anderen. tesseract entscheidet über die ganze Seite mit einer einzigen Schwelle
+   und verliert dabei die dunkle Hälfte. Das stark verkleinerte Bild ist genau dieser
+   Verlauf ohne die Schrift; teilt man das Bild dadurch, bleibt gleichmäßiges Grau übrig.
+3. **Ausrichtung bestimmen.** Zuerst die Achse – aufrecht oder quer –, dann nur noch die
+   Frage, ob die gewählte Achse auf dem Kopf steht. Das sind zwei bis drei Durchgänge auf
+   800 Punkten statt vier. `ocrGuete()` bewertet nicht die Zuversicht allein – auf einer
+   gedrehten Seite erkennt tesseract wenige Zeichen sehr sicher –, sondern die Zahl echter
+   Wörter, gewichtet mit dem, was über 40 Prozent Zuversicht hinausgeht. Am Beispielfoto:
+   0 Grad → 0, **90 Grad → 136**, 270 Grad → 0.
+4. **Seite ausmessen** (1400 Punkte, ein Durchgang). Wo liegt der Bundsteg
+   (`spaltenLuecke`), wie schief liegt die Seite (`schraeglage`)? Für beides genügen grobe
+   Wortkästchen; der Bundsteg wird schon bei 1200 Punkten an derselben Stelle gefunden.
+5. **Jede Spalte einzeln lesen**, in voller Auflösung (3000 Punkte).
+
+**Schritt 5 ist der eigentliche Unterschied.** Liest man die ganze Seite in einem Zug,
+versucht die Texterkennung, quer über den Bundsteg hinweg Zeilen zu bilden, und aus der
+schmalen Zutatenspalte kommen fünf zerrissene Bruchstücke
+(`"SO y (z.B. viuscovado) gemahlene (Größe M)"`). Legt man derselben Erkennung dieselbe
+Spalte allein vor, liest sie **alle vierzehn Zutatenzeilen der Reihe nach**. Gemessen am
+selben Foto, am selben Tag, mit derselben Fassung von tesseract.
+
+Innerhalb einer Spalte wird auch die Zeilenbildung tesseract überlassen. Der eigene Aufbau
+aus Wortkästchen (`wortZeilen`) ist dort schlechter: Fehlt der Erkennung mitten in der
+Zeile ein Wort, entsteht eine Lücke, und die Zeile zerfällt. Die Wortkästchen dienen nur
+noch dem Ausmessen, nicht mehr dem Lesen.
+
+### Wie die Seite zusammengesetzt wird
+
+Die Funktionen dafür rechnen nur mit Zahlen und Zeichenketten, brauchen weder Browser noch
+tesseract und stehen deshalb einzeln in `tests/16-buchseite.js`:
+
+| Funktion | Aufgabe |
+|---|---|
+| `seitenAusschnitt` | Die Seite im Foto finden – der helle, zusammenhängende Bereich. Schwelle aus der Helligkeitsverteilung, nicht aus dem hellsten Punkt. |
+| `wortRauschen` | Tischkante, Schatten, Sofamuster werden auch zu „Wörtern“. Zu unsicher, ohne Buchstaben oder aus der Zeilenhöhe gefallen heißt: weg. Bruchzeichen, Prozent und Grad zählen als Inhalt. |
+| `wortZeilen` | Wörter gleicher Höhe zu Zeilen. Getrennt wird, wo der Abstand ein Vielfaches der Zeilenhöhe misst – das ist kein Wortabstand mehr, das ist die Spaltengrenze. **Nur zum Ausmessen**, nicht zum Lesen. |
+| `schraeglage` | Der Neigungswinkel aus den Wortkästchen: Bei der richtigen Neigung fallen die Wörter in scharfe Zeilen. Ohne weiteren Durchgang. |
+| `spaltenLuecke` | Der senkrechte Streifen, durch den fast keine Zeile läuft. Gesucht nur zwischen 22 und 78 Prozent der Breite; ein paar durchlaufende Zeilen sind erlaubt, weil unter den Spalten gern ein Kasten über die volle Breite steht. Ohne Fund gilt die Seite als einspaltig. |
+| `spaltenArt` | Welche Spalte trägt die Zutaten? Nicht am Inhalt zu erkennen, wohl aber am Bau: Zutaten sind kurze Zeilen mit einer Menge vorn und ohne Satzende, Schritte sind lang, nummeriert und enden mit Punkt. |
+| `spaltenOrdnen` | Welche der beiden Spalten ist welche – für beide Wege gleich. |
+| `seiteOrdnen` | Der Weg für einen einzigen Durchgang (Rückfall, und was die Prüfungen benutzen): zerlegt in Kopf, Zutatenspalte und Schrittspalte. Was über beide Spalten läuft, zählt nur, wenn es **darüber** steht – darüber steht der Titel, darunter der Ernährungskasten, der Kapitelname, die Seitenzahl. |
+| `trennungenFuegen` | „Minu-/ten" wird „Minuten". Vor einem großen Buchstaben bleibt der Strich: „Dinkel-/Vollkornmehl" heißt wirklich so. |
+| `titelzeilenFuegen` | Der Titel steht in Versalien über zwei Zeilen. Einzeln gelesen gewinnt die zweite Hälfte, und das Rezept hieße „MIT MÖHREN UND SAUERRAHM". |
+| `zutatenzeilenFuegen` | Der Zusatz unter der Zutat gehört an die Zutat, sonst steht „(z. B. Muscovado)" als eigener Posten auf der Einkaufsliste. |
+| `schritteBuendeln` | Nummerierte Schritte über mehrere Zeilen zu einem. Hinter dem letzten Schritt ist bei der ersten kurzen Zeile ohne Satzende Schluss – dort fängt der Ernährungskasten an. |
+| `buchText` | Setzt daraus den Text zusammen und **schreibt die Überschriften „Zutaten" und „Zubereitung" selbst hinein.** Eine Überschrift ist das verlässlichste Signal, das `textEinordnen()` kennt, und aus dem Seitenaufbau wissen wir hier sicher, was was ist. |
+
+Danach geht es wie jede andere Quelle durch `textEinordnen()` ins Prüfblatt.
+
+**Dauer.** Am Beispielfoto im Browser gemessen: **84 Sekunden** vom Antippen bis zum
+Prüfblatt, den einmaligen Download der deutschen Sprachdaten eingerechnet. Auf dem Handy
+entsprechend länger. Das ist viel für einen Knopfdruck – aber es ist ein Vorgang je
+Rezept, und die Alternative war ein Ergebnis, das man wegwerfen musste.
+
+### Was am echten Foto herauskommt
+
+Geprüft wurde mit dem Foto einer von Hand gehaltenen, gewölbten Kochbuchseite
+(„Nusskuchen mit Möhren und Sauerrahm", 4032 × 2268, Schatten quer über der Seite):
+
+| | 3.9, ohne Drehung | 4.0, ganze Seite am Stück | 4.0, spaltenweise |
+|---|---|---|---|
+| Zutaten | – | 9 Bruchstücke, 4 davon unbrauchbar | **alle 14 Zeilen, in der Reihenfolge des Buchs** |
+| Schritte | – | 17 zerrissene Fetzen | **5 Absätze** (2 und 3 in einem, siehe unten) |
+| Zeit | – | nicht erkannt | **85 Minuten** (30 + 55; Abkühlen zählt nicht) |
+| Nährwerte, Seitenzahl, Ernährungskasten | – | mitten im Rezept | **draußen** |
+| Titel | – | ein Erkennungsfetzen | leer – die Versalzeile war nicht lesbar |
+
+Die erste Spalte hat einen Strich, weil dort nichts zu messen war: 3.9 hat das Bild nie
+gedreht, und in der Lage, in der das Foto aufgenommen wurde, erkennt tesseract **kein
+einziges verwertbares Wort** (`ocrGuete` = 0 bei 0 Grad gegen 136 bei 90 Grad). Genau das
+war der Grund, warum die Seite „leider nicht gut erkannt" wurde.
+
+Die Zeichen stimmen dabei nicht überall: Aus „200 g Möhren" wird „Z26C 9 Möhren", aus
+„100 g" wird „iDIg". Das ist bei einem Handyfoto einer gewölbten Seite auch nicht zu
+holen. Entscheidend ist, dass **Gestalt und Reihenfolge stimmen** – der Rest ist im
+Prüfblatt eine Minute Tippen statt einer halben Stunde Abschreiben.
+
+Der genaue Text, den die Erkennung an diesem Tag geliefert hat, steht als feste Prüfung in
+`tests/16-buchseite.js`. Nicht nachgebaut: wortwörtlich, mit allen Lesefehlern. Geprüft
+wird daran nicht, ob die Zeichen stimmen, sondern ob daraus ein Rezept der richtigen
+Gestalt wird. Wer an der Einordnung etwas ändert, merkt sofort, wenn es schlechter wird.
+
+### Warum fünf Schritte und nicht sechs
+
+Die Erkennung hat aus dem „3." ein „2 " ohne Punkt gemacht. Ohne Punkt wird bewusst nicht
+getrennt: „5 Minuten cremig rühren." fängt genauso an und steht mitten im Schritt. Ein
+lockerer Vergleich hat in der Prüfung prompt einen Schritt in der Mitte zerschnitten.
+Lieber zwei Schritte in einem Absatz als ein Schritt in zwei Teilen – das eine sieht man
+im Prüfblatt sofort, das andere nicht.
+
+Vier weitere Dinge kamen aus derselben Prüfung:
+
+- **Schrittnummern**, die die Erkennung verpatzt: aus „1." wird „]l.", aus „6." ein „©.".
+  Erkannt wird deshalb die Gestalt (ein bis drei Zeichen, Punkt, Leerzeichen, großer
+  Buchstabe), nicht die Ziffer. Vorher trafen zwei von sechs.
+- **Das Kringel-C** in der Müll-Liste war zu gierig. Aus der „6" vor „6 Eier (Größe M)"
+  macht die Erkennung gern ein „©" – und damit fiel eine Zutat als „Impressum" heraus.
+  Jetzt braucht es eine Jahreszahl daneben.
+- **Zusatzzeilen** wurden angehängt, sobald sie klein anfingen. „iDIg waiche Butter" fängt
+  klein an – und eine ganze Zutat verschwand in der Zeile davor. Angehängt wird jetzt nur
+  noch, was mit einer Klammer oder einem der wenigen Zusatzwörter beginnt.
+- **Der Kopf der Zutatenspalte** endete an der ersten Ziffer. Fängt die erste Menge nicht
+  mit einer Ziffer an, weil die Erkennung sie verpatzt hat, verschwand sie im Kopf. Jetzt
+  endet der Kopf am letzten Datum – Form, Zeit, Portionen.
+
+### Was der Foto-Weg weiterhin nicht kann
+
+Er versteht die Seite nicht, er misst sie aus. Ein Rezept über zwei Buchseiten, ein
+dreispaltiger Satz, eine Zutatenliste ohne Mengen – das geht daneben, und dafür gibt es
+das Prüfblatt und „Text von Hand nachbessern". Handschrift bleibt aussichtslos.
+
+---
+
 ## 11. Der Cloudflare Worker („Rezept-Leser")
 
 Eigenes Programm, nicht in der App enthalten. Adresse wird unter „Mehr" eingetragen.
@@ -569,8 +755,10 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
   Einwurffeld: Beschreibung kopieren, hineinwerfen, Prüfblatt bestätigen.
 - **YouTube Shorts** nennen selten Zutaten in der Beschreibung.
 - **Bilder aus Google Takeout** und Prospektbilder werden nicht übernommen.
-- **Texterkennung aus Fotos** funktioniert bei gedruckten Seiten mit gutem Licht ordentlich,
-  bei Handschrift praktisch nie.
+- **Texterkennung aus Fotos** funktioniert bei gedruckten Seiten ordentlich, seit 4.0 auch
+  bei quer liegenden und ungleichmäßig ausgeleuchteten Kochbuchseiten (Abschnitt 10b).
+  Bei Handschrift praktisch nie. Fünf Durchgänge je Foto brauchen auf dem Handy spürbar
+  Zeit – der erste entfällt, wenn die Seite schon richtig herum liegt.
 - **PDF-Einlesen auf dem Handy** ist speicherintensiv; ein 44-MB-Prospekt dauert spürbar.
 - **Prospekt-Viewer von Aldi** (publitas.com) gibt Daten nur mit signierten Parametern
   heraus, ist also nicht automatisierbar. Das PDF dagegen schon.
@@ -784,6 +972,39 @@ Sechs gemeldete oder dabei gefundene Fehler, alle per Test abgesichert
 **Aufgeräumt:** Über der Einkaufsliste standen sieben Knöpfe; geblieben sind zwei
 („Erledigte ausblenden" und „Weiteres …"), das Eingabefeld ist nach oben gerückt.
 Teilen, Laufweg, Bildschirm anlassen und die beiden Zurücksetzen-Wege liegen im Blatt.
+
+---
+
+## 12e. Was in Version 4.0 behoben wurde
+
+Vier Punkte aus dem Alltag, alle vier mit einer Prüfung dahinter.
+
+**1. „Es ist immer alles im Angebot."** Der Vergleich der ersten sechs Buchstaben machte
+aus jedem Küchengerät im Prospekt ein Lebensmittelangebot – Zwiebelschneider fand
+Zwiebeln, Butterdose fand Butter. Bei rund 950 Prospektzeilen traf am Ende alles.
+Verglichen wird jetzt am Wortende, wo bei deutschen Zusammensetzungen die Bedeutung
+steht. Abschnitt 9, „Abgleich".
+
+**2. Einzelne Posten ließen sich nicht ändern.** An einem Posten ging nur der Haken.
+Jetzt öffnet die Menge rechts ein Blatt mit Name, Menge, Einheit und Abteilung, dazu
+„entfernen" und „Angebotshinweis abnehmen". Geändertes trägt `bearbeitet` und übersteht
+den nächsten Aufbau der Liste. Abschnitt 8.
+
+**3. Von Hand ergänzte Posten standen immer als „nachfüllen" da.** Sie bekamen nie eine
+Menge. Neben dem Namen steht jetzt ein Mengenfeld; wer die Menge mittippt („500 g
+Möhren"), wird ebenso verstanden, weil derselbe Parser liest wie im Rezeptformular.
+Abschnitt 8.
+
+**4. Kochbuchseiten waren nicht auszulesen.** Quer liegend, ungleichmäßig ausgeleuchtet,
+zweispaltig, mit Trennstrichen – vier Gründe auf einmal, und der schwerste davon war der
+erste: In der Lage, in der das Foto aufgenommen wurde, erkennt die Texterkennung kein
+einziges verwertbares Wort. Der Foto-Weg stellt die Seite jetzt frei, gleicht die
+Beleuchtung aus, bestimmt die Ausrichtung selbst, misst den Bundsteg aus und **liest dann
+jede Spalte einzeln**. Am Beispielfoto: vorher nichts, jetzt alle vierzehn Zutatenzeilen,
+fünf Schrittabsätze und die richtige Zeit. Abschnitt 10b.
+
+Nebenbei: `ocrReparieren()` verstümmelte jede Zahl, die auf 9 endet – „19 g Butter" wurde
+zu „1 g g Butter". Das galt für jede Quelle, nicht nur für Fotos.
 
 ---
 
