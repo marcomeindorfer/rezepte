@@ -351,6 +351,7 @@ input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-vis
 <!-- ohne capture, sonst öffnet das Handy sofort die Kamera statt der Dateiauswahl -->
 <input type="file" id="fotowahl" accept="image/*" style="display:none">
 <input type="file" id="fotokamera" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="impdatei" accept="application/json,.json,text/plain,.txt" style="display:none">
 <script>
 const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
 const SOMMER=[5,6,7,8,9], WINTER=[10,11,12,1,2,3], HERBST=[9,10,11], KALT=[11,12,1,2];
@@ -1168,7 +1169,7 @@ const KAT_WORT=[
  [/(kokos|mandel|hafer|soja|reis|cashew|dinkel)(-| )?(milch|drink)/i,"tr"],
  [/milch|k(ä|ae)se|joghurt|jogurt|quark|sahne|butter(?!brotpapier)|margarine|\bei\b|eier|tofu|seitan|tempeh|sojaschnetzel|feta|mozzarella|schmand|cr(è|e)me fra(î|i)che|halloumi|kefir|burrata|paneer|skyr|h(ü|ue)ttenk(ä|ae)se|sauerkraut|kimchi|gnocchi|falafel|hummus|tzatziki/i,"kr"],
  [/brot|br(ö|oe)tchen|tortilla|bagel|baguette|ciabatta|fladen|toast|semmel|kn(ä|ae)ckebrot|zwieback|croissant|brezel|pita|naan|teig|pizzaboden|wrap|br(ö|oe)sel/i,"bw"],
- [/(ö|oe)l\b|essig|\bsalz|pfeffer|gew(ü|ue)rz|honig|sirup|zucker|\bpaste\b|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver|hefe\b|natron|kakao|ketchup|mayonnaise|sojaso(ß|ss)e|sojasauce|worcester|tabasco|sriracha|harissa|tahin|oregano|majoran|lorbeer|kreuzk(ü|ue)mmel|\bkümmel|chiliflocken|st(ä|ae)rke/i,"gw"],
+ [/(ö|oe)l\b|essig|\bsalz|pfeffer|gew(ü|ue)rz|honig|sirup|zucker|\bpaste\b|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver|hefe\b|natron|kakao|schokolade|kuvert(ü|ue)re|nelke|piment|anis\b|kardamom|safran|wacholder|estragon|ketchup|mayonnaise|sojaso(ß|ss)e|sojasauce|worcester|tabasco|sriracha|harissa|tahin|oregano|majoran|lorbeer|kreuzk(ü|ue)mmel|\bkümmel|chiliflocken|st(ä|ae)rke/i,"gw"],
  [/nudel|spaghetti|penne|fusilli|tagliatelle|lasagne|makkaroni|\bpasta|reis\b|risotto|linsen|bohnen|kichererbsen|\bdose|mehl|hafer|couscous|bulgur|quinoa|hirse|polenta|graupen|samen|kerne|nuss|n(ü|ue)sse|mandeln|sesam|tomatenmark|passierte|konserve|m(ü|ue)sli|cornflakes|erdnussmus/i,"tr"],
  [/wasser\b|saft\b|\bwein\b|rot-?wein|wei(ß|ss)-?wein|\bbier\b|limo|cola|kaffee|\btee\b|teebeutel|espresso|schorle|smoothie/i,"gt"],
  /* Obst und Gemuese bewusst zuletzt: "Kuerbiskerne" soll ins Trockensortiment, nicht ins Gemuese */
@@ -2326,35 +2327,167 @@ function eigeneExportieren(){
     <textarea rows="12" onclick="this.select()">${esc(daten)}</textarea>
     <button class="btn btn-wide btn-ghost" style="margin-top:8px" onclick="closeSheet()">Schließen</button>`);
 }
+/* ---------- Rezepte einspielen ----------
+   Der zweite Weg für Kochbücher, und der schnellere bei mehreren Seiten auf
+   einmal: Fotos bei Claude hochladen, dort nach der Vorlage unten ein
+   Rezeptpaket erzeugen lassen und hier einspielen. Die Texterkennung im Browser
+   liest ein Foto; ein Mensch mit Augen liest zehn.
+
+   Das Format ist absichtlich nachsichtig. Pflicht ist nur der Name. Zutaten
+   dürfen als Klartextzeile kommen („200 g Möhren"), die Art des Gerichts, das
+   Protein und die Abteilungen leitet die App selbst ab. Was fehlt, wird
+   geschätzt – aber nichts wird stillschweigend verworfen. */
 function eigeneImportieren(){
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">Rezepte einspielen</h2>
-    <p class="note" style="margin:8px 0 12px">Rezeptpaket als JSON einfügen. Vorhandene Rezepte mit gleicher Kennung werden ersetzt, alles andere bleibt unangetastet.</p>
-    <textarea id="imp" rows="10" placeholder="[ { &quot;n&quot;: &quot;...&quot; } ]"></textarea>
+    <p class="note" style="margin:8px 0 12px">Für einzelne Rezepte genügt das Feld unten. Für einen Stapel Kochbuchseiten ist der Weg über Claude schneller und genauer als die Texterkennung im Browser.</p>
+    <div class="sect"><h2>Aus Fotos, über Claude</h2></div>
+    <ol class="note" style="margin:2px 0 10px;padding-left:20px">
+      <li>Anleitung unten kopieren.</li>
+      <li>Bei Claude einfügen und die Fotos dazulegen – mehrere auf einmal gehen.</li>
+      <li>Die Antwort als Datei sichern oder den Text kopieren.</li>
+      <li>Hier einspielen.</li>
+    </ol>
+    <button class="btn btn-wide" onclick="vorlageZeigen()">Anleitung für Claude anzeigen</button>
+    <div class="sect" style="margin-top:14px"><h2>Einspielen</h2></div>
+    <div class="row-btns">
+      <button class="btn btn-s btn-primary" onclick="importDateiWaehlen()">Datei wählen</button>
+      <button class="btn btn-s" onclick="document.getElementById('imp').focus()">Text einfügen</button>
+    </div>
+    <textarea id="imp" rows="8" style="margin-top:10px" placeholder="[ { &quot;n&quot;: &quot;Nusskuchen&quot;, &quot;port&quot;: 18, &quot;z&quot;: [&quot;200 g Möhren&quot;], &quot;s&quot;: [&quot;Backofen vorheizen.&quot;] } ]"></textarea>
+    <p class="note" style="margin-top:6px">Rezepte mit gleicher Kennung werden ersetzt, alles andere bleibt unangetastet.</p>
     <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="importAusfuehren()">Einspielen</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button>`);
 }
+function importDateiWaehlen(){ const f=document.getElementById("impdatei"); if(f&&f.click){f.value="";f.click();} }
+function importDateiLesen(datei){
+  if(!datei) return;
+  const leser=new FileReader();
+  leser.onerror=()=>alert("Die Datei ließ sich nicht lesen.");
+  leser.onload=()=>{
+    const feld=document.getElementById("imp");
+    if(feld){ feld.value=String(leser.result||""); importAusfuehren(); }
+  };
+  leser.readAsText(datei);
+}
+/* Die Anleitung steht hier und nicht in der Dokumentation, weil sie am Handy
+   gebraucht wird – dort, wo auch eingespielt wird. */
+const CLAUDE_VORLAGE=`Ich fotografiere Rezepte aus Kochbüchern und pflege sie in meine Küchenplan-App ein.
+Lies die angehängten Fotos und gib mir für jedes Rezept einen Eintrag als JSON zurück.
+
+Antworte NUR mit dem JSON, einer Liste in eckigen Klammern, ohne Erklärung drumherum.
+
+Pro Rezept diese Felder:
+  n     Name des Rezepts (Pflicht)
+  port  Für wie viele Portionen die Mengen im Buch gelten (Zahl). Bei Gebackenem
+        die Zahl der Stücke oder Scheiben. Die App rechnet selbst auf eine Portion herunter.
+  z     Zutaten, eine Zeile je Zutat, genau wie im Buch: "200 g Möhren", "1/2 TL Zimtpulver",
+        "1 Msp. Nelkenpulver", "Salz". Bitte keine Sammelzeilen, jede Zutat einzeln.
+        Steht ein Zusatz in Klammern, häng ihn an dieselbe Zeile: "50 g Vollrohrzucker (z. B. Muscovado)".
+  s     Zubereitung, eine Zeile je Schritt, ohne die Nummer davor.
+  min   Arbeitszeit in Minuten (Zubereitung plus Backen oder Kochen, ohne Abkühlen und Ruhen).
+  typ   "haupt", "fruehstueck", "snack" oder "dessert".
+  ma    Passende Mahlzeiten als Liste: "f" Frühstück, "m" Mittag, "a" Abend.
+        Bei Snacks und Desserts eine leere Liste.
+  m     Saisonmonate als Zahlenliste 1 bis 12. Wenn es ganzjährig geht, alle zwölf.
+  bl    Blähfaktor 0, 1 oder 2 (Kohl, Zwiebeln, Hülsenfrüchte eher 1 oder 2).
+  nut   Auffällige Nährstoffe als Liste aus: eisen, jod, omega3, folat, b12, calcium, zink, ballast.
+  why   Ein bis zwei Sätze, warum das Rezept hier steht.
+  q     Woher es stammt, zum Beispiel "Kochbuch, Seite 204".
+
+Nicht übernehmen: Nährwertangaben, Seitenzahlen, Kapitelnamen, Werbetexte.
+Bei unleserlichen Stellen schreib deine beste Lesart hin und sag mir darunter,
+welche Zeilen unsicher waren – aber erst nach dem JSON, in einer eigenen Zeile.
+
+Beispiel für einen Eintrag:
+[
+ {"n":"Nusskuchen mit Möhren und Sauerrahm","port":18,"min":85,"typ":"dessert","ma":[],
+  "m":[1,2,3,4,5,6,7,8,9,10,11,12],"bl":0,"nut":["eisen","ballast"],
+  "why":"Kuchen mit Möhren, Nüssen und Vollkornmehl statt Weißmehl.",
+  "q":"Kochbuch, Seite 204",
+  "z":["200 g Möhren","100 g weiche Butter","50 g Vollrohrzucker (z. B. Muscovado)","1/2 TL Zimtpulver","6 Eier"],
+  "s":["Den Backofen auf 180 °C vorheizen und die Form mit Backpapier auslegen.","Die Möhren putzen, schälen und fein raspeln."]}
+]`;
+function vorlageZeigen(){
+  openSheet(`<div class="grab"></div><h2 style="font-size:20px">Anleitung für Claude</h2>
+    <p class="note" style="margin:8px 0 12px">Diesen Text bei Claude einfügen und die Rezeptfotos dazulegen. Antippen wählt alles aus.</p>
+    <textarea rows="14" onclick="this.select()">${esc(CLAUDE_VORLAGE)}</textarea>
+    <button class="btn btn-primary btn-wide" style="margin-top:10px" onclick="vorlageKopieren()">In die Zwischenablage</button>
+    <button class="btn btn-wide" style="margin-top:6px" onclick="eigeneImportieren()">Zurück zum Einspielen</button>`);
+}
+function vorlageKopieren(){
+  try{
+    navigator.clipboard.writeText(CLAUDE_VORLAGE)
+      .then(()=>alert("Kopiert. Jetzt bei Claude einfügen und die Fotos dazulegen."))
+      .catch(()=>alert("Das Kopieren hat nicht geklappt – markier den Text und kopier ihn von Hand."));
+  }catch(e){ alert("Das Kopieren hat nicht geklappt – markier den Text und kopier ihn von Hand."); }
+}
+/* Aus einem eingespielten Eintrag ein Rezept machen, das die App kennt.
+   Alles, was fehlt, wird abgeleitet statt auf einen Standardwert gesetzt:
+   die Art aus den Zutaten, das Protein aus den Mengen, die Abteilung aus dem
+   Namen. Ein Rezept mit 20 g Protein und 30 Minuten für jedes eingespielte
+   Gericht würde den Wochenschnitt verfälschen. */
+function importEintrag(r){
+  if(!r||!r.n) return null;
+  const alsListe=x=>Array.isArray(x)?x:(typeof x==="string"?x.split(/\r?\n/):[]);
+  const id=r.id||neueId("u");
+  const zRoh=alsListe(r.z).map(z=>Array.isArray(z)
+      ? [z[0],+z[1]||0,z[2]||"",ABT[z[3]]?z[3]:katFuer(z[0])]
+      : parseZutat(String(z))).filter(Boolean);
+  /* Alle Mengen der App gelten für eine Portion. Steht im Paket, für wie viele
+     das Buch rechnet, wird hier geteilt – sonst stimmt die Einkaufsliste nie. */
+  const port=Math.max(1,+r.port||1);
+  const z=port>1?zRoh.map(x=>[x[0],Math.round(x[1]/port*1000)/1000,x[2],x[3]]):zRoh;
+  const ma=(Array.isArray(r.ma)?r.ma:["a"]).filter(x=>MAHL[x]);
+  const typ=TYP[r.typ]?r.typ:"haupt";
+  return {id,n:String(r.n),
+    k:["veg","fisch","fleisch"].includes(r.k)?r.k:artAusZutaten(z),
+    typ,
+    ma:(typ==="snack"||typ==="dessert")?[]:(ma.length?ma:["a"]),
+    m:Array.isArray(r.m)&&r.m.length?r.m.filter(x=>+x>=1&&+x<=12).map(Number):ALL,
+    min:+r.min||30,
+    p:+r.p||Math.round(proteinSchaetzen(z)),
+    bl:[0,1,2].includes(r.bl)?r.bl:0,
+    nut:Array.isArray(r.nut)?r.nut.filter(x=>NUT[x]):[],
+    why:r.why||"Eingespielt.",
+    z, s:alsListe(r.s).map(x=>String(x).trim().replace(/^\d+[.)]\s*/,"")).filter(Boolean),
+    q:r.q?String(r.q):undefined,
+    src:"eigen", port};
+}
 function importAusfuehren(){
+  const roh=String((document.getElementById("imp")||{}).value||"").trim();
+  if(!roh){ alert("Da ist noch nichts zum Einspielen. Wähl eine Datei oder füg den Text ein."); return; }
+  /* Claude schreibt gern noch einen Satz unter die Liste. Das ist kein Grund
+     zu scheitern: gesucht wird die äußerste eckige Klammer. */
   let liste;
-  try{ liste=JSON.parse(document.getElementById("imp").value); }
-  catch(e){ alert("Das ist kein gültiges JSON. Achte darauf, den Text vollständig zu kopieren – von der eckigen Klammer bis zur schließenden."); return; }
-  if(!Array.isArray(liste)){alert("Erwartet wird eine Liste von Rezepten in eckigen Klammern.");return;}
-  let n=0;
-  liste.forEach(r=>{
-    if(!r||!r.n) return;
-    const id=r.id||neueId("u");
-    const sauber={id,n:String(r.n),k:["veg","fisch","fleisch"].includes(r.k)?r.k:"veg",
-      ma:Array.isArray(r.ma)&&r.ma.length?r.ma.filter(x=>MAHL[x]):["a"],
-      m:Array.isArray(r.m)&&r.m.length?r.m:ALL,min:+r.min||30,p:+r.p||20,bl:[0,1,2].includes(r.bl)?r.bl:0,
-      nut:Array.isArray(r.nut)?r.nut.filter(x=>NUT[x]):[],why:r.why||"Eingespielt.",
-      z:Array.isArray(r.z)?r.z.map(z=>Array.isArray(z)?[z[0],+z[1]||0,z[2]||"",ABT[z[3]]?z[3]:katFuer(z[0])]:parseZutat(String(z))).filter(Boolean):[],
-      s:Array.isArray(r.s)?r.s.map(String):[],src:"eigen"};
-    if(r.q)sauber.q=String(r.q);
-    if(!sauber.ma.length)sauber.ma=["a"];
-    mut("eigene/"+id,sauber,false);
-    if(!S.sammlung[id])mut("sammlung/"+id,Date.now(),false);
-    n++;
+  const versuche=[roh, roh.slice(roh.indexOf("["),roh.lastIndexOf("]")+1)];
+  for(const v of versuche){ try{ liste=JSON.parse(v); break; }catch(e){} }
+  if(liste&&!Array.isArray(liste)&&Array.isArray(liste.rezepte)) liste=liste.rezepte;
+  if(!liste){ alert("Das ist kein gültiges JSON. Achte darauf, den Text vollständig zu kopieren – von der eckigen Klammer bis zur schließenden."); return; }
+  if(!Array.isArray(liste)){ alert("Erwartet wird eine Liste von Rezepten in eckigen Klammern."); return; }
+  const rein=[], ohneName=[];
+  liste.forEach(r=>{ const x=importEintrag(r); if(x) rein.push(x); else ohneName.push(r); });
+  if(!rein.length){ alert("Darin war kein Rezept mit Namen."); return; }
+  rein.forEach(x=>{
+    const {port,...rezept}=x;
+    mut("eigene/"+rezept.id,rezept,false);
+    if(!S.sammlung[rezept.id]) mut("sammlung/"+rezept.id,Date.now(),false);
   });
-  closeSheet(); alert(n+" Rezept"+(n===1?"":"e")+" eingespielt."); go("rezepte");
+  closeSheet();
+  /* Was beim Einspielen geschätzt oder umgerechnet wurde, gehört gesagt –
+     sonst steht es unbemerkt im Wochenplan. */
+  const geteilt=rein.filter(x=>x.port>1);
+  const unklar=rein.reduce((a,x)=>a+x.z.filter(z=>z[3]==="so").length,0);
+  const ohneSchritte=rein.filter(x=>!x.s.length).length;
+  const hinweise=[
+    geteilt.length?geteilt.length+(geteilt.length===1?" Rezept":" Rezepte")+" auf eine Portion heruntergerechnet":"",
+    unklar?unklar+" Zutat"+(unklar===1?"":"en")+" ohne Abteilung – die stehen unter Sonstiges":"",
+    ohneSchritte?ohneSchritte+" ohne Zubereitung":"",
+    ohneName.length?ohneName.length+" Eintrag ohne Namen übersprungen":""
+  ].filter(Boolean);
+  alert(rein.length+" Rezept"+(rein.length===1?"":"e")+" eingespielt."
+    +(hinweise.length?"\n\n"+hinweise.join(".\n")+".":"")
+    +"\n\nBitte einmal gegenlesen: "+rein.slice(0,6).map(x=>x.n).join(", ")+(rein.length>6?" …":""));
+  go("rezepte");
 }
 
 /* ===== Beilagen-Vielfalt, Angebote, Mehrwochenplanung ===== */
@@ -5485,6 +5618,7 @@ if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch
   const p=document.getElementById("pdfwahl"); if(p) p.onchange=()=>prospektLesen(p.files);
   const f=document.getElementById("fotowahl"); if(f) f.onchange=()=>fotoLesen(f.files&&f.files[0]);
   const k=document.getElementById("fotokamera"); if(k) k.onchange=()=>fotoLesen(k.files&&k.files[0]);
+  const i=document.getElementById("impdatei"); if(i) i.onchange=()=>importDateiLesen(i.files&&i.files[0]);
 })();
 /* Der frühere zweite Block hat den richtigen Handler überschrieben und eine
    einzelne Datei statt der Dateiliste übergeben – prospektLesen brach damit ab. */

@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 4.0**, Stand 3. September 2026. Datei rund 396 KB, 134 Rezepte und 48 Ideen.
-Die Testreihen unter `tests/` prüfen 562 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 4.0**, Stand 3. September 2026. Datei rund 404 KB, 134 Rezepte und 48 Ideen.
+Die Testreihen unter `tests/` prüfen 583 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -49,7 +49,7 @@ Einzeldateien gebaut wurde. Diese Abschnitte findet man an ihren Kommentarköpfe
 | Asana-Import Teil 2 | 48 vegetarische Rezepte | `REZEPTE_ASANA_2` |
 | Ergänzungen | 8 darmfreundliche Schnellrezepte, `REZEPTE.push(...)` | `REZEPTE_EXTRA` |
 | Rezeptarten | `TYP`, `typVon()`, 8 Snacks, 6 Desserts | `const TYP=` |
-| Eigene Rezepte | Formular, Zutatenparser, Teilen-Aufnahme, Import/Export | `KAT_INDEX` |
+| Eigene Rezepte | Formular, Zutatenparser, Teilen-Aufnahme, Import/Export, `CLAUDE_VORLAGE` | `KAT_INDEX` |
 | Vielfalt und Angebote | `KH`, `khVon()`, Angebotszeiträume, `imAngebot()` | `const KH=` |
 | Komfort | Bildschirm wachhalten, Kochmodus, Einplanen-Raster, Liste teilen | `wachHalten` |
 | Buchseiten | Spalten, Zeilen, Trennstriche, Kopfdaten aus Fotos | `function wortZeilen` |
@@ -508,6 +508,10 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 5. **Aus Bild** – tesseract.js erkennt Text aus einem Foto oder Bildschirmfoto. Bei
    abfotografierten Kochbuchseiten wird die Seite vorher aufbereitet, siehe Abschnitt 10b.
    Das Ergebnis geht wie jede andere Quelle ins Prüfblatt.
+6. **Einspielen** – ein Rezeptpaket als JSON, aus einer Datei oder eingefügt. Der zweite
+   Weg für Kochbücher und der schnellere bei mehreren Seiten: Fotos bei Claude hochladen,
+   dort nach der mitgelieferten Anleitung ein Paket erzeugen lassen, hier einspielen.
+   Siehe Abschnitt 10c.
 
 Beim Abruf über den Rezept-Leser wird **automatisch auf eine Portion heruntergerechnet**,
 außer bei Backwerk (`BACKWERK`-Regex: Kuchen, Torte, Brot, Muffin, Auflauf, Gratin …).
@@ -718,6 +722,69 @@ Vier weitere Dinge kamen aus derselben Prüfung:
 Er versteht die Seite nicht, er misst sie aus. Ein Rezept über zwei Buchseiten, ein
 dreispaltiger Satz, eine Zutatenliste ohne Mengen – das geht daneben, und dafür gibt es
 das Prüfblatt und „Text von Hand nachbessern". Handschrift bleibt aussichtslos.
+
+---
+
+## 10c. Rezepte einspielen: der Weg über Claude (4.0)
+
+Die Texterkennung im Browser liest **ein** Foto. Wer einen Stapel Kochbuchseiten vor sich
+hat, ist über Claude schneller und genauer: Fotos hochladen, Rezeptpaket zurückbekommen,
+in der App einspielen. Zu finden unter „Mehr → Eigene Rezepte → Rezepte einspielen".
+
+Der Ablauf hat vier Schritte, und die App führt durch alle vier:
+
+1. **Anleitung kopieren** (`CLAUDE_VORLAGE`, ein Knopf legt sie in die Zwischenablage).
+   Sie steht bewusst in der App und nicht in dieser Dokumentation – gebraucht wird sie am
+   Handy, dort, wo auch eingespielt wird.
+2. Bei Claude einfügen, Fotos dazulegen. Mehrere auf einmal gehen.
+3. Antwort als Datei sichern oder den Text kopieren.
+4. In der App **„Datei wählen"** oder einfügen und einspielen.
+
+### Das Format ist absichtlich nachsichtig
+
+Pflicht ist allein `n`, der Name. Alles andere darf fehlen:
+
+| Feld | Was passiert, wenn es fehlt |
+|---|---|
+| `z` Zutaten | Darf eine Klartextzeile je Zutat sein („200 g Möhren"), eine fertige Liste, oder ein Textblock mit Zeilenumbrüchen. Menge, Einheit und Abteilung liest `parseZutat()`. |
+| `s` Schritte | Wie `z`; eine führende Nummer wird abgeschnitten. |
+| `k` Art | Wird über `artAusZutaten()` aus den Zutaten abgeleitet. |
+| `p` Protein | Wird über `proteinSchaetzen()` aus den Mengen geschätzt. Ein fester Standardwert von 20 g würde den Wochenschnitt verfälschen. |
+| `typ`, `ma`, `m`, `bl`, `nut` | Werden geprüft und Unsinniges verworfen; Snacks und Desserts bekommen grundsätzlich keine Mahlzeit. |
+
+### `port` ist das Feld, auf das es ankommt
+
+**Alle Mengen der App gelten für eine Portion.** Ein Kochbuch rechnet für 4 Personen oder
+18 Scheiben. Steht `port` im Paket, teilt der Import die Mengen – und erst damit stimmt die
+Einkaufsliste. Ohne `port` bleiben die Mengen, wie sie kommen; das ist richtig für
+Pakete, die aus der App selbst stammen.
+
+Geprüft wird das über die Einkaufsliste, nicht nur an der Zahl: 200 g Möhren für 18
+Scheiben, wieder mit 18 Portionen eingeplant, müssen erneut 200 g ergeben
+(`tests/17-einspielen.js`).
+
+### Was nachsichtig heißt
+
+- Ein Satz vor oder hinter der Liste lässt das Einspielen nicht scheitern – gesucht wird
+  die äußerste eckige Klammer. Claude schreibt gern noch „Unsicher war Zeile 3" darunter,
+  und das soll es auch dürfen.
+- Ein Paket in einem Objekt (`{"rezepte":[…]}`) wird ebenso gefunden.
+- Einträge ohne Namen werden übersprungen und gezählt, nicht stillschweigend verworfen.
+
+### Gesagt wird, was geschätzt wurde
+
+Nach dem Einspielen steht in der Meldung, wie viele Rezepte heruntergerechnet wurden, wie
+viele Zutaten ohne Abteilung unter Sonstiges gelandet sind und wie viele Rezepte ohne
+Zubereitung kamen – dazu die Namen zum Gegenlesen. Was im Wochenplan landet, ohne dass es
+jemand gesehen hat, ist der teuerste Fehler dieser App.
+
+### Am Beispiel gemessen
+
+Die Nusskuchen-Seite über diesen Weg eingespielt: 15 Zutaten mit Menge, Einheit und
+Abteilung, 6 Schritte, 85 Minuten, Quelle „Kochbuch, Seite 204", **7 g Protein je
+Portion** – dieselbe Zahl, die im Buch unter den Nährwerten steht. Keine Zutat ohne Regal,
+nachdem `KAT_WORT` um Schokolade, Kuvertüre, Nelken, Kardamom, Piment und Safran ergänzt
+wurde; die fehlten vorher und landeten unter Sonstiges.
 
 ---
 
@@ -1002,6 +1069,12 @@ einziges verwertbares Wort. Der Foto-Weg stellt die Seite jetzt frei, gleicht di
 Beleuchtung aus, bestimmt die Ausrichtung selbst, misst den Bundsteg aus und **liest dann
 jede Spalte einzeln**. Am Beispielfoto: vorher nichts, jetzt alle vierzehn Zutatenzeilen,
 fünf Schrittabsätze und die richtige Zeit. Abschnitt 10b.
+
+**5. Ein zweiter Weg für Kochbücher.** Die Texterkennung im Browser liest ein Foto; wer
+einen Stapel Seiten hat, ist über Claude schneller. „Rezepte einspielen" führt jetzt durch
+den ganzen Weg: Anleitung kopieren, Fotos bei Claude, Paket zurück, Datei wählen,
+einspielen. Der Import leitet Art und Protein selbst ab und rechnet über `port` auf eine
+Portion herunter. Abschnitt 10c.
 
 Nebenbei: `ocrReparieren()` verstümmelte jede Zahl, die auf 9 endet – „19 g Butter" wurde
 zu „1 g g Butter". Das galt für jede Quelle, nicht nur für Fotos.
