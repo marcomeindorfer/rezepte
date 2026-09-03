@@ -135,6 +135,11 @@ const SHEETS = [
   ["Angebote bearbeiten", () => A.angeboteBearbeiten()],
   ["Rezept bearbeiten", () => A.neuesRezept(A.S.eigene.eig1)],
   ["Weiteres zur Einkaufsliste", () => A.einkaufMehr()],
+  ["Posten ändern", () => A.postenBearbeiten("extra_manuell")],
+  ["Posten ändern, im Angebot", () => {
+    A.S.liste.extra_manuell = { ...A.S.liste.extra_manuell, ang: "Taschentücher 10er" };
+    A.postenBearbeiten("extra_manuell");
+  }],
   ["Mehr: Vorrat", () => A.mehrOeffnen("vorrat")],
   ["Mehr: Angebote", () => A.mehrOeffnen("angebote")],
   ["Mehr: Eigene Rezepte", () => A.mehrOeffnen("eigene")],
