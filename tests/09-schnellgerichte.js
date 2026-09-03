@@ -46,10 +46,13 @@ t("Das Protein wird aus den Zutaten geschätzt", () => {
   wahr(mitEiweiss.p > ohne.p, "Quark bringt mehr Protein als Gurke: " + mitEiweiss.p + " vs " + ohne.p);
   wahr(mitEiweiss.p > 10, "plausibler Wert, bekommen " + mitEiweiss.p);
 });
-t("Die Mahlzeit ist die, in die eingetragen wird", () => {
+/* Seit 4.1 kennen Rezepte den Unterschied zwischen Mittag und Abend nicht mehr:
+   Was kein Frühstück ist, ist eine Hauptspeise und passt zu beidem. */
+t("Ein Schnellgericht ist Frühstück oder Hauptspeise", () => {
   frisch();
   gleich(A.R(anlegen("Müsli", "", "f")).ma, ["f"]);
-  gleich(A.R(anlegen("Suppe", "", "m")).ma, ["m"]);
+  gleich(A.R(anlegen("Suppe", "", "m")).ma, ["m", "a"], "mittags eingetragen, abends genauso brauchbar");
+  gleich(A.R(anlegen("Auflauf", "", "a")).ma, ["m", "a"]);
 });
 t("Ohne Namen entsteht nichts", () => {
   frisch();
@@ -260,7 +263,7 @@ t("Eintragen setzt das Gericht in den Platz", () => {
   const e = A.S.plan["w0-1-m"];
   wahr(e, "Platz belegt");
   gleich(A.R(e.r).n, "Nudeln mit Pesto");
-  gleich(A.R(e.r).ma, ["m"], "Mahlzeit passt zum Platz");
+  gleich(A.R(e.r).ma, ["m", "a"], "als Hauptspeise passt es zu beiden Plätzen");
 });
 t("Ohne Namen wird nichts eingetragen, sondern erklärt", () => {
   frisch();

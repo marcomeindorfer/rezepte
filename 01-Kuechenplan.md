@@ -1,8 +1,8 @@
 # Küchenplan
 
 Wochenplanung für Essen, Rezeptsammlung und Einkaufsliste für zwei Personen.
-**Version 4.0**, Stand 3. September 2026. Datei rund 404 KB, 134 Rezepte und 48 Ideen.
-Die Testreihen unter `tests/` prüfen 583 Punkte, Aufruf mit `./tests/run.sh`.
+**Version 4.1**, Stand 3. September 2026. Datei rund 377 KB, 134 Rezepte und 48 Ideen.
+Die Testreihen unter `tests/` prüfen 580 Punkte, Aufruf mit `./tests/run.sh`.
 
 Voraussetzung: Lies zuerst `00-Grundlagen-und-Infrastruktur.md`.
 
@@ -52,7 +52,6 @@ Einzeldateien gebaut wurde. Diese Abschnitte findet man an ihren Kommentarköpfe
 | Eigene Rezepte | Formular, Zutatenparser, Teilen-Aufnahme, Import/Export, `CLAUDE_VORLAGE` | `KAT_INDEX` |
 | Vielfalt und Angebote | `KH`, `khVon()`, Angebotszeiträume, `imAngebot()` | `const KH=` |
 | Komfort | Bildschirm wachhalten, Kochmodus, Einplanen-Raster, Liste teilen | `wachHalten` |
-| Buchseiten | Spalten, Zeilen, Trennstriche, Kopfdaten aus Fotos | `function wortZeilen` |
 | Quellen und PDF | pdf.js-Anbindung, Prospektauswertung, Blog-Feeds | `PDFJS_URL` |
 | Extras | Zusatzgerichte, weitere Listen, Symbole, Foto-Import | `extraSchluessel` |
 | Ideen | `THEMEN` (12 Wochenthemen) und `IDEEN` (48 Vorschläge) | `const THEMEN=` |
@@ -175,13 +174,23 @@ zusätzliche Gerichte, „Frühstück für alle Tage übernehmen", „Zuletzt ge
 **0 Portionen bedeutet Restetag** und erzeugt keine Einkäufe.
 
 ### Rezepte
-Suchfeld, Filterreihe, Trefferliste. Karten zeigen bewusst **nur Art und Protein** –
-alle anderen Kennzeichen wurden auf Wunsch entfernt. Papierkorb-Knopf je Rezept:
-eigene werden gelöscht, mitgelieferte nur aus der Sammlung genommen, beides mit Rückfrage
-und Rücknahme.
 
-Filter: Alle · Unter 25 Min · Darmfreundlich · Frühstück · Mittag · Abend · Fisch ·
-Fleisch · Vegetarisch · Snacks · Desserts · Aus eurer Liste · Selbst angelegt · Alle Rezepte.
+Die eigene Sammlung, **nach Art gruppiert** (4.1): Frühstück, Hauptspeisen, Snacks,
+Desserts, jede Gruppe mit ihrer Anzahl in der Überschrift. Vorher lief alles als eine
+einzige Reihe durch – bei 134 Rezepten scrollt man dabei an den Übergängen vorbei, ohne
+sie zu bemerken. Steht die Art schon als Überschrift darüber, nennt die Karte darunter sie
+nicht noch einmal; sonst liest man achtzehnmal „Frühstück“.
+
+Darüber Suche (Name **und** Zutaten), „Eigenes Rezept anlegen“, „Was ist noch da?“ und die
+Filterleiste. Sie ist in 4.1 von 15 auf 12 Chips geschrumpft:
+
+`Alle · Frühstück · Hauptspeisen · Unter 25 Min · Darmfreundlich · Saison · Vegetarisch ·
+Fisch · Fleisch · Selbst angelegt · Schnellgerichte · Alle Rezepte`
+
+Weggefallen sind **Mittag** und **Abend** – beide meinten dasselbe – sowie **Snacks** und
+**Desserts**, die jetzt als Überschrift in der Liste stehen. Gefiltert wird weiterhin
+immer nur nach einem Kriterium; ist es eine Art, entfallen die Überschriften, weil sie
+dann nur den Filter wiederholen würden.
 
 ### Entdecken
 Der Inspirationsbereich. Er zeigt **nur Vorschläge, die noch nicht in der Sammlung
@@ -491,7 +500,7 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 
 ---
 
-## 10. Rezepte hinzufügen: sechs Wege
+## 10. Rezepte hinzufügen: fünf Wege
 
 0. **Einwerfen** – das Feld ganz oben im Formular. Der ganze Block einer beliebigen Quelle
    kommt hinein, roh und unsortiert; die App trennt Zutaten, Zubereitung, Dauer, Portionen
@@ -505,13 +514,9 @@ Resteküche. Für den Zugriff darauf gibt es `RZ_ALLE()` und `SCHNELL()`.
 4. **Von Hand** – Formular mit Freitext für Zutaten (`200 g Möhren` je Zeile). Der Parser
    erkennt Menge, Einheit und Abteilung; das Abteilungswissen stammt aus 173 Zutaten der
    mitgelieferten Rezepte plus Wortlisten.
-5. **Aus Bild** – tesseract.js erkennt Text aus einem Foto oder Bildschirmfoto. Bei
-   abfotografierten Kochbuchseiten wird die Seite vorher aufbereitet, siehe Abschnitt 10b.
-   Das Ergebnis geht wie jede andere Quelle ins Prüfblatt.
-6. **Einspielen** – ein Rezeptpaket als JSON, aus einer Datei oder eingefügt. Der zweite
-   Weg für Kochbücher und der schnellere bei mehreren Seiten: Fotos bei Claude hochladen,
-   dort nach der mitgelieferten Anleitung ein Paket erzeugen lassen, hier einspielen.
-   Siehe Abschnitt 10c.
+5. **Einspielen** – ein Rezeptpaket als JSON, aus einer Datei oder eingefügt. Der Weg für
+   Kochbücher: Fotos bei Claude hochladen, dort nach der mitgelieferten Anleitung ein
+   Paket erzeugen lassen, hier einspielen. Siehe Abschnitt 10b.
 
 Beim Abruf über den Rezept-Leser wird **automatisch auf eine Portion heruntergerechnet**,
 außer bei Backwerk (`BACKWERK`-Regex: Kuchen, Torte, Brot, Muffin, Auflauf, Gratin …).
@@ -592,140 +597,7 @@ den man wegklicken kann.
 
 ---
 
-## 10b. Fotos von Kochbuchseiten (4.0)
-
-Bis 3.9 hieß der Weg: Bild auf 1800 Pixel verkleinern, tesseract darüberlaufen lassen,
-den Text nehmen, wie er kommt. Bei einem Bildschirmfoto reicht das. Bei einer
-abfotografierten Buchseite reicht es nicht, und zwar aus vier Gründen zugleich: Die Seite
-liegt quer, der eigene Schatten liegt darüber, sie hat zwei Spalten, und jede zweite
-Zeile ist getrennt. Was herauskam, war Wortsalat – daran ist der Nusskuchen gescheitert.
-
-### Die fünf Schritte
-
-1. **Seite freistellen** (`seitenAusschnitt`). Auf dem Foto ist die Seite selten allein;
-   ringsum liegen Tisch, Sofa, Hand. Diese Fläche kostet Auflösung, und Auflösung ist bei
-   der Texterkennung fast alles. Beim Beispielfoto (4032 × 2268) füllt die Seite 83 Prozent
-   der Breite – ohne Zuschnitt bleiben für die Schrift 18 Bildpunkte Höhe, mit Zuschnitt
-   sind es 30. Die Seite ist der helle, zusammenhängende Bereich. **Die Schwelle darf
-   dabei nicht am hellsten Bildpunkt hängen:** Ein einziger Lichtreflex auf dem Papier
-   setzt sie auf 255, und dann fällt die schattige Hälfte der Seite als „Hintergrund" weg.
-   Gemessen wird deshalb am 10.- und 90.-Perzentil der Helligkeit.
-2. **Beleuchtung ausgleichen** (`bildEbnen`). Ein Foto einer Buchseite hat fast immer
-   einen Helligkeitsverlauf: Fensterlicht auf der einen Seite, der eigene Schatten auf
-   der anderen. tesseract entscheidet über die ganze Seite mit einer einzigen Schwelle
-   und verliert dabei die dunkle Hälfte. Das stark verkleinerte Bild ist genau dieser
-   Verlauf ohne die Schrift; teilt man das Bild dadurch, bleibt gleichmäßiges Grau übrig.
-3. **Ausrichtung bestimmen.** Zuerst die Achse – aufrecht oder quer –, dann nur noch die
-   Frage, ob die gewählte Achse auf dem Kopf steht. Das sind zwei bis drei Durchgänge auf
-   800 Punkten statt vier. `ocrGuete()` bewertet nicht die Zuversicht allein – auf einer
-   gedrehten Seite erkennt tesseract wenige Zeichen sehr sicher –, sondern die Zahl echter
-   Wörter, gewichtet mit dem, was über 40 Prozent Zuversicht hinausgeht. Am Beispielfoto:
-   0 Grad → 0, **90 Grad → 136**, 270 Grad → 0.
-4. **Seite ausmessen** (1400 Punkte, ein Durchgang). Wo liegt der Bundsteg
-   (`spaltenLuecke`), wie schief liegt die Seite (`schraeglage`)? Für beides genügen grobe
-   Wortkästchen; der Bundsteg wird schon bei 1200 Punkten an derselben Stelle gefunden.
-5. **Jede Spalte einzeln lesen**, in voller Auflösung (3000 Punkte).
-
-**Schritt 5 ist der eigentliche Unterschied.** Liest man die ganze Seite in einem Zug,
-versucht die Texterkennung, quer über den Bundsteg hinweg Zeilen zu bilden, und aus der
-schmalen Zutatenspalte kommen fünf zerrissene Bruchstücke
-(`"SO y (z.B. viuscovado) gemahlene (Größe M)"`). Legt man derselben Erkennung dieselbe
-Spalte allein vor, liest sie **alle vierzehn Zutatenzeilen der Reihe nach**. Gemessen am
-selben Foto, am selben Tag, mit derselben Fassung von tesseract.
-
-Innerhalb einer Spalte wird auch die Zeilenbildung tesseract überlassen. Der eigene Aufbau
-aus Wortkästchen (`wortZeilen`) ist dort schlechter: Fehlt der Erkennung mitten in der
-Zeile ein Wort, entsteht eine Lücke, und die Zeile zerfällt. Die Wortkästchen dienen nur
-noch dem Ausmessen, nicht mehr dem Lesen.
-
-### Wie die Seite zusammengesetzt wird
-
-Die Funktionen dafür rechnen nur mit Zahlen und Zeichenketten, brauchen weder Browser noch
-tesseract und stehen deshalb einzeln in `tests/16-buchseite.js`:
-
-| Funktion | Aufgabe |
-|---|---|
-| `seitenAusschnitt` | Die Seite im Foto finden – der helle, zusammenhängende Bereich. Schwelle aus der Helligkeitsverteilung, nicht aus dem hellsten Punkt. |
-| `wortRauschen` | Tischkante, Schatten, Sofamuster werden auch zu „Wörtern“. Zu unsicher, ohne Buchstaben oder aus der Zeilenhöhe gefallen heißt: weg. Bruchzeichen, Prozent und Grad zählen als Inhalt. |
-| `wortZeilen` | Wörter gleicher Höhe zu Zeilen. Getrennt wird, wo der Abstand ein Vielfaches der Zeilenhöhe misst – das ist kein Wortabstand mehr, das ist die Spaltengrenze. **Nur zum Ausmessen**, nicht zum Lesen. |
-| `schraeglage` | Der Neigungswinkel aus den Wortkästchen: Bei der richtigen Neigung fallen die Wörter in scharfe Zeilen. Ohne weiteren Durchgang. |
-| `spaltenLuecke` | Der senkrechte Streifen, durch den fast keine Zeile läuft. Gesucht nur zwischen 22 und 78 Prozent der Breite; ein paar durchlaufende Zeilen sind erlaubt, weil unter den Spalten gern ein Kasten über die volle Breite steht. Ohne Fund gilt die Seite als einspaltig. |
-| `spaltenArt` | Welche Spalte trägt die Zutaten? Nicht am Inhalt zu erkennen, wohl aber am Bau: Zutaten sind kurze Zeilen mit einer Menge vorn und ohne Satzende, Schritte sind lang, nummeriert und enden mit Punkt. |
-| `spaltenOrdnen` | Welche der beiden Spalten ist welche – für beide Wege gleich. |
-| `seiteOrdnen` | Der Weg für einen einzigen Durchgang (Rückfall, und was die Prüfungen benutzen): zerlegt in Kopf, Zutatenspalte und Schrittspalte. Was über beide Spalten läuft, zählt nur, wenn es **darüber** steht – darüber steht der Titel, darunter der Ernährungskasten, der Kapitelname, die Seitenzahl. |
-| `trennungenFuegen` | „Minu-/ten" wird „Minuten". Vor einem großen Buchstaben bleibt der Strich: „Dinkel-/Vollkornmehl" heißt wirklich so. |
-| `titelzeilenFuegen` | Der Titel steht in Versalien über zwei Zeilen. Einzeln gelesen gewinnt die zweite Hälfte, und das Rezept hieße „MIT MÖHREN UND SAUERRAHM". |
-| `zutatenzeilenFuegen` | Der Zusatz unter der Zutat gehört an die Zutat, sonst steht „(z. B. Muscovado)" als eigener Posten auf der Einkaufsliste. |
-| `schritteBuendeln` | Nummerierte Schritte über mehrere Zeilen zu einem. Hinter dem letzten Schritt ist bei der ersten kurzen Zeile ohne Satzende Schluss – dort fängt der Ernährungskasten an. |
-| `buchText` | Setzt daraus den Text zusammen und **schreibt die Überschriften „Zutaten" und „Zubereitung" selbst hinein.** Eine Überschrift ist das verlässlichste Signal, das `textEinordnen()` kennt, und aus dem Seitenaufbau wissen wir hier sicher, was was ist. |
-
-Danach geht es wie jede andere Quelle durch `textEinordnen()` ins Prüfblatt.
-
-**Dauer.** Am Beispielfoto im Browser gemessen: **84 Sekunden** vom Antippen bis zum
-Prüfblatt, den einmaligen Download der deutschen Sprachdaten eingerechnet. Auf dem Handy
-entsprechend länger. Das ist viel für einen Knopfdruck – aber es ist ein Vorgang je
-Rezept, und die Alternative war ein Ergebnis, das man wegwerfen musste.
-
-### Was am echten Foto herauskommt
-
-Geprüft wurde mit dem Foto einer von Hand gehaltenen, gewölbten Kochbuchseite
-(„Nusskuchen mit Möhren und Sauerrahm", 4032 × 2268, Schatten quer über der Seite):
-
-| | 3.9, ohne Drehung | 4.0, ganze Seite am Stück | 4.0, spaltenweise |
-|---|---|---|---|
-| Zutaten | – | 9 Bruchstücke, 4 davon unbrauchbar | **alle 14 Zeilen, in der Reihenfolge des Buchs** |
-| Schritte | – | 17 zerrissene Fetzen | **5 Absätze** (2 und 3 in einem, siehe unten) |
-| Zeit | – | nicht erkannt | **85 Minuten** (30 + 55; Abkühlen zählt nicht) |
-| Nährwerte, Seitenzahl, Ernährungskasten | – | mitten im Rezept | **draußen** |
-| Titel | – | ein Erkennungsfetzen | leer – die Versalzeile war nicht lesbar |
-
-Die erste Spalte hat einen Strich, weil dort nichts zu messen war: 3.9 hat das Bild nie
-gedreht, und in der Lage, in der das Foto aufgenommen wurde, erkennt tesseract **kein
-einziges verwertbares Wort** (`ocrGuete` = 0 bei 0 Grad gegen 136 bei 90 Grad). Genau das
-war der Grund, warum die Seite „leider nicht gut erkannt" wurde.
-
-Die Zeichen stimmen dabei nicht überall: Aus „200 g Möhren" wird „Z26C 9 Möhren", aus
-„100 g" wird „iDIg". Das ist bei einem Handyfoto einer gewölbten Seite auch nicht zu
-holen. Entscheidend ist, dass **Gestalt und Reihenfolge stimmen** – der Rest ist im
-Prüfblatt eine Minute Tippen statt einer halben Stunde Abschreiben.
-
-Der genaue Text, den die Erkennung an diesem Tag geliefert hat, steht als feste Prüfung in
-`tests/16-buchseite.js`. Nicht nachgebaut: wortwörtlich, mit allen Lesefehlern. Geprüft
-wird daran nicht, ob die Zeichen stimmen, sondern ob daraus ein Rezept der richtigen
-Gestalt wird. Wer an der Einordnung etwas ändert, merkt sofort, wenn es schlechter wird.
-
-### Warum fünf Schritte und nicht sechs
-
-Die Erkennung hat aus dem „3." ein „2 " ohne Punkt gemacht. Ohne Punkt wird bewusst nicht
-getrennt: „5 Minuten cremig rühren." fängt genauso an und steht mitten im Schritt. Ein
-lockerer Vergleich hat in der Prüfung prompt einen Schritt in der Mitte zerschnitten.
-Lieber zwei Schritte in einem Absatz als ein Schritt in zwei Teilen – das eine sieht man
-im Prüfblatt sofort, das andere nicht.
-
-Vier weitere Dinge kamen aus derselben Prüfung:
-
-- **Schrittnummern**, die die Erkennung verpatzt: aus „1." wird „]l.", aus „6." ein „©.".
-  Erkannt wird deshalb die Gestalt (ein bis drei Zeichen, Punkt, Leerzeichen, großer
-  Buchstabe), nicht die Ziffer. Vorher trafen zwei von sechs.
-- **Das Kringel-C** in der Müll-Liste war zu gierig. Aus der „6" vor „6 Eier (Größe M)"
-  macht die Erkennung gern ein „©" – und damit fiel eine Zutat als „Impressum" heraus.
-  Jetzt braucht es eine Jahreszahl daneben.
-- **Zusatzzeilen** wurden angehängt, sobald sie klein anfingen. „iDIg waiche Butter" fängt
-  klein an – und eine ganze Zutat verschwand in der Zeile davor. Angehängt wird jetzt nur
-  noch, was mit einer Klammer oder einem der wenigen Zusatzwörter beginnt.
-- **Der Kopf der Zutatenspalte** endete an der ersten Ziffer. Fängt die erste Menge nicht
-  mit einer Ziffer an, weil die Erkennung sie verpatzt hat, verschwand sie im Kopf. Jetzt
-  endet der Kopf am letzten Datum – Form, Zeit, Portionen.
-
-### Was der Foto-Weg weiterhin nicht kann
-
-Er versteht die Seite nicht, er misst sie aus. Ein Rezept über zwei Buchseiten, ein
-dreispaltiger Satz, eine Zutatenliste ohne Mengen – das geht daneben, und dafür gibt es
-das Prüfblatt und „Text von Hand nachbessern". Handschrift bleibt aussichtslos.
-
----
-
-## 10c. Rezepte einspielen: der Weg über Claude (4.0)
+## 10b. Rezepte einspielen: der Weg über Claude (4.0)
 
 Die Texterkennung im Browser liest **ein** Foto. Wer einen Stapel Kochbuchseiten vor sich
 hat, ist über Claude schneller und genauer: Fotos hochladen, Rezeptpaket zurückbekommen,
@@ -780,11 +652,27 @@ jemand gesehen hat, ist der teuerste Fehler dieser App.
 
 ### Am Beispiel gemessen
 
-Die Nusskuchen-Seite über diesen Weg eingespielt: 15 Zutaten mit Menge, Einheit und
-Abteilung, 6 Schritte, 85 Minuten, Quelle „Kochbuch, Seite 204", **7 g Protein je
-Portion** – dieselbe Zahl, die im Buch unter den Nährwerten steht. Keine Zutat ohne Regal,
-nachdem `KAT_WORT` um Schokolade, Kuvertüre, Nelken, Kardamom, Piment und Safran ergänzt
-wurde; die fehlten vorher und landeten unter Sonstiges.
+Erster echter Stapel: **13 Kochbuchseiten aus drei Büchern** auf einmal – 146 Zutatenzeilen,
+59 Schritte. Alle dreizehn kamen an, alle Mengen wurden auf eine Portion heruntergerechnet
+(200 g Möhren für 18 Scheiben, mit 18 Portionen geplant wieder exakt 200 g), und **keine
+einzige Zutat blieb ohne Abteilung**.
+
+Dafür musste `KAT_WORT` allerdings nachgebessert werden – der Stapel hat zehn Lücken
+aufgedeckt, die vorher niemandem aufgefallen waren:
+
+| fehlte | landete unter | jetzt |
+|---|---|---|
+| Parmesan, Emmentaler, Bergkäse, Gouda, Ricotta … | Sonstiges | Kühlregal – Käse heißt selten „Käse" |
+| Buchweizen, Grünkern, Kokos-Chips, Proteinpulver | Sonstiges | Nudeln, Reis & Konserven |
+| Kräuterseitlinge, Austernpilze, Shiitake | Sonstiges | Obst & Gemüse – die Regel kannte nur „Pilz" |
+| Grapefruit | Sonstiges | Obst & Gemüse |
+| „2 Espressi" | Sonstiges | Getränke – die Regel kannte nur „Espresso" |
+| „Fett für die Form", „Pul Biber" | Sonstiges | Öl, Gewürze & Backzutaten |
+| Schokolade, Kuvertüre, Nelken, Kardamom, Piment, Safran | Sonstiges | Öl, Gewürze & Backzutaten |
+
+Die Nährwerte des Buchs liefern nebenbei das Protein je Portion – genauer als jede
+Schätzung. Beim Nusskuchen steht dort „7 g EW", und genau diese 7 g stehen jetzt im
+Rezept.
 
 ---
 
@@ -822,10 +710,10 @@ eine eigene Tabelle aufgelöst – ohne das kamen deutsche Umlaute zerschossen a
   Einwurffeld: Beschreibung kopieren, hineinwerfen, Prüfblatt bestätigen.
 - **YouTube Shorts** nennen selten Zutaten in der Beschreibung.
 - **Bilder aus Google Takeout** und Prospektbilder werden nicht übernommen.
-- **Texterkennung aus Fotos** funktioniert bei gedruckten Seiten ordentlich, seit 4.0 auch
-  bei quer liegenden und ungleichmäßig ausgeleuchteten Kochbuchseiten (Abschnitt 10b).
-  Bei Handschrift praktisch nie. Fünf Durchgänge je Foto brauchen auf dem Handy spürbar
-  Zeit – der erste entfällt, wenn die Seite schon richtig herum liegt.
+- **Texterkennung aus Fotos gibt es nicht mehr.** Sie stand von 3.x bis 4.0 im Formular
+  und wurde in 4.1 entfernt: Der Weg über Claude (Abschnitt 10b) liest dieselben Seiten
+  besser, in einem Zug und ohne 15 MB Sprachdaten. Wer sie zurückwill, findet sie in
+  `kuechenplan-4.0-mit-fotoimport-sicherung.html`.
 - **PDF-Einlesen auf dem Handy** ist speicherintensiv; ein 44-MB-Prospekt dauert spürbar.
 - **Prospekt-Viewer von Aldi** (publitas.com) gibt Daten nur mit signierten Parametern
   heraus, ist also nicht automatisierbar. Das PDF dagegen schon.
@@ -1039,6 +927,37 @@ Sechs gemeldete oder dabei gefundene Fehler, alle per Test abgesichert
 **Aufgeräumt:** Über der Einkaufsliste standen sieben Knöpfe; geblieben sind zwei
 („Erledigte ausblenden" und „Weiteres …"), das Eingabefeld ist nach oben gerückt.
 Teilen, Laufweg, Bildschirm anlassen und die beiden Zurücksetzen-Wege liegen im Blatt.
+
+---
+
+## 12f. Was in Version 4.1 aufgeräumt wurde
+
+**Mittag und Abend sind eine Hauptspeise.** Jedes Rezept musste ankreuzen, ob es mittags,
+abends oder beides passt – eine Frage, die in diesem Haushalt nie eine Antwort hatte. Sie
+ist aus dem Formular verschwunden: Die Art des Gerichts (`typ`) sagt jetzt alles, und
+`mahlzeitenZu()` leitet daraus ab, wozu es passt. Frühstück bleibt Frühstück, alles andere
+passt zu beidem.
+
+**Der Wochenplan bleibt, wie er war** – drei Felder je Tag. Gegessen wird ja weiterhin
+mittags und abends; nur die Rezepte kennen den Unterschied nicht mehr.
+
+Die 134 mitgelieferten Rezepte tragen die alte Einteilung (`ma:["m"]`) noch in den Daten.
+Statt 134 Datensätze anzufassen, normalisiert `passtZuMahlzeit()` beim Vergleich. Damit
+gilt die neue Regel rückwirkend, ohne dass irgendwo Daten wandern – und ohne dass ein
+Abgleich zwischen zwei Handys etwas verschieben kann.
+
+**Der Foto-Import ist entfernt.** „Foto aufnehmen“ und „Bild auswählen“ sind aus dem
+Formular verschwunden, und mit ihnen rund 28 KB Code: tesseract.js-Anbindung,
+Beleuchtungsausgleich, Lagenerkennung, Spaltenzerlegung, Buchsatz-Aufbereitung. Der Weg
+über Claude liest dieselben Seiten besser und in einem Zug. Geblieben sind die Regeln, die
+auch eingeworfenem Text nützen: die Kopfdaten im Buchstil („Backen: 55 Minuten“), die
+Nährwertzeilen in `MUELL`, der Versal-Titel und die Zahlenreparatur in `ocrReparieren()`.
+
+Wer den Foto-Weg zurückwill: `kuechenplan-4.0-mit-fotoimport-sicherung.html` liegt
+neben den Doku-Dateien.
+
+**Die Rezeptliste ist gruppiert** statt eine durchlaufende Reihe zu sein. Siehe
+Abschnitt 5, „Rezepte“.
 
 ---
 

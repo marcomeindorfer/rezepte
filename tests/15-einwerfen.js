@@ -255,4 +255,34 @@ t("Ein Titel, der nur aus dem Wort bestünde, bleibt stehen", () => {
   gleich(A.titelSaeubern("Speichern"), "Speichern", "sonst hieße das Rezept nichts");
 });
 
+gruppe("Was die Erkennung an Zahlen verdirbt");
+t("Eine Zahl, die auf 9 endet, bleibt heil", () => {
+  gleich(A.ocrReparieren("19 g Butter"), "19 g Butter");
+  gleich(A.ocrReparieren("249 g Mehl"), "249 g Mehl");
+});
+t("Ein alleinstehendes 9 nach einer Zahl war ein g", () => {
+  gleich(A.ocrReparieren("250 9 Möhren"), "250 g Möhren");
+});
+
+gruppe("Titel aus Versalien");
+/* Kochbücher und viele Blogs setzen den Titel in Großbuchstaben. Ohne diese
+   Regel gewann die Zeile, die am nächsten an den Zutaten stand. */
+t("Eine Versalzeile bleibt der Titel, auch neben Bruchstücken", () => {
+  frisch();
+  const e = A.textEinordnen(["NUSSKUCHEN MIT MOEHREN UND SAUERRAHM", "En NOT", "Zutaten",
+    "200 g Möhren", "Zubereitung", "1. Alles verrühren und backen."].join("\n"));
+  gleich(e.funde.titel, "NUSSKUCHEN MIT MOEHREN UND SAUERRAHM");
+});
+t("Ein kurzes Bruchstück in Großbuchstaben wird nicht zum Titel", () => {
+  frisch();
+  wahr(!A.versalTitel("AT EUER LTE SE"), "zwei Wörter mit vier Buchstaben sind die Grenze");
+  wahr(A.versalTitel("NUSSKUCHEN MIT MOEHREN"), "ein echter Titel muss durchkommen");
+});
+t("Ohne Versalzeile gewinnt weiterhin die Nähe zu den Zutaten", () => {
+  frisch();
+  const e = A.textEinordnen(["Kochkarussell", "Cremige Gnocchi mit Spinat", "Zutaten",
+    "200 g Gnocchi", "Zubereitung", "1. Alles verrühren."].join("\n"));
+  gleich(e.funde.titel, "Cremige Gnocchi mit Spinat");
+});
+
 bilanz();

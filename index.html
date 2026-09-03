@@ -348,9 +348,6 @@ input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="meldung" role="status" aria-live="polite"></div>
 <div id="sheet"></div>
 <input type="file" id="pdfwahl" accept="application/pdf,.pdf" multiple style="display:none">
-<!-- ohne capture, sonst öffnet das Handy sofort die Kamera statt der Dateiauswahl -->
-<input type="file" id="fotowahl" accept="image/*" style="display:none">
-<input type="file" id="fotokamera" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="impdatei" accept="application/json,.json,text/plain,.txt" style="display:none">
 <script>
 const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
@@ -373,7 +370,27 @@ const IKON={
   herz:'<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="fill:currentColor;stroke:none"><path d="M12 20.5l-1.5-1.4C5.2 14.4 2 11.5 2 8A5 5 0 0 1 12 5.8 5 5 0 0 1 22 8c0 3.5-3.2 6.4-8.5 11.3z"/></svg>'
 };
 const NUT={eisen:"Eisen",jod:"Jod",omega3:"Omega-3",folat:"Folat",b12:"B12",calcium:"Calcium",zink:"Zink",ballast:"Ballaststoffe"};
+/* Der Wochenplan kennt weiterhin drei Felder je Tag – gegessen wird ja mittags
+   und abends. Die Rezepte kennen den Unterschied seit 4.1 nicht mehr: Was kein
+   Frühstück ist, ist eine Hauptspeise und passt zu beidem. Vorher musste man an
+   jedem Rezept ankreuzen, ob es mittags, abends oder beides geht – eine Frage,
+   die in diesem Haushalt nie eine Antwort hatte und die Rezeptliste um zwei
+   Filter aufgebläht hat, die dasselbe meinten. */
 const MAHL={f:"Frühstück",m:"Mittag",a:"Abend"};
+const MAHL_HAUPT=["m","a"];
+const mahlzeitenZu=typ=>typ==="fruehstueck"?["f"]:(typ==="haupt"?[...MAHL_HAUPT]:[]);
+const passtZuMahlzeit=(r,mk)=>!!r&&mahlzeitenNorm(r.ma).includes(mk);
+/* Alte Rezepte, die nur mittags oder nur abends passten, passen jetzt zu beidem */
+/* Ein Rezept passt zu einer Mahlzeit, wenn seine Art dazu passt. Die 134
+   mitgelieferten Rezepte tragen noch die alte Einteilung („nur mittags“, „nur
+   abends“); statt 134 Datensätze anzufassen, wird beim Vergleich normalisiert.
+   Damit gilt die neue Regel rückwirkend, ohne dass irgendwo Daten wandern. */
+const mahlzeitenNorm=ma=>{
+  const l=(Array.isArray(ma)?ma:[]).filter(x=>MAHL[x]);
+  if(!l.length) return [];
+  if(l.includes("f")&&l.length===1) return ["f"];
+  return l.includes("f")?["f",...MAHL_HAUPT]:[...MAHL_HAUPT];
+};
 const TAGE=["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
 
 /* k = Art · ma = passende Mahlzeiten · bl = Blähfaktor 0–2 (zählt im Stillzeit-Modus)
@@ -1167,14 +1184,14 @@ const KAT_WORT=[
  [ZUT_FLEISCH,"ff"],
  /* Pflanzendrinks stehen im Regal, nicht im Kühlregal */
  [/(kokos|mandel|hafer|soja|reis|cashew|dinkel)(-| )?(milch|drink)/i,"tr"],
- [/milch|k(ä|ae)se|joghurt|jogurt|quark|sahne|butter(?!brotpapier)|margarine|\bei\b|eier|tofu|seitan|tempeh|sojaschnetzel|feta|mozzarella|schmand|cr(è|e)me fra(î|i)che|halloumi|kefir|burrata|paneer|skyr|h(ü|ue)ttenk(ä|ae)se|sauerkraut|kimchi|gnocchi|falafel|hummus|tzatziki/i,"kr"],
+ [/milch|k(ä|ae)se|joghurt|jogurt|quark|sahne|butter(?!brotpapier)|margarine|\bei\b|eier|tofu|seitan|tempeh|sojaschnetzel|feta|mozzarella|schmand|cr(è|e)me fra(î|i)che|halloumi|kefir|burrata|paneer|skyr|h(ü|ue)ttenk(ä|ae)se|parmesan|emmentaler|bergk(ä|ae)se|butterk(ä|ae)se|gouda|edamer|cheddar|camembert|\bbrie\b|ricotta|mascarpone|pecorino|gruy(è|e)re|comt(é|e)|raclette|appenzeller|maasdamer|sauerkraut|kimchi|gnocchi|falafel|hummus|tzatziki/i,"kr"],
  [/brot|br(ö|oe)tchen|tortilla|bagel|baguette|ciabatta|fladen|toast|semmel|kn(ä|ae)ckebrot|zwieback|croissant|brezel|pita|naan|teig|pizzaboden|wrap|br(ö|oe)sel/i,"bw"],
- [/(ö|oe)l\b|essig|\bsalz|pfeffer|gew(ü|ue)rz|honig|sirup|zucker|\bpaste\b|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver|hefe\b|natron|kakao|schokolade|kuvert(ü|ue)re|nelke|piment|anis\b|kardamom|safran|wacholder|estragon|ketchup|mayonnaise|sojaso(ß|ss)e|sojasauce|worcester|tabasco|sriracha|harissa|tahin|oregano|majoran|lorbeer|kreuzk(ü|ue)mmel|\bkümmel|chiliflocken|st(ä|ae)rke/i,"gw"],
- [/nudel|spaghetti|penne|fusilli|tagliatelle|lasagne|makkaroni|\bpasta|reis\b|risotto|linsen|bohnen|kichererbsen|\bdose|mehl|hafer|couscous|bulgur|quinoa|hirse|polenta|graupen|samen|kerne|nuss|n(ü|ue)sse|mandeln|sesam|tomatenmark|passierte|konserve|m(ü|ue)sli|cornflakes|erdnussmus/i,"tr"],
- [/wasser\b|saft\b|\bwein\b|rot-?wein|wei(ß|ss)-?wein|\bbier\b|limo|cola|kaffee|\btee\b|teebeutel|espresso|schorle|smoothie/i,"gt"],
+ [/(ö|oe)l\b|essig|\bsalz|pfeffer|gew(ü|ue)rz|honig|sirup|zucker|\bpaste\b|curry|paprikapulver|zimt|kurkuma|muskat|senf|vanille|backpulver|hefe\b|natron|kakao|schokolade|kuvert(ü|ue)re|nelke|piment|anis\b|kardamom|safran|wacholder|estragon|ketchup|mayonnaise|sojaso(ß|ss)e|sojasauce|worcester|tabasco|sriracha|harissa|tahin|oregano|majoran|lorbeer|kreuzk(ü|ue)mmel|\bkümmel|chiliflocken|st(ä|ae)rke|fett f(ü|ue)r|paprikaflocken|pul biber/i,"gw"],
+ [/nudel|spaghetti|penne|fusilli|tagliatelle|lasagne|makkaroni|\bpasta|reis\b|risotto|linsen|bohnen|kichererbsen|\bdose|mehl|hafer|couscous|bulgur|quinoa|hirse|polenta|graupen|samen|kerne|nuss|n(ü|ue)sse|mandeln|sesam|tomatenmark|passierte|konserve|m(ü|ue)sli|cornflakes|erdnussmus|buchweizen|gr(ü|ue)nkern|amaranth|kokosraspel|kokos-?chips|proteinpulver/i,"tr"],
+ [/wasser\b|saft\b|\bwein\b|rot-?wein|wei(ß|ss)-?wein|\bbier\b|limo|cola|kaffee|\btee\b|teebeutel|espress|schorle|smoothie/i,"gt"],
  /* Obst und Gemuese bewusst zuletzt: "Kuerbiskerne" soll ins Trockensortiment, nicht ins Gemuese */
- [/beere|erdbeer|himbeer|apfel|äpfel|birne|pflaume|kirsche|traube|melone|orange|zitrone|limette|banane|mango|pfirsich|ananas|avocado|granatapfel|feige|dattel|nektarine|aprikose|kiwi/i,"og"],
- [/salat|kohl|kraut|lauch|sellerie|spinat|spargel|kuerbis|kürbis|zucchini|aubergine|paprika|gurke|tomate|kartoffel|zwiebel|knoblauch|moehre|möhre|karotte|radies|rucola|petersilie|basilikum|minze|dill|schnittlauch|koriander|thymian|rosmarin|salbei|ingwer|chili|pilz|champignon|fenchel|rote bete|rettich|brokkoli|blumenkohl|erbse|mais|bete|kresse|sprossen|pastinake|kohlrabi|mangold|chicor(é|e)e|topinambur|artischocke|zuckerschote/i,"og"]
+ [/beere|erdbeer|himbeer|apfel|äpfel|birne|pflaume|kirsche|traube|melone|orange|zitrone|limette|banane|mango|pfirsich|ananas|avocado|granatapfel|feige|dattel|nektarine|aprikose|kiwi|grapefruit|pampelmuse/i,"og"],
+ [/salat|kohl|kraut|lauch|sellerie|spinat|spargel|kuerbis|kürbis|zucchini|aubergine|paprika|gurke|tomate|kartoffel|zwiebel|knoblauch|moehre|möhre|karotte|radies|rucola|petersilie|basilikum|minze|dill|schnittlauch|koriander|thymian|rosmarin|salbei|ingwer|chili|pilz|champignon|seitling|austernpilz|shiitake|pfifferling|steinpilz|fenchel|rote bete|rettich|brokkoli|blumenkohl|erbse|mais|bete|kresse|sprossen|pastinake|kohlrabi|mangold|chicor(é|e)e|topinambur|artischocke|zuckerschote/i,"og"]
 ];
 const EINH={g:"g",gr:"g",gramm:"g",kg:"kg",ml:"ml",l:"l",liter:"l",el:"EL",essloeffel:"EL",tl:"TL",teeloeffel:"TL",
  stk:"Stk","stück":"Stk",stueck:"Stk",st:"Stk",dose:"Dose",dosen:"Dose",bund:"Bund",zehe:"Zehe",zehen:"Zehe",
@@ -1592,327 +1609,12 @@ function zutatZeileTeilen(z){
   return eigen?teile:null;
 }
 
-/* ===== Buchseiten: Drehung, Spalten, Trennstriche =====
-   Ein abfotografiertes Kochbuch ist der schwerste Fall, den die App kennt. Die
-   Seite liegt quer, sie hat zwei Spalten, jede zweite Zeile ist getrennt, und die
-   Texterkennung liefert die Wörter in einer Reihenfolge, die quer durch beide
-   Spalten läuft. Wer diesen Text einfach aneinanderhängt, bekommt Wortsalat –
-   genau das ist beim Nusskuchen passiert.
-
-   Deshalb wird die Seite nicht aus dem Text, sondern aus den Koordinaten der
-   erkannten Wörter wieder zusammengesetzt. Die Funktionen hier rechnen nur mit
-   Zahlen und Zeichenketten; sie brauchen weder Browser noch tesseract und sind
-   deshalb in `tests/16-buchseite.js` einzeln prüfbar. */
-
-/* Wörter zu Zeilen bündeln: gleiche Höhe heißt gleiche Zeile. Als Maß dient die
-   mittlere Worthöhe – absolute Werte gingen bei jedem Bild anders aus.
-   Zwei Spalten liegen auf gleicher Höhe und würden dabei zu einer Zeile
-   verschmelzen. Deshalb wird ein Bündel dort getrennt, wo der Abstand zwischen
-   zwei Wörtern ein Vielfaches der Zeilenhöhe misst: Das ist kein Wortabstand
-   mehr, das ist die Spaltengrenze. */
-function wortZeilen(woerter){
-  if(!woerter||!woerter.length) return [];
-  const hoehen=woerter.map(w=>w.y1-w.y0).sort((a,b)=>a-b);
-  const h=hoehen[Math.floor(hoehen.length/2)]||10;
-  const mitte=w=>(w.y0+w.y1)/2;
-  const sortiert=[...woerter].sort((a,b)=>(mitte(a)-mitte(b))||(a.x0-b.x0));
-  const baender=[];
-  sortiert.forEach(w=>{
-    const letzte=baender[baender.length-1];
-    if(letzte&&Math.abs(mitte(w)-letzte.m)<=h*0.6){
-      letzte.w.push(w);
-      letzte.m=letzte.w.reduce((a,x)=>a+mitte(x),0)/letzte.w.length;
-    } else baender.push({m:mitte(w),w:[w]});
-  });
-  const zeilen=[];
-  baender.forEach(b=>{
-    const nachX=[...b.w].sort((a,x)=>a.x0-x.x0);
-    let teil=[];
-    nachX.forEach(w=>{
-      if(teil.length&&w.x0-teil[teil.length-1].x1>h*2.2){ zeilen.push({m:b.m,w:teil}); teil=[]; }
-      teil.push(w);
-    });
-    if(teil.length) zeilen.push({m:b.m,w:teil});
-  });
-  return zeilen.map(z=>({y:z.m,
-      x0:Math.min(...z.w.map(w=>w.x0)), x1:Math.max(...z.w.map(w=>w.x1)),
-      t:z.w.map(w=>w.text).join(" ").replace(/\s+/g," ").trim()}))
-    .filter(z=>z.t)
-    .sort((a,b)=>(a.y-b.y)||(a.x0-b.x0));
-}
-
-/* Ein Foto ist nie gerade gehalten. Schon drei Grad Schräglage verschieben die
-   unterste Zeile einer Spalte um über hundert Bildpunkte gegen die oberste – die
-   Spaltenlücke ist damit zugeschmiert, und aus zwei Spalten wird eine einzige,
-   in der Zutaten und Schritte ineinanderlaufen. Genau daran ist das erste echte
-   Foto gescheitert.
-
-   Der Winkel lässt sich aus den Wortkästchen schätzen, ohne das Bild noch einmal
-   zu lesen: Bei der richtigen Neigung fallen die Wörter in scharfe Zeilen, und
-   die Verteilung über die Höhe bekommt hohe Berge und tiefe Täler. Die Summe der
-   Quadrate misst genau das. */
-function schraeglage(woerter){
-  if(!woerter||woerter.length<30) return 0;
-  const mx=w=>(w.x0+w.x1)/2, my=w=>(w.y0+w.y1)/2;
-  const hoehen=woerter.map(w=>w.y1-w.y0).sort((a,b)=>a-b);
-  const h=hoehen[Math.floor(hoehen.length/2)]||10;
-  const xm=woerter.reduce((a,w)=>a+mx(w),0)/woerter.length;
-  let besterWinkel=0, besteSchaerfe=-1;
-  for(let grad=-60;grad<=60;grad++){
-    const t=Math.tan(grad/10*Math.PI/180);
-    const ys=woerter.map(w=>my(w)-(mx(w)-xm)*t);
-    const min=Math.min(...ys), max=Math.max(...ys);
-    if(max-min<h) continue;
-    const n=Math.max(4,Math.round((max-min)/(h*0.6)));
-    const eimer=new Array(n).fill(0);
-    ys.forEach(y=>eimer[Math.min(n-1,Math.floor((y-min)/(max-min)*n))]++);
-    const schaerfe=eimer.reduce((a,v)=>a+v*v,0);
-    if(schaerfe>besteSchaerfe){ besteSchaerfe=schaerfe; besterWinkel=grad/10; }
-  }
-  return besterWinkel;
-}
-
-/* Die Spaltenlücke: ein senkrechter Streifen, durch den fast keine Zeile läuft.
-   Gesucht wird nur in der Mitte – am Blattrand ist immer Luft, und die ist keine
-   Spaltengrenze. Gezählt werden Zeilen und nicht Wörter, und ein paar
-   durchlaufende Zeilen sind erlaubt: Unter den Spalten steht auf einer
-   Kochbuchseite gern ein Kasten über die volle Breite, und der darf die Grenze
-   nicht zudecken. Ohne Fund gilt die Seite als einspaltig. */
-function spaltenLuecke(woerter){
-  if(!woerter||woerter.length<20) return 0;
-  const zeilen=wortZeilen(woerter);
-  if(zeilen.length<6) return 0;
-  const links=Math.min(...zeilen.map(z=>z.x0)), rechts=Math.max(...zeilen.map(z=>z.x1));
-  const breite=rechts-links; if(breite<=0) return 0;
-  const N=200, schritt=breite/N;
-  const belegt=new Array(N).fill(0);
-  zeilen.forEach(z=>{
-    const a=Math.max(0,Math.floor((z.x0-links)/schritt));
-    const e=Math.min(N-1,Math.ceil((z.x1-links)/schritt));
-    for(let i=a;i<=e;i++) belegt[i]++;
-  });
-  const von=Math.floor(N*0.22), bis=Math.floor(N*0.78);
-  let hoechst=0;
-  for(let i=von;i<=bis;i++) if(belegt[i]>hoechst) hoechst=belegt[i];
-  /* Wie viele durchlaufende Zeilen die Lücke verträgt. Am echten Foto liefen
-     vier Zeilen des Ernährungskastens über beide Spalten – bei 15 Prozent war
-     die Lücke damit zugedeckt und die Seite galt als einspaltig. Zwischen 20 und
-     35 Prozent findet sie sich stabil an derselben Stelle; genommen wird die
-     Mitte davon. */
-  const toleranz=Math.max(2,Math.round(hoechst*0.25));
-  let besteMitte=0, besteBreite=0;
-  for(let i=von;i<=bis;i++){
-    if(belegt[i]>toleranz) continue;
-    let j=i; while(j<=bis&&belegt[j]<=toleranz) j++;
-    if(j-i>besteBreite){ besteBreite=j-i; besteMitte=(i+j-1)/2; }
-    i=j;
-  }
-  if(besteBreite<N*0.02) return 0;
-  const x=links+besteMitte*schritt;
-  /* Zwei Spalten sind es nur, wenn auf beiden Seiten wirklich etwas steht. Die
-     Zutatenspalte ist dabei wortarm – sie trägt Mengen, keine Sätze –, deshalb
-     genügt ein Achtel. */
-  const l=woerter.filter(w=>w.x1<=x).length, r=woerter.filter(w=>w.x0>=x).length;
-  if(l<woerter.length*0.12||r<woerter.length*0.12) return 0;
-  return x;
-}
-
-/* Welche der beiden Spalten trägt die Zutaten? Nicht am Inhalt zu erkennen,
-   wohl aber am Bau: Zutaten sind kurze Zeilen, die mit einer Menge anfangen und
-   nicht wie ein Satz enden. Schritte sind lang, nummeriert und enden mit Punkt. */
-const MENGE_ANFANG=/^\s*(\d|½|¼|¾|⅓|⅔|⅛|⅜|⅝|⅞|⅕)/;
-/* Woran der Kopf einer Zutatenspalte zu erkennen ist: Form, Zeit, Portionen.
-   „stund" ohne das e, weil aus „1 Stunde" gern „1Stunds" wird. */
-const KOPFDATUM=/\d\s*(min|minuten|std|stund)|^\s*f(ü|ue)r\s|portionen|personen|scheiben|st(ü|ue)ck/i;
-/* Woran die Zutatenliste endet: der Nährwertkasten darunter */
-const NAEHRWERT_ENDE=/kcal|\bkj\b|\bBST\b|n(ä|ae)hrwert|^\s*pro\s+(portion|scheibe|st(ü|ue)ck|person|glas|riegel)\b/i;
-/* Die Nummer eines Schrittes liest die Erkennung erstaunlich oft falsch: Aus
-   „1." wird „]l.", aus „2." ein „z.", aus „6." ein „©." – am echten Foto traf
-   die strenge Regel nur zwei von sechs Schritten, und der Rest klebte zu einem
-   Klumpen zusammen. Erkannt wird deshalb nicht die Ziffer, sondern die Gestalt:
-   ein bis drei Zeichen, ein Punkt, ein Leerzeichen, ein großer Buchstabe.
-
-   Der Punkt muss dabei stehen. Ohne ihn zu trennen wäre verlockend – die
-   Erkennung verschluckt ihn gelegentlich –, ist aber teurer, als es einbringt:
-   „5 Minuten cremig rühren." fängt genauso an und ist mitten im Schritt. Lieber
-   zwei Schritte in einem Absatz als ein Schritt in der Mitte zerschnitten. */
-const SCHRITT_NUMMER=/^\s*[\dA-Za-z\]\[©@|!]{1,3}[.)]\s+[A-ZÄÖÜ]/;
-function spaltenArt(zeilen){
-  let zutat=0, schritt=0;
-  zeilen.forEach(z=>{
-    const t=z.t||z;
-    if(SCHRITT_NUMMER.test(t)) schritt+=3;
-    else if(MENGE_ANFANG.test(t)&&t.length<48) zutat+=3;
-    if(t.length>44) schritt+=1;
-    if(t.length<34&&!/[.!?]$/.test(t)) zutat+=1;
-  });
-  return zutat-schritt;
-}
-
-/* Die Seite in Kopf, Zutaten und Schritte zerlegen. Gibt es keine Spaltenlücke,
-   liefert die Funktion nichts zurück – dann ist es ein Zettel und kein Buch. */
-/* Welche Spalte ist welche – unabhängig davon, ob sie aus einem Durchgang
-   getrennt wurden oder einzeln gelesen. */
-function spaltenOrdnen(links,rechts,quer){
-  const zuerst=spaltenArt(links)>=spaltenArt(rechts);
-  return {zutaten:zuerst?links:rechts, schritte:zuerst?rechts:links, quer:quer||[]};
-}
-function seiteOrdnen(woerter){
-  const gut=(woerter||[]).filter(w=>w&&String(w.text||"").trim());
-  if(gut.length<12) return null;
-  const x=spaltenLuecke(gut);
-  if(!x) return null;
-  const zeilen=wortZeilen(gut);
-  const links=zeilen.filter(z=>z.x1<=x), rechts=zeilen.filter(z=>z.x0>=x);
-  if(!links.length||!rechts.length) return null;
-  /* Was über beide Spalten läuft, steht entweder darüber oder darunter. Darüber
-     steht der Titel. Darunter steht der Ernährungskasten, der Kapitelname, die
-     Seitenzahl – Seite, nicht Rezept. Der Unterschied ist die Höhe. */
-  const oben=Math.min(links[0].y,rechts[0].y);
-  const quer=zeilen.filter(z=>z.x0<x&&z.x1>x&&z.y<oben);
-  return spaltenOrdnen(links,rechts,quer);
-}
-
-/* Im Buch ist jede zweite Zeile getrennt: „Minu-/ten“, „Back-/papier“, „mit-/hilfe“.
-   Bleibt der Trennstrich stehen, steht im Rezept ein Wort, das es nicht gibt.
-   Vor einem großen Buchstaben bleibt der Strich dagegen: „Dinkel-/Vollkornmehl“
-   heißt wirklich so. */
-function trennungenFuegen(zeilen){
-  const raus=[];
-  zeilen.forEach(z=>{
-    const letzte=raus[raus.length-1];
-    /* „Bac!ı-“ statt „Back-“: Vor dem Trennstrich darf stehen, was will –
-       entscheidend ist, dass die nächste Zeile klein anfängt. */
-    if(letzte&&/[^\s\d]-$/.test(letzte)&&/^[a-zäöüß]/.test(z)){
-      raus[raus.length-1]=letzte.slice(0,-1)+z; return;
-    }
-    if(letzte&&/[A-Za-zÄÖÜäöüß]-$/.test(letzte)&&/^[A-ZÄÖÜ]/.test(z)){
-      raus[raus.length-1]=letzte+z; return;
-    }
-    raus.push(z);
-  });
-  return raus;
-}
-
-/* Der Titel steht im Kochbuch in Versalien und läuft über zwei Zeilen. Einzeln
-   gelesen gewinnt die zweite Hälfte, und das Rezept hieße „MIT MÖHREN UND
-   SAUERRAHM“. */
+/* Der Titel eines Rezepts steht in Kochbüchern und auf vielen Blogs in
+   Versalien. Eine lange Versalzeile im Kopf ist deshalb der Titel und schlägt
+   bei der Auswahl jede Nähe zu den Zutaten. „Lang“ heißt: zwei Wörter mit
+   mindestens vier Buchstaben – sonst gewinnt der erstbeste Erkennungsfetzen. */
 const NUR_GROSS=z=>/[A-ZÄÖÜ]/.test(z)&&!/[a-zäöüß]/.test(z);
-/* Eine Versalzeile ist der Titel – aber nur, wenn wirklich Wörter darin stehen.
-   Aus dem Kopf einer Buchseite kommen sonst auch Bruchstücke in Großbuchstaben
-   („AT EUER LTE SE“), und die gewönnen jeden Vergleich. Zwei Wörter mit
-   mindestens vier Buchstaben sind die Grenze. */
 const versalTitel=z=>NUR_GROSS(z)&&z.length>=10&&(z.match(/[A-ZÄÖÜ]{4,}/g)||[]).length>=2;
-function titelzeilenFuegen(zeilen){
-  const raus=[...zeilen];
-  while(raus.length>=2&&NUR_GROSS(raus[0])&&NUR_GROSS(raus[1])&&(raus[0]+" "+raus[1]).length<=70){
-    raus[0]=raus[0]+" "+raus[1]; raus.splice(1,1);
-  }
-  return raus;
-}
-
-/* Zutaten laufen im Buch über mehr als eine Zeile: der Zusatz steht darunter,
-   in Klammern oder klein. Er gehört an die Zeile davor, sonst steht später
-   „(z. B. Muscovado)“ als eigener Posten auf der Einkaufsliste. */
-/* Angehängt wird nur, was erkennbar eine Fortsetzung ist: eine Klammer oder
-   eines der wenigen Wörter, mit denen ein Zusatz anfängt. „Jede klein
-   beginnende Zeile" war zu großzügig – am echten Foto las die Erkennung
-   „100g" als „iDIg", und damit wanderte eine ganze Zutat in die Zeile davor. */
-const ZUSATZ_ANFANG=/^\s*(\(|z\.\s*B\.|ca\.|mind\.|etwa\b|oder\b|davon\b|nach\b|alternativ\b)/i;
-function zutatenzeilenFuegen(zeilen){
-  const raus=[];
-  zeilen.forEach(z=>{
-    if(raus.length&&!MENGE_ANFANG.test(z)&&ZUSATZ_ANFANG.test(z)) raus[raus.length-1]+=" "+z;
-    else raus.push(z);
-  });
-  return raus;
-}
-
-/* Nummerierte Schritte laufen über mehrere Zeilen, und hinter dem letzten Schritt
-   steht auf einer Kochbuchseite regelmäßig etwas ganz anderes: ein
-   Ernährungshinweis, der Kapitelname, die Seitenzahl. Beides ist am Bau zu
-   erkennen: Was zum letzten Schritt gehört, ist lang oder endet mit einem Punkt.
-   Die erste kurze Zeile ohne Satzende ist eine Überschrift – ab da ist Schluss. */
-function schritteBuendeln(zeilen){
-  const nummer=zeilen.map(z=>SCHRITT_NUMMER.test(z));
-  const anzahl=nummer.filter(Boolean).length;
-  if(anzahl<2) return zeilen;
-  const letzte=nummer.lastIndexOf(true);
-  const raus=[];
-  for(let i=0;i<zeilen.length;i++){
-    const z=zeilen[i];
-    if(i>letzte&&z.length<38&&!/[.!?]$/.test(z)) break;
-    if(nummer[i]||!raus.length) raus.push(z);
-    else raus[raus.length-1]+=" "+z;
-  }
-  return raus;
-}
-
-/* Aus der geordneten Seite den Text bauen, den die Einordnung erwartet. Die
-   beiden Überschriften werden dabei selbst gesetzt: Eine Überschrift ist das
-   verlässlichste Signal, das `textEinordnen()` kennt, und hier wissen wir aus
-   dem Seitenaufbau sicher, was Zutat und was Schritt ist. */
-function buchText(ordnung){
-  const kopfS=[], schritte=[];
-  ordnung.schritte.forEach(z=>{
-    if(!schritte.length&&kopfS.length<8&&!SCHRITT_NUMMER.test(z.t)&&!KOCHVERB.test(z.t)) kopfS.push(z.t);
-    else schritte.push(z.t);
-  });
-  /* Unter der Zutatenliste steht der Nährwertkasten, und darunter läuft auf
-     einer Kochbuchseite gern noch ein Textkasten über die volle Breite. Wird die
-     Spalte einzeln gelesen, kommt dessen halbe Zeile mit. Die Nährwertzeile ist
-     die Grenze: Danach gehört nichts mehr zur Zutatenliste. */
-  /* Wo endet der Kopf der Zutatenspalte? Nicht an der ersten Ziffer – die
-     Mengen fangen nicht immer mit einer an, wenn die Erkennung sie verpatzt
-     („Z26C 9 Möhren"). Verlässlicher ist das Ende von hinten: die letzte Zeile,
-     die Form, Zeit oder Portionen nennt. Danach kommen Zutaten. */
-  const zutatenZeilen=ordnung.zutaten.map(z=>z.t);
-  let kopfEnde=-1;
-  zutatenZeilen.slice(0,12).forEach((z,i)=>{ if(KOPFDATUM.test(z)) kopfEnde=i; });
-  const kopfZ=[], zutaten=[];
-  let nachNaehrwert=false;
-  zutatenZeilen.forEach((z,i)=>{
-    if(nachNaehrwert) return;
-    if(NAEHRWERT_ENDE.test(z)){ nachNaehrwert=true; return; }
-    const nochKopf=kopfEnde>=0 ? i<=kopfEnde : (!zutaten.length&&kopfZ.length<8&&!MENGE_ANFANG.test(z));
-    if(nochKopf) kopfZ.push(z); else zutaten.push(z);
-  });
-  /* Auch im Kopf hängen Zusätze unter ihrer Zeile: „Für 1 Kastenform“ und
-     darunter „(ca. 25 cm Länge; 18 Scheiben)“. Getrennt gelesen wird aus der
-     Klammer der Rezepttitel – und die Zahl der Scheiben ist verloren. */
-  const kopf=titelzeilenFuegen(zutatenzeilenFuegen(trennungenFuegen([...ordnung.quer.map(z=>z.t),...kopfS,...kopfZ])));
-  return [...kopf,
-    "Zutaten", ...zutatenzeilenFuegen(trennungenFuegen(zutaten)),
-    "Zubereitung", ...schritteBuendeln(trennungenFuegen(schritte))
-  ].filter(z=>String(z).trim()).join("\n");
-}
-
-/* Ein Foto zeigt mehr als die Seite: Tischkante, Schatten, Sofamuster. Daraus
-   macht die Texterkennung Wörter, die keine sind – und die liegen quer über dem
-   Blatt und decken die Spaltenlücke zu. Weg damit, bevor die Seite ausgemessen
-   wird: zu unsicher, ohne Buchstaben, oder aus der Höhe gefallen. */
-function wortRauschen(woerter){
-  /* Bruchzeichen, Prozent und Grad zählen als Inhalt – „½“ ist die halbe
-     Zutatenzeile, „%“ steht in „10 % Fett“, „°“ in „180 °C“. Keines davon
-     trägt einen Buchstaben. */
-  const gut=(woerter||[]).filter(w=>w&&String(w.text||"").trim()
-    &&w.conf>=40&&/[A-Za-zÄÖÜäöüß0-9½¼¾⅓⅔⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚%°]/.test(w.text));
-  if(gut.length<12) return gut;
-  const hoehen=gut.map(w=>w.y1-w.y0).sort((a,b)=>a-b);
-  const h=hoehen[Math.floor(hoehen.length/2)]||10;
-  return gut.filter(w=>{const e=w.y1-w.y0; return e>=h*0.45&&e<=h*2.4;});
-}
-
-/* Der ganze Weg vom erkannten Bild zum Text. Ohne Spalten bleibt es beim
-   gewöhnlichen Zeilentext – ein Handyfoto von einem Zettel hat keine Spalten. */
-function buchseiteLesen(woerter,rohtext){
-  const einfach=z=>titelzeilenFuegen(trennungenFuegen(z.map(x=>String(x).trim()).filter(Boolean))).join("\n");
-  woerter=wortRauschen(woerter);
-  if(!woerter||woerter.length<12) return einfach(String(rohtext||"").split(/\r?\n/));
-  const ordnung=seiteOrdnen(woerter);
-  if(!ordnung) return einfach(wortZeilen(woerter).map(z=>z.t));
-  return buchText(ordnung);
-}
 
 function textEinordnen(roh){
   let zeilen=String(roh||"").split(/\r?\n/).map(ocrReparieren).filter(Boolean);
@@ -2219,8 +1921,7 @@ function nfLesen(){
 }
 function nfSet(feld,wert){
   nfLesen();
-  if(feld==="ma"){nf.ma=nf.ma.includes(wert)?nf.ma.filter(x=>x!==wert):[...nf.ma,wert];if(!nf.ma.length)nf.ma=[wert];}
-  else nf[feld]=wert;
+  nf[feld]=wert;
   if(feld==="k") nf.kFest=true;   /* ab jetzt hat die Automatik hier nichts mehr zu suchen */
   formZeigen(true);
 }
@@ -2238,8 +1939,6 @@ function formZeigen(behalten){
     <div class="row-btns" style="margin-top:8px">
       <button class="btn btn-s${cfg.leser?" btn-primary":""}" onclick="ausLinkHolen()">Aus Link holen</button>
       <button class="btn btn-s" onclick="textEinfuegen()">Text einwerfen</button>
-      <button class="btn btn-s" onclick="fotoAufnehmen()">Foto aufnehmen</button>
-      <button class="btn btn-s" onclick="fotoWaehlen()">Bild auswählen</button>
       ${nf.port>1?`<button class="btn btn-s" onclick="aufEinePortion()">Von ${nf.port} auf 1 Portion rechnen</button>`:""}
     </div>
     ${nf.status?`<p class="note" style="margin-top:8px;color:var(--sea)">${esc(nf.status)}</p>`:""}
@@ -2250,8 +1949,6 @@ function formZeigen(behalten){
       .map(([v,l])=>`<button aria-pressed="${nf.k===v}" onclick="nfSet('k','${v}')">${l}</button>`).join("")}</div>
     ${(()=>{const auto=artAusZutaten(zut,nf.k);
       return auto!==nf.k?`<p class="note" style="margin-top:6px">Die Zutaten sprechen eher für „${KIND[auto][0]}“ – deine Wahl gilt trotzdem.</p>`:"";})()}
-    ${["haupt","fruehstueck"].includes(nf.typ||"haupt")?`<label class="fl">Passt zu</label>
-    <div class="pickrow">${["f","m","a"].map(v=>`<button aria-pressed="${nf.ma.includes(v)}" onclick="nfSet('ma','${v}')">${MAHL[v]}</button>`).join("")}</div>`:""}
     <div style="display:flex;gap:10px">
       <div style="flex:1"><label class="fl" for="nfmin">Dauer in Minuten${nf.minAuto!==false?' <em style="font-weight:400;font-style:normal;color:var(--ink-3)">geschätzt</em>':""}</label><input type="text" inputmode="numeric" id="nfmin" value="${nf.min}"></div>
       <div style="flex:1"><label class="fl" for="nfp">Protein je Portion${nf.pAuto!==false?' <em style="font-weight:400;font-style:normal;color:var(--ink-3)">geschätzt</em>':""}</label><input type="text" inputmode="numeric" id="nfp" value="${nf.p}"></div>
@@ -2283,7 +1980,7 @@ function nfSpeichern(){
   schaetzungAuffrischen();
   const id=nf.id||neueId("u");
   const typ=nf.typ||"haupt";
-  const r={id,n:nf.n.trim(),k:nf.k,kFest:!!nf.kFest,typ,ma:["haupt","fruehstueck"].includes(typ)?nf.ma:[],m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
+  const r={id,n:nf.n.trim(),k:nf.k,kFest:!!nf.kFest,typ,ma:mahlzeitenZu(typ),m:ALL,min:Math.max(1,nf.min),p:Math.max(0,nf.p),bl:0,nut:[],
     why:nf.why||"Selbst angelegt.",z:parseZutaten(nf.zText),s:parseSchritte(nf.sText),src:"eigen"};
   if(nf.q.trim())r.q=nf.q.trim();
   /* Bearbeitetes Grundrezept behält Saison, Blähfaktor und Nährstoffe des Originals */
@@ -2385,9 +2082,8 @@ Pro Rezept diese Felder:
         Steht ein Zusatz in Klammern, häng ihn an dieselbe Zeile: "50 g Vollrohrzucker (z. B. Muscovado)".
   s     Zubereitung, eine Zeile je Schritt, ohne die Nummer davor.
   min   Arbeitszeit in Minuten (Zubereitung plus Backen oder Kochen, ohne Abkühlen und Ruhen).
-  typ   "haupt", "fruehstueck", "snack" oder "dessert".
-  ma    Passende Mahlzeiten als Liste: "f" Frühstück, "m" Mittag, "a" Abend.
-        Bei Snacks und Desserts eine leere Liste.
+  typ   "haupt", "fruehstueck", "snack" oder "dessert". Zwischen Mittag und Abend
+        unterscheiden wir nicht – beides ist "haupt".
   m     Saisonmonate als Zahlenliste 1 bis 12. Wenn es ganzjährig geht, alle zwölf.
   bl    Blähfaktor 0, 1 oder 2 (Kohl, Zwiebeln, Hülsenfrüchte eher 1 oder 2).
   nut   Auffällige Nährstoffe als Liste aus: eisen, jod, omega3, folat, b12, calcium, zink, ballast.
@@ -2400,7 +2096,7 @@ welche Zeilen unsicher waren – aber erst nach dem JSON, in einer eigenen Zeile
 
 Beispiel für einen Eintrag:
 [
- {"n":"Nusskuchen mit Möhren und Sauerrahm","port":18,"min":85,"typ":"dessert","ma":[],
+ {"n":"Nusskuchen mit Möhren und Sauerrahm","port":18,"min":85,"typ":"dessert",
   "m":[1,2,3,4,5,6,7,8,9,10,11,12],"bl":0,"nut":["eisen","ballast"],
   "why":"Kuchen mit Möhren, Nüssen und Vollkornmehl statt Weißmehl.",
   "q":"Kochbuch, Seite 204",
@@ -2437,12 +2133,11 @@ function importEintrag(r){
      das Buch rechnet, wird hier geteilt – sonst stimmt die Einkaufsliste nie. */
   const port=Math.max(1,+r.port||1);
   const z=port>1?zRoh.map(x=>[x[0],Math.round(x[1]/port*1000)/1000,x[2],x[3]]):zRoh;
-  const ma=(Array.isArray(r.ma)?r.ma:["a"]).filter(x=>MAHL[x]);
   const typ=TYP[r.typ]?r.typ:"haupt";
   return {id,n:String(r.n),
     k:["veg","fisch","fleisch"].includes(r.k)?r.k:artAusZutaten(z),
     typ,
-    ma:(typ==="snack"||typ==="dessert")?[]:(ma.length?ma:["a"]),
+    ma:mahlzeitenZu(typ),
     m:Array.isArray(r.m)&&r.m.length?r.m.filter(x=>+x>=1&&+x<=12).map(Number):ALL,
     min:+r.min||30,
     p:+r.p||Math.round(proteinSchaetzen(z)),
@@ -2764,7 +2459,7 @@ function einplanen(rid){
         <span></span><span style="text-align:center;font-size:11px">Früh</span><span style="text-align:center;font-size:11px">Mittag</span><span style="text-align:center;font-size:11px">Abend</span>
         ${TAGE.map((tn,d)=>`<span>${tn.slice(0,2)}${w===0&&d===heuteIdx()?" ·":""}</span>${["f","m","a"].map(mk=>{
           const k="w"+w+"-"+d+"-"+mk, e=S.plan[k], belegt=e&&R(e.r);
-          const passt=r&&r.ma.includes(mk);
+          const passt=passtZuMahlzeit(r,mk);
           return `<button class="${belegt?"voll":""}" onclick="epSetzen('${k}','${rid}')" title="${belegt?esc(belegt.n):""}">${belegt?"belegt":(passt?"frei":"·")}</button>`;
         }).join("")}`).join("")}
       </div>
@@ -3195,274 +2890,10 @@ function vZusatz(id){
       <button class="btn btn-s" onclick="zusatzWeg('${id}')">Liste löschen</button></div>`;
 }
 
-/* ===== Rezept aus einem Foto =====
-   Bis 3.9 hieß der Weg: Bild verkleinern, tesseract darüberlaufen lassen, den
-   Text nehmen, wie er kommt. Bei einem Bildschirmfoto reicht das. Bei einer
-   abfotografierten Kochbuchseite reicht es nicht: Die Seite liegt quer, der
-   Schatten der Hand liegt darüber, und die zwei Spalten werden zeilenweise
-   ineinander geschoben. Jetzt sind es vier Schritte:
-
-     1. Beleuchtung ausgleichen – der Schatten kostet mehr Erkennung als jede
-        Unschärfe.
-     2. Ausrichtung bestimmen – das Bild wird in allen vier Lagen kurz angelesen,
-        die beste gewinnt.
-     3. In voller Auflösung lesen, diesmal mit den Koordinaten jedes Wortes.
-     4. Die Seite aus den Koordinaten wieder zusammensetzen (`buchseiteLesen`).
-
-   Danach geht es wie bei jeder anderen Quelle ins Prüfblatt. */
-const TESS_URL="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js";
-let tessLaden=null;
-function tesseract(){
-  if(window.Tesseract) return Promise.resolve(window.Tesseract);
-  if(tessLaden) return tessLaden;
-  tessLaden=new Promise((ok,fehler)=>{
-    const s=document.createElement("script");
-    s.src=TESS_URL;
-    s.onload=()=>window.Tesseract?ok(window.Tesseract):fehler(new Error("nicht geladen"));
-    s.onerror=()=>fehler(new Error("nicht erreichbar"));
-    document.head.appendChild(s);
-  });
-  return tessLaden;
-}
-/* Ein Arbeiter für alle Durchgänge. Er lädt die deutschen Sprachdaten einmal
-   (rund 15 MB) – bei fünf Durchgängen je Foto ist das der ganze Unterschied
-   zwischen „dauert einen Moment“ und „dauert zu lange“. */
-let tessArbeiter=null;
-async function tessArbeiterHolen(T){
-  if(tessArbeiter) return tessArbeiter;
-  tessArbeiter=await T.createWorker("deu");
-  return tessArbeiter;
-}
-function bildLaden(datei){
-  return new Promise((ok,fehler)=>{
-    const leser=new FileReader();
-    leser.onerror=()=>fehler(new Error("Datei nicht lesbar"));
-    leser.onload=()=>{
-      const bild=new Image();
-      bild.onerror=()=>fehler(new Error("Bildformat nicht lesbar"));
-      bild.onload=()=>ok(bild);
-      bild.src=leser.result;
-    };
-    leser.readAsDataURL(datei);
-  });
-}
-/* Ausschneiden, verkleinern und drehen in einem Zug. Der Winkel darf beliebig
-   sein, nicht nur ein Vielfaches von 90 Grad – die Fläche wächst entsprechend
-   mit, damit nichts abgeschnitten wird. */
-function bildFlaeche(bild,maxKante,grad,aus){
-  const a=aus||{x:0,y:0,b:bild.width,h:bild.height};
-  const gr=Math.max(a.b,a.h)||1;
-  const f=Math.min(1,(maxKante||1800)/gr);
-  const b=Math.round(a.b*f)||1, h=Math.round(a.h*f)||1;
-  const r=(grad||0)*Math.PI/180, cs=Math.abs(Math.cos(r)), sn=Math.abs(Math.sin(r));
-  const c=document.createElement("canvas");
-  c.width=Math.max(1,Math.round(b*cs+h*sn)); c.height=Math.max(1,Math.round(b*sn+h*cs));
-  const k=c.getContext("2d");
-  k.fillStyle="#fff"; k.fillRect(0,0,c.width,c.height);
-  k.save(); k.translate(c.width/2,c.height/2); k.rotate(r);
-  k.drawImage(bild,a.x,a.y,a.b,a.h,-b/2,-h/2,b,h); k.restore();
-  return c;
-}
-/* Auf dem Foto ist die Seite selten allein: ringsum liegen Tisch, Sofa, Hand,
-   Schatten. Diese Fläche kostet Auflösung, und Auflösung ist bei der
-   Texterkennung alles. Wird das ganze Bild auf 2400 Punkte gebracht, bleiben für
-   die Schrift 18 Punkte Höhe – zu wenig für zuverlässiges Lesen. Die Seite ist
-   der helle, zusammenhängende Bereich; alles außerhalb fliegt weg, bevor
-   verkleinert wird. Ist nichts abzuschneiden, bleibt es beim ganzen Bild. */
-function seitenAusschnitt(bild){
-  try{
-    const B=160, H=Math.max(1,Math.round(bild.height*B/(bild.width||1)));
-    const c=document.createElement("canvas"); c.width=B; c.height=H;
-    const k=c.getContext("2d"); k.drawImage(bild,0,0,B,H);
-    const p=k.getImageData(0,0,B,H).data;
-    const g=new Array(B*H);
-    for(let i=0;i<B*H;i++) g[i]=p[i*4]*0.299+p[i*4+1]*0.587+p[i*4+2]*0.114;
-    /* Die Schwelle darf nicht am hellsten Bildpunkt hängen: Ein einziger
-       Lichtreflex auf dem Papier setzt sie auf 255, und dann fällt die halbe
-       Seite, die im Schatten liegt, unter die Grenze und wird als Hintergrund
-       weggeschnitten. Gemessen wird deshalb an der Verteilung. */
-    const sortiert=[...g].sort((a,b)=>a-b);
-    const teil=x=>sortiert[Math.min(sortiert.length-1,Math.floor(sortiert.length*x))];
-    const dunkel=teil(0.10), hell=teil(0.90);
-    if(hell<60||hell-dunkel<25) return null;       /* alles dunkel oder alles gleich hell */
-    const schwelle=dunkel+(hell-dunkel)*0.45;
-    const spalte=new Array(B).fill(0), reihe=new Array(H).fill(0);
-    for(let y=0;y<H;y++) for(let x=0;x<B;x++) if(g[y*B+x]>schwelle){ spalte[x]++; reihe[y]++; }
-    const laengsterLauf=(feld,grenze)=>{
-      let besteA=0, besteL=0, a=-1;
-      for(let i=0;i<=feld.length;i++){
-        if(i<feld.length&&feld[i]>=grenze){ if(a<0) a=i; }
-        else if(a>=0){ if(i-a>besteL){ besteL=i-a; besteA=a; } a=-1; }
-      }
-      return [besteA,besteL];
-    };
-    const [sx,sl]=laengsterLauf(spalte,H*0.35);
-    const [sy,sh]=laengsterLauf(reihe,B*0.35);
-    if(sl<B*0.25||sh<H*0.25) return null;          /* zu klein, um die Seite zu sein */
-    if(sl>B*0.93&&sh>H*0.93) return null;          /* füllt ohnehin das Bild */
-    const rand=0.02;
-    const x0=Math.max(0,sx/B-rand)*bild.width, x1=Math.min(1,(sx+sl)/B+rand)*bild.width;
-    const y0=Math.max(0,sy/H-rand)*bild.height, y1=Math.min(1,(sy+sh)/H+rand)*bild.height;
-    return {x:Math.round(x0),y:Math.round(y0),b:Math.round(x1-x0),h:Math.round(y1-y0)};
-  }catch(e){ return null; }
-}
-/* Beleuchtung ausgleichen. Ein Foto einer Buchseite hat fast immer einen
-   Helligkeitsverlauf – Fensterlicht auf der einen Seite, der eigene Schatten auf
-   der anderen. tesseract entscheidet über die ganze Seite mit einer einzigen
-   Schwelle und verliert dabei die dunkle Hälfte.
-
-   Das stark verkleinerte Bild ist genau dieser Verlauf ohne die Schrift. Teilt
-   man das Bild dadurch, bleibt gleichmäßiges Grau übrig, auf dem die Schrift
-   überall gleich dunkel steht. */
-function bildEbnen(c){
-  try{
-    const k=c.getContext("2d");
-    const d=k.getImageData(0,0,c.width,c.height), p=d.data;
-    const kw=Math.max(1,Math.round(c.width/12)), kh=Math.max(1,Math.round(c.height/12));
-    const klein=document.createElement("canvas"); klein.width=kw; klein.height=kh;
-    klein.getContext("2d").drawImage(c,0,0,kw,kh);
-    const bg=klein.getContext("2d").getImageData(0,0,kw,kh).data;
-    const grau=(a,i)=>a[i]*0.299+a[i+1]*0.587+a[i+2]*0.114;
-    for(let y=0;y<c.height;y++){
-      const by=Math.min(kh-1,Math.floor(y*kh/c.height));
-      for(let x=0;x<c.width;x++){
-        const i=(y*c.width+x)*4, j=(by*kw+Math.min(kw-1,Math.floor(x*kw/c.width)))*4;
-        const v=(grau(p,i)/Math.max(40,grau(bg,j)))*210;
-        p[i]=p[i+1]=p[i+2]=v<0?0:(v>255?255:v);
-      }
-    }
-    k.putImageData(d,0,0);
-  }catch(e){ /* getImageData kann scheitern – dann eben ohne Ausgleich */ }
-  return c;
-}
-/* Einen senkrechten Streifen aus einer Fläche schneiden – für das getrennte
-   Lesen der beiden Spalten. */
-function bildStreifen(c,x0,x1){
-  const b=Math.max(1,Math.round(x1-x0));
-  const n=document.createElement("canvas"); n.width=b; n.height=c.height;
-  n.getContext("2d").drawImage(c,Math.round(x0),0,b,c.height,0,0,b,c.height);
-  return n;
-}
-/* tesseract liefert die Wörter je nach Fassung oben oder in Blöcken verschachtelt */
-function tessWoerter(data){
-  const raus=[];
-  const nimm=w=>{
-    const b=(w&&w.bbox)||w;
-    if(!b||b.x0===undefined) return;
-    const t=String(w.text||"").trim();
-    if(t) raus.push({text:t,conf:w.confidence===undefined?100:w.confidence,
-      x0:b.x0,y0:b.y0,x1:b.x1,y1:b.y1});
-  };
-  if(data&&Array.isArray(data.words)&&data.words.length) data.words.forEach(nimm);
-  else (data&&data.blocks||[]).forEach(bl=>(bl.paragraphs||[]).forEach(pa=>
-    (pa.lines||[]).forEach(li=>(li.words||[]).forEach(nimm))));
-  return raus;
-}
-/* Wie gut sieht ein Durchgang aus? Die Zuversicht allein genügt nicht: Auf einer
-   um 90 Grad gedrehten Seite erkennt tesseract sehr wenige Zeichen sehr sicher.
-   Gezählt wird deshalb, wie viele echte Wörter herauskommen, gewichtet mit dem,
-   was über 40 Prozent Zuversicht hinausgeht. */
-function ocrGuete(woerter){
-  const echt=(woerter||[]).filter(w=>/[a-zäöüß]{3}/i.test(w.text));
-  if(!echt.length) return 0;
-  const zuversicht=echt.reduce((a,w)=>a+w.conf,0)/echt.length;
-  return echt.length*Math.max(0,zuversicht-40);
-}
-/* Zwei Wege, weil capture="environment" die Dateiauswahl sperren würde:
-   ein Eingabefeld für die Kamera, eines für Galerie und Dateien. */
-function fotoAufnehmen(){ const f=document.getElementById("fotokamera"); if(f&&f.click){f.value="";f.click();} }
-function fotoWaehlen(){ const f=document.getElementById("fotowahl"); if(f&&f.click){f.value="";f.click();} }
-/* ---------- Der Ablauf ----------
-   1. Seite freistellen – alles ringsum kostet nur Auflösung.
-   2. Ausrichtung bestimmen – klein und schnell anlesen, höchstens drei Lagen.
-   3. Die Seite billig ausmessen – wo liegt der Bundsteg, wie schief liegt sie.
-   4. Teuer lesen: jede Spalte einzeln, in voller Auflösung.
-
-   Schritt 4 ist der Unterschied zwischen unbrauchbar und brauchbar. Am echten
-   Foto gemessen: Liest man die ganze Seite in einem Zug, kommen aus der schmalen
-   Zutatenspalte fünf zerrissene Bruchstücke. Legt man derselben Erkennung
-   dieselbe Spalte allein vor, liest sie alle fünfzehn Zutaten der Reihe nach.
-
-   Innerhalb einer Spalte wird auch die Zeilenbildung tesseract überlassen. Der
-   eigene Aufbau aus Wortkästchen (`wortZeilen`) ist dort schlechter: Fehlt der
-   Erkennung mitten in der Zeile ein Wort, entsteht eine Lücke, und die Zeile
-   zerfällt. Die Wortkästchen werden deshalb nur noch zum Ausmessen der Seite
-   gebraucht, nicht mehr zum Lesen. */
-async function fotoLesen(datei){
-  if(!datei) return;
-  if(!nf||!nf.ma) nf={id:null,n:"",q:"",k:"veg",typ:"haupt",ma:["a"],min:30,p:20,zText:"",sText:"",why:"",port:1,status:"",pAuto:true,minAuto:true};
-  nf.status="Texterkennung wird geladen …"; formZeigen(true);
-  let T;
-  try{ T=await tesseract(); }
-  catch(e){ nf.status="Die Texterkennung ließ sich nicht laden. Dafür braucht es eine Internetverbindung."; formZeigen(true); return; }
-  try{
-    const bild=await bildLaden(datei);
-    const arbeiter=await tessArbeiterHolen(T);
-    const melde=t=>{ nf.status=t; formZeigen(true); };
-    const lesen=async c=>{
-      const {data}=await arbeiter.recognize(c,{},{text:true,blocks:true});
-      return {woerter:wortRauschen(tessWoerter(data)), text:(data&&data.text)||""};
-    };
-    const zuZeilen=t=>String(t||"").split(/\r?\n/).map(z=>z.trim()).filter(Boolean).map(x=>({t:x}));
-
-    melde("Bild wird vorbereitet …");
-    const aus=seitenAusschnitt(bild);
-    const flaeche=(kante,grad)=>bildEbnen(bildFlaeche(bild,kante,grad,aus));
-
-    /* Ausrichtung. Zuerst die Achse (aufrecht oder quer), dann nur noch die
-       Frage, ob die gewählte Achse auf dem Kopf steht. Das sind zwei bis drei
-       Durchgänge statt vier – bei einem schon richtig gehaltenen Bild zwei. */
-    melde("Ausrichtung wird bestimmt …");
-    const guete=async grad=>ocrGuete((await lesen(flaeche(800,grad))).woerter);
-    const g0=await guete(0), g90=await guete(90);
-    let besterGrad=g0>=g90?0:90, besteGuete=Math.max(g0,g90);
-    if(besteGuete<6000){
-      const kopfueber=besterGrad===0?180:270;
-      if(await guete(kopfueber)>besteGuete) besterGrad=kopfueber;
-    }
-
-    /* Ausmessen: klein und schnell. Für den Bundsteg genügen 1400 Punkte, die
-       Wortkästchen liegen dort schon genau genug. */
-    melde("Seite wird ausgemessen …");
-    const mass=await lesen(flaeche(1400,besterGrad));
-    const winkel=schraeglage(mass.woerter);
-    const grad=besterGrad+(Math.abs(winkel)>=0.5?winkel:0);
-    const messFlaeche=flaeche(1400,grad);
-    const messWorte=Math.abs(winkel)>=0.5?(await lesen(messFlaeche)).woerter:mass.woerter;
-    const luecke=spaltenLuecke(messWorte);
-    const anteil=luecke?luecke/messFlaeche.width:0;
-
-    let text="";
-    if(anteil>0.15&&anteil<0.85){
-      melde("Zwei Spalten – beide werden einzeln gelesen …");
-      const voll=flaeche(3000,grad);
-      const schnitt=Math.round(voll.width*anteil);
-      const links=zuZeilen((await lesen(bildStreifen(voll,0,schnitt))).text);
-      const rechts=zuZeilen((await lesen(bildStreifen(voll,schnitt,voll.width))).text);
-      if(links.length&&rechts.length) text=buchText(spaltenOrdnen(links,rechts,[]));
-    }
-    if(!text){
-      melde("Bild wird gelesen, das dauert einen Moment …");
-      const ganz=await lesen(flaeche(3000,grad));
-      text=buchseiteLesen(ganz.woerter,ganz.text);
-    }
-    text=text.replace(/ /g," ").trim();
-    if(!text||text.length<25){
-      nf.status="Auf dem Bild war kaum Text zu erkennen. Bei Kochbuchseiten hilft gerades Halten, viel Licht und ein Ausschnitt, der nur den Text zeigt.";
-      formZeigen(true); return;
-    }
-    nf.status=""; nf.rohtext=text;
-    fotoUebernehmen(text);
-  }catch(e){
-    nf.status="Das Bild ließ sich nicht auswerten: "+(e&&e.message?e.message:"unbekannt");
-    formZeigen(true);
-  }
-}
-function fotoUebernehmen(text){ pruefStart(text); }
 
 /* ============ Zustand ============ */
 const KEY="kuechenplan.v2";   /* bleibt stabil, damit Updates keine Daten verwaisen lassen */
-const VERSION="4.0";
+const VERSION="4.1";
 const TAG=86400000;
 const FRIST={spaeter:30,alt:60,ungekocht:120,geprueft:90,idee:120};   /* Tage */
 let idZaehler=0;
@@ -3501,7 +2932,7 @@ function rezeptNorm(r){
     k:(r.kFest&&["veg","fisch","fleisch"].includes(r.k))?r.k
       :artAusZutaten(arr(r.z,[]),["veg","fisch","fleisch"].includes(r.k)?r.k:"veg"),
     kFest:!!r.kFest,
-    ma:(arr(r.ma,[]).filter(x=>MAHL[x])).length?arr(r.ma,[]).filter(x=>MAHL[x]):["a"],
+    ma:mahlzeitenNorm(arr(r.ma,[])).length?mahlzeitenNorm(arr(r.ma,[])):[...MAHL_HAUPT],
     m:arr(r.m,[]).length?arr(r.m,[]):ALL,
     min:+r.min||30, p:+r.p||20, bl:[0,1,2].includes(r.bl)?r.bl:0,
     nut:arr(r.nut,[]).filter(x=>NUT[x]),
@@ -4172,7 +3603,7 @@ function waehle(k,mk){
   let q="";
   const treffer=()=>{
     const m=monat(), benutzt=new Set(slots().map(x=>S.plan[x]&&S.plan[x].r).filter(Boolean));
-    const passt=r=>istTagesgericht(r)&&r.ma.includes(mk);
+    const passt=r=>istTagesgericht(r)&&passtZuMahlzeit(r,mk);
     let pool=RZ().filter(r=>passt(r)&&(S.sammlung[r.id]||false));
     if(pool.length<4)pool=RZ().filter(passt);
     if(q)pool=pool.filter(r=>r.n.toLowerCase().includes(q.toLowerCase()));
@@ -4219,7 +3650,7 @@ function schnellAnlegen(name,zutatenText,mahlzeit){
     id, n,
     k:artAusZutaten(z,"veg"),
     typ:"haupt",
-    ma:[mahlzeit&&MAHL[mahlzeit]?mahlzeit:"a"],
+    ma:mahlzeit==="f"?["f"]:[...MAHL_HAUPT],
     m:[...ALL],
     min:z.length?dauerSchaetzen(z,[]):10,
     p:proteinSchaetzen(z),
@@ -4270,7 +3701,7 @@ function schnellVorschlag(){
 function schnellAufnehmen(id){
   const r=R(id); if(!r) return;
   neuesRezept({
-    n:r.n, k:r.k, typ:"haupt", ma:[...(r.ma||["a"])], min:r.min, p:r.p,
+    n:r.n, k:r.k, typ:"haupt", ma:mahlzeitenZu("haupt"), min:r.min, p:r.p,
     zText:(r.z||[]).map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
     sText:"", why:"", pAuto:false, minAuto:false,
     status:"Aus einem Schnellgericht übernommen – ergänze Zubereitung und Kennzeichen."
@@ -4283,7 +3714,7 @@ function autoWoche(){
   const m=monat();
   const kürzlich=new Set(Object.values(S.verlauf||{}).slice(-25).map(v=>v.r));
   const sam=r=>S.sammlung[r.id];
-  const passt=(r,mk)=>istTagesgericht(r)&&r.ma.includes(mk);
+  const passt=(r,mk)=>istTagesgericht(r)&&passtZuMahlzeit(r,mk);
   const poolVoll=mk=>RZ().filter(r=>passt(r,mk));
   /* Bevorzugt eure Sammlung. Sieben Plätze je Mahlzeit wollen aber gefüllt werden –
      reicht die Sammlung dafür nicht, wird aus dem Gesamtbestand aufgefüllt. */
@@ -4457,7 +3888,6 @@ function trefferHtml(){
     :filter==="alles"?RZ().filter(r=>!S.archiv[r.id])
     :RZ().filter(r=>S.sammlung[r.id]);
   if(["fisch","fleisch","veg"].includes(filter))list=list.filter(r=>r.k===filter);
-  if(["f","m","a"].includes(filter))list=list.filter(r=>r.ma.includes(filter));
   if(filter==="saison")list=list.filter(r=>r.m.includes(m));
   if(filter==="darm")list=list.filter(r=>r.bl===0);
   if(filter==="kurz")list=list.filter(r=>r.min<=25);
@@ -4472,6 +3902,24 @@ function trefferHtml(){
   if(q)list=list.filter(r=>imNamen(r)||inZutat(r));
   list.sort((a,b)=>(q?(imNamen(b)-imNamen(a)):0)||(b.m.includes(m)-a.m.includes(m))||a.n.localeCompare(b.n));
   if(!list.length)return `<div class="empty"><b>Nichts gefunden</b>Ändere den Filter oder hol dir neue Rezepte unter Entdecken.</div>`;
+  /* Die Liste lief bisher als eine einzige Reihe durch – bei 134 Rezepten
+     scrollt man dabei an Frühstück, Hauptspeisen, Snacks und Desserts vorbei,
+     ohne zu merken, wo das eine aufhört und das andere anfängt. Jetzt trägt
+     jede Gruppe eine Überschrift mit ihrer Anzahl. Filtert man ohnehin schon
+     auf eine Art, bleibt die Überschrift weg – sie sagte dann nichts mehr. */
+  const ORDNUNG=["fruehstueck","haupt","snack","dessert"];
+  const einzeln=!!TYP[filter];
+  const gruppen=ORDNUNG.map(t=>[t,list.filter(r=>typVon(r)===t)]).filter(([,l])=>l.length);
+  if(gruppen.length<2||einzeln) return kartenHtml(list,q,false);
+  /* Steht die Art schon als Überschrift darüber, hat sie auf jeder Karte
+     darunter nichts mehr zu suchen – sonst liest man achtzehnmal „Frühstück“. */
+  return gruppen.map(([t,l])=>
+    `<div class="sect" style="margin-top:14px"><h2>${TYP[t]}${t==="haupt"?"n":t==="snack"||t==="dessert"?"s":""}</h2><span class="zahl">${l.length}</span></div>`
+    +kartenHtml(l,q,true)).join("");
+}
+function kartenHtml(list,q,ohneArt){
+  const m=monat();
+  const imNamen=r=>r.n.toLowerCase().includes(q);
   return list.map(r=>{
     const [lbl,tag,,kk]=KIND[r.k];
     const zuletzt=zuletztGekocht(r.id);
@@ -4482,7 +3930,7 @@ function trefferHtml(){
     const schnell=istSchnell(r), gekocht=schnell?malGekocht(r.id):0;
     return `<div class="rec ${kk}"><div class="rec-b" onclick="detail('${r.id}')">
       <div class="rec-t">${esc(r.n)}${schnell?'<span class="pill" style="margin-left:7px">Schnell</span>':""}</div>
-      <div class="rec-m">${TYP[typVon(r)]} · ${r.min} Min${herTage?" · zuletzt vor "+herTage+" Tag"+(herTage===1?"":"en"):""}</div>
+      <div class="rec-m">${ohneArt?"":TYP[typVon(r)]+" · "}${r.min} Min${herTage?" · zuletzt vor "+herTage+" Tag"+(herTage===1?"":"en"):""}</div>
       ${treffZutat?`<div class="rec-m" style="color:var(--herb)">mit ${esc(treffZutat[0])}</div>`:""}
       <div class="rec-tags"><span class="tag ${tag}">${lbl}</span><span class="pill">${r.p} g Protein</span>${
         schnell&&gekocht>=SCHNELL_SCHWELLE?`<button class="tag t-sun" style="border:0;cursor:pointer" onclick="event.stopPropagation();schnellAufnehmen('${r.id}')">${gekocht}× gekocht · als Rezept aufnehmen</button>`:""}</div>
@@ -4496,8 +3944,14 @@ function trefferHtml(){
       :`<button class="add-b" onclick="mut('sammlung/${r.id}',Date.now())" aria-label="In die Sammlung">${IKON.plus}</button>`}</div>`;}).join("");
 }
 function chipsHtml(){
-  return [["alle","Alle"],["kurz","Unter 25 Min"],["darm","Darmfreundlich"],["f","Frühstück"],["m","Mittag"],["a","Abend"],
-          ["fisch","Fisch"],["fleisch","Fleisch"],["veg","Vegetarisch"],["snack","Snacks"],["dessert","Desserts"],["asana","Aus eurer Liste"],["eigen","Selbst angelegt"],["schnell","Schnellgerichte"],["alles","Alle Rezepte"]]
+  /* „Mittag“ und „Abend“ sind verschwunden: Beide meinten dasselbe, nämlich
+     eine Hauptspeise. Snacks und Desserts stehen ebenfalls nicht mehr als
+     Chip – die Liste trägt sie jetzt als Überschrift, und wer nur sie sehen
+     will, findet sie beim Scrollen sofort. */
+  return [["alle","Alle"],["fruehstueck","Frühstück"],["haupt","Hauptspeisen"],
+          ["kurz","Unter 25 Min"],["darm","Darmfreundlich"],["saison","Saison"],
+          ["veg","Vegetarisch"],["fisch","Fisch"],["fleisch","Fleisch"],
+          ["eigen","Selbst angelegt"],["schnell","Schnellgerichte"],["alles","Alle Rezepte"]]
     .map(([v,l])=>`<button class="chip" aria-pressed="${filter===v}" onclick="setFilter('${v}')">${l}</button>`).join("");
 }
 /* Nur Chips und Treffer austauschen – das Suchfeld bleibt stehen und behält den Fokus */
@@ -5616,8 +5070,6 @@ if(!shareAufnehmen()){}
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 (function(){
   const p=document.getElementById("pdfwahl"); if(p) p.onchange=()=>prospektLesen(p.files);
-  const f=document.getElementById("fotowahl"); if(f) f.onchange=()=>fotoLesen(f.files&&f.files[0]);
-  const k=document.getElementById("fotokamera"); if(k) k.onchange=()=>fotoLesen(k.files&&k.files[0]);
   const i=document.getElementById("impdatei"); if(i) i.onchange=()=>importDateiLesen(i.files&&i.files[0]);
 })();
 /* Der frühere zweite Block hat den richtigen Handler überschrieben und eine

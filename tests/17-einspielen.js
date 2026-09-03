@@ -81,15 +81,19 @@ t("Das Protein wird geschätzt statt auf 20 gesetzt", () => {
   wahr(linsen.p > gurke.p, "Linsen sollten mehr Protein haben als Gurke: " + linsen.p + " gegen " + gurke.p);
   gleich(einspielen([{ n: "X", p: 42, z: ["100 g Linsen"] }])[0].p, 42, "eine Angabe schlägt die Schätzung");
 });
-t("Snacks und Desserts bekommen keine Mahlzeit zugewiesen", () => {
+/* Seit 4.1 sagt allein die Art, zu welcher Mahlzeit ein Rezept passt.
+   Ein mitgeschicktes "ma" wird nicht mehr beachtet – es hat nur widersprochen. */
+t("Die Mahlzeit folgt aus der Art des Gerichts", () => {
   gleich(einspielen([{ n: "A", typ: "dessert", ma: ["m", "a"], z: ["100 g Mehl"] }])[0].ma, []);
-  gleich(einspielen([{ n: "B", typ: "haupt", ma: [], z: ["100 g Mehl"] }])[0].ma, ["a"], "sonst wäre es nie planbar");
+  gleich(einspielen([{ n: "B", typ: "haupt", ma: [], z: ["100 g Mehl"] }])[0].ma, ["m", "a"]);
+  gleich(einspielen([{ n: "C", typ: "fruehstueck", z: ["100 g Mehl"] }])[0].ma, ["f"]);
+  gleich(einspielen([{ n: "D", typ: "haupt", ma: ["f"], z: ["100 g Mehl"] }])[0].ma, ["m", "a"], "die Art schlägt die Angabe");
 });
 t("Unsinnige Angaben werden aussortiert, nicht übernommen", () => {
   const r = einspielen([{ n: "Test", typ: "quatsch", k: "vogel", m: [1, 99], nut: ["eisen", "erfunden"],
     bl: 7, ma: ["f", "x"], z: ["100 g Mehl"] }])[0];
   gleich(r.typ, "haupt"); gleich(r.k, "veg"); gleich(r.m, [1]);
-  gleich(r.nut, ["eisen"]); gleich(r.bl, 0); gleich(r.ma, ["f"]);
+  gleich(r.nut, ["eisen"]); gleich(r.bl, 0); gleich(r.ma, ["m", "a"]);
 });
 
 gruppe("Nachsichtig gegenüber dem, was aus einem Chat kommt");
@@ -138,7 +142,7 @@ t("Was geschätzt oder umgerechnet wurde, wird gesagt", () => {
 gruppe("Die Anleitung für Claude");
 t("Die Vorlage nennt alle Felder, die der Import auswertet", () => {
   const v = A.CLAUDE_VORLAGE;
-  ["n", "port", "z", "s", "min", "typ", "ma", "m", "bl", "nut", "why", "q"].forEach(f =>
+  ["n", "port", "z", "s", "min", "typ", "m", "bl", "nut", "why", "q"].forEach(f =>
     wahr(new RegExp("\\b" + f + "\\b").test(v), "Feld " + f + " fehlt in der Anleitung"));
   ["haupt", "fruehstueck", "snack", "dessert"].forEach(x =>
     wahr(v.indexOf(x) >= 0, "Rezeptart " + x + " fehlt"));
@@ -167,6 +171,30 @@ t("Die alten Zuordnungen bleiben, wie sie waren", () => {
   gleich(A.katFuer("Haselnusskerne"), "tr");
   gleich(A.katFuer("saure Sahne"), "kr");
   gleich(A.katFuer("Zahnpasta"), "so", "Drogerie steht weiter vor allem anderen");
+});
+t("Käse heißt selten Käse, gehört aber ins Kühlregal", () => {
+  ["geriebener Parmesan", "Emmentaler", "Bergkäse", "Gouda", "Ricotta", "Mascarpone", "Pecorino"]
+    .forEach(n => gleich(A.katFuer(n), "kr", n));
+});
+t("Körner und Zuchtpilze finden ihr Regal", () => {
+  gleich(A.katFuer("Buchweizen"), "tr");
+  gleich(A.katFuer("Grünkern"), "tr");
+  gleich(A.katFuer("Kokos-Chips"), "tr");
+  gleich(A.katFuer("kleine Kräuterseitlinge"), "og");
+  gleich(A.katFuer("Austernpilze"), "og");
+  gleich(A.katFuer("rosa Grapefruit"), "og");
+  gleich(A.katFuer("2 Espressi"), "gt");
+  gleich(A.katFuer("Fett für die Form"), "gw");
+  gleich(A.katFuer("Pul Biber (scharfe Paprikaflocken)"), "gw");
+});
+t("Die Fettangabe im Namen verschiebt keine Zutat", () => {
+  gleich(A.katFuer("Emmentaler (am Stück, mind. 45 % Fett i. Tr.)"), "kr");
+  gleich(A.katFuer("saure Sahne (10 % Fett)"), "kr");
+  gleich(A.katFuer("Skyr natur (max. 0,5 % Fett)"), "kr");
+});
+t("Kokosmilch bleibt im Regal, Kokos-Chips auch", () => {
+  gleich(A.katFuer("Kokosmilch"), "tr", "Pflanzendrinks stehen nicht im Kühlregal");
+  gleich(A.katFuer("Kokos-Chips"), "tr");
 });
 t("Aus dem ganzen Kochbuchrezept bleibt keine Zutat ohne Regal", () => {
   const r = einspielen([NUSSKUCHEN])[0];
