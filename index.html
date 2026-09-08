@@ -3137,7 +3137,7 @@ function grabsteinePflegen(pfad,wert){
        Objekt statt den Grabstein zu räumen. */
     Object.keys(wert).forEach(k=>{
       const totSeit=(S.weg||{})[wegSchluessel(p[0],k)]||0;
-      if(totSeit>0&&totSeit>=stempel(wert[k])){ delete wert[k]; return; }
+      if(totIstJuenger(totSeit,wert[k])){ delete wert[k]; return; }
       grabsteinWeg(p[0],k);
     });
   }
@@ -3161,6 +3161,10 @@ const stempel=v=>{
   if(!v||typeof v!=="object")return 0;
   return v.geaendert||v.ts||v.erstellt||0;
 };
+/* Ein Grabstein gewinnt gegen einen Eintrag, wenn er existiert (>0) und
+   nicht älter ist als der Eintrag selbst. Eine Regel, drei Anwendungsstellen
+   (grabsteinePflegen und zweimal in zusammenfuehren) – so bleiben sie in Sync. */
+const totIstJuenger=(totZeit,v)=>totZeit>0&&totZeit>=stempel(v);
 /* Alle Sammlungen werden eintragsweise gemischt. Die Liste wird aus leer()
    abgeleitet, damit ein neues Feld nie wieder vergessen wird. */
 const SAMMELFELDER=()=>Object.entries(leer())
@@ -3188,7 +3192,7 @@ function zusammenfuehren(fern){
       if(r===undefined){
         /* Nur noch hier: entweder gerade selbst angelegt oder von der anderen Seite
            gelöscht. Der Grabstein sagt, was von beidem – und was jünger ist. */
-        if(totSeit(k)>=stempel(v)&&totSeit(k)>0) return;
+        if(totIstJuenger(totSeit(k),v)) return;
         raus[k]=v; return;
       }
       if(v&&r&&typeof v==="object"&&typeof r==="object"&&stempel(v)>stempel(r))raus[k]=v;
@@ -3196,7 +3200,7 @@ function zusammenfuehren(fern){
     /* Und andersherum: was diese Seite gelöscht hat, die andere aber noch kennt */
     Object.keys(raus).forEach(k=>{
       if(lokal[k]!==undefined) return;
-      if(totSeit(k)>0&&totSeit(k)>=stempel(raus[k])) delete raus[k];
+      if(totIstJuenger(totSeit(k),raus[k])) delete raus[k];
     });
     neu[f]=raus;
   });
@@ -4039,9 +4043,13 @@ function rezeptWeg(id){
 }
 function rezeptWegJetzt(id,eigen){
   const kopie=S.eigene&&S.eigene[id]?{...S.eigene[id]}:null;
-  Object.keys(S.plan||{}).forEach(k=>{ if(S.plan[k]&&S.plan[k].r===id) setPfad(S,"plan/"+k,null); });
-  Object.keys(S.extra||{}).forEach(k=>{ if(S.extra[k]&&S.extra[k].r===id) setPfad(S,"extra/"+k,null); });
-  mut("plan",S.plan,false); mut("extra",S.extra,false);
+  /* Pro Feld löschen statt den ganzen Knoten zu ersetzen – nur so setzt mut()
+     für jeden Slot einen Grabstein. Ein Bulk-mut() mit S.plan als Wert sähe
+     die schon lokal entfernten Slots gar nicht mehr und würde sie beim
+     nächsten Massen-Schreiben auf einem unsynchronisierten Gerät wieder
+     zurückbringen (wie eigenesLoeschen es schon immer richtig gemacht hat). */
+  Object.keys(S.plan||{}).forEach(k=>{ if(S.plan[k]&&S.plan[k].r===id) mut("plan/"+k,null,false); });
+  Object.keys(S.extra||{}).forEach(k=>{ if(S.extra[k]&&S.extra[k].r===id) mut("extra/"+k,null,false); });
   mut("sammlung/"+id,null,false);
   if(eigen) mut("eigene/"+id,null,false);
   if(eigen) grabsteinSetzen(id); else mut("archiv/"+id,Date.now(),false);
