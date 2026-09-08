@@ -250,7 +250,7 @@ header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 .ingline.ab span:first-child{color:var(--ink-3)}
 .steps li.ab{color:var(--ink-3)}
 .steps li{cursor:pointer}
-.grid3{display:grid;grid-template-columns:auto repeat(3,1fr);gap:7px;align-items:center}
+.grid3{display:grid;grid-template-columns:auto repeat(2,1fr);gap:7px;align-items:center}
 .grid3 button{border:0;background:var(--fill);border-radius:10px;padding:11px 4px;font-size:14px;min-height:44px}
 .grid3 button.voll{color:var(--ink-3)}
 .grid3 span{font-size:14px;color:var(--ink-2)}
@@ -309,16 +309,6 @@ input:focus-visible,button:focus-visible,select:focus-visible,textarea:focus-vis
 .meldung button{border:0;background:transparent;color:var(--paper);font-weight:600;
   text-decoration:underline;padding:2px 4px}
 @keyframes hochrein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-
-/* Heute-Karte über dem Wochenplan */
-.heutekarte{background:var(--card);border:0;border-radius:var(--r);padding:15px;margin-bottom:12px;box-shadow:var(--schatten)}
-@media (prefers-color-scheme:dark){.heutekarte{border:0.5px solid var(--line)}}
-.heutekarte .hk-kopf{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
-.hk-zeile{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:0.5px solid var(--line)}
-.hk-zeile:first-of-type{border-top:0}
-.hk-zeile .hk-m{font-size:12px;color:var(--ink-3);width:52px;flex:none;text-transform:uppercase;letter-spacing:.03em}
-.hk-zeile .hk-n{flex:1;min-width:0;font-size:17px;font-weight:500;text-align:left;background:transparent;border:0;color:inherit;padding:0}
-.hk-zeile .hk-leer{flex:1;color:var(--ink-3);font-size:16px;text-align:left;background:transparent;border:0;padding:0}
 
 /* Herkunft eines Einkaufspostens */
 .it-q{cursor:pointer}
@@ -2456,8 +2446,8 @@ function einplanen(rid){
       <div class="toggle" style="width:100%;margin:12px 0">
         ${[0,1,2].map(x=>`<button style="flex:1" aria-pressed="${w===x}" onclick="epWoche(${x},'${rid}')">${["Diese","Nächste","Übernächste"][x]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(x)}</span></button>`).join("")}</div>
       <div class="grid3">
-        <span></span><span style="text-align:center;font-size:11px">Früh</span><span style="text-align:center;font-size:11px">Mittag</span><span style="text-align:center;font-size:11px">Abend</span>
-        ${TAGE.map((tn,d)=>`<span>${tn.slice(0,2)}${w===0&&d===heuteIdx()?" ·":""}</span>${["f","m","a"].map(mk=>{
+        <span></span><span style="text-align:center;font-size:11px">Mittag</span><span style="text-align:center;font-size:11px">Abend</span>
+        ${TAGE.map((tn,d)=>`<span>${tn.slice(0,2)}${w===0&&d===heuteIdx()?" ·":""}</span>${["m","a"].map(mk=>{
           const k="w"+w+"-"+d+"-"+mk, e=S.plan[k], belegt=e&&R(e.r);
           const passt=passtZuMahlzeit(r,mk);
           return `<button class="${belegt?"voll":""}" onclick="epSetzen('${k}','${rid}')" title="${belegt?esc(belegt.n):""}">${belegt?"belegt":(passt?"frei":"·")}</button>`;
@@ -3333,7 +3323,7 @@ function render(){
 
 /* ============ Wochenplan ============ */
 let planWoche=0, erledigtWeg=false, einkaufAnsicht="woche";   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
-const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["f","m","a"])a.push("w"+w+"-"+d+"-"+mk);return a;};
+const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["m","a"])a.push("w"+w+"-"+d+"-"+mk);return a;};
 const slotTag=k=>+k.split("-")[1];
 const slotMahl=k=>k.split("-")[2];
 function kwPlus(n){const d=new Date();d.setDate(d.getDate()+n*7);return kw(d);}
@@ -3342,40 +3332,8 @@ function planStat(w=planWoche){
   slots(w).forEach(k=>{const e=S.plan[k];if(!e)return;const r=R(e.r);if(!r)return;z[r.k]++;});
   return {z,belegt:slots(w).filter(k=>S.plan[k]).length};
 }
-/* ---------- Was koche ich jetzt? ----------
-   Die Frage um 17 Uhr lautet nicht „wie sieht die Woche aus", sondern
-   „was steht heute an". Der Kochmodus war dafür drei Ebenen tief. */
-function heuteKarte(){
-  if(planWoche!==0) return "";
-  const d=heuteIdx();
-  const zeilen=["f","m","a"].map(mk=>{
-    const k="w0-"+d+"-"+mk, e=S.plan[k], r=e&&R(e.r);
-    if(!r) return `<div class="hk-zeile"><span class="hk-m">${MAHL[mk].slice(0,6)}</span>
-      <button class="hk-leer" onclick="waehle('${k}','${mk}')">+ Noch nichts geplant</button></div>`;
-    return `<div class="hk-zeile"><span class="hk-m">${MAHL[mk].slice(0,6)}</span>
-      <button class="hk-n" onclick="detail('${r.id}','${k}')">${esc(r.n)}</button>
-      <button class="btn btn-s" onclick="kochModus('${r.id}',${e.p===0?2:(e.p||2)})">Kochen</button></div>`;
-  }).join("");
-  const geplant=["f","m","a"].filter(mk=>{const e=S.plan["w0-"+d+"-"+mk];return e&&R(e.r);}).length;
-  return `<div class="heutekarte">
-    <div class="hk-kopf"><b style="font-size:15px">Heute · ${TAGE[d]}</b>
-      <span class="note">${geplant?proteinTag(0,d)+" g Protein":"nichts geplant"}</span></div>
-    ${zeilen}</div>`;
-}
-/* Viele essen morgens ohnehin dasselbe – und bei 21 Frühstücken für 21 Plätze
-   in drei Wochen ist die Wiederholung ohnehin unvermeidlich. */
-function fruehstueckUebernehmen(){
-  const quelle=[...Array(7)].map((_,d)=>S.plan["w"+planWoche+"-"+d+"-f"]).find(e=>e&&R(e.r));
-  if(!quelle){ meldung("Trag zuerst an einem Tag ein Frühstück ein."); return; }
-  const vorher={...S.plan};
-  const neu={...S.plan};
-  for(let d=0;d<7;d++) neu["w"+planWoche+"-"+d+"-f"]={r:quelle.r,p:quelle.p||S.portionStd||2};
-  mut("plan",neu);
-  meldung("„"+R(quelle.r).n+"“ steht jetzt an allen sieben Tagen.","Rückgängig",()=>mut("plan",vorher));
-}
-
 /* ---------- Ein Tag im Plan ----------
-   Die sieben Tageskarten standen bis 3.7 alle offen: 21 Zeilen mit Portionswahl
+   Die sieben Tageskarten standen bis 3.7 alle offen: 14 Zeilen mit Portionswahl
    und Löschknopf, bevor man am Ende der Seite den Einkaufsknopf erreichte. Jetzt
    ist der Tag zugeklappt eine einzige Zeile mit dem, was daraufsteht; aufgeklappt
    ist er unverändert. Was offen ist, merkt sich die Ansicht – wer ein Gericht
@@ -3383,23 +3341,28 @@ function fruehstueckUebernehmen(){
 let tagOffen={};
 function tagUmschalten(k){ tagOffen[k]=!tagOffen[k]; render(); }
 function tagZeile(d){
-  const eintraege=["f","m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
-  const voll=eintraege.filter(x=>x.e&&R(x.e.r)).length;
+  const eintraege=["m","a"].map(mk=>{const k="w"+planWoche+"-"+d+"-"+mk;return {mk,k,e:S.plan[k]};});
+  const voll=eintraege.filter(x=>x.e&&(R(x.e.r)||x.e.aus)).length;
   const bl2=eintraege.filter(x=>{const r=x.e&&R(x.e.r);return r&&r.bl===2;}).length;
   const istHeute=planWoche===0&&d===heuteIdx();
   const schluessel="w"+planWoche+"-"+d;
   const offen=!!tagOffen[schluessel];
   /* Zugeklappt zählt, was auf dem Tisch steht – nicht, wie viele Felder belegt sind */
-  const namen=eintraege.map(({e})=>{const r=e&&R(e.r);return r?r.n:null;}).filter(Boolean);
+  const namen=eintraege.map(({e})=>{if(e&&e.aus)return "Auswärts";const r=e&&R(e.r);return r?r.n:null;}).filter(Boolean);
   const kurz=namen.length?namen.join(" · "):"nichts geplant";
   return `<div class="day${istHeute?" heute":""}">
     <button class="day-h" onclick="tagUmschalten('${schluessel}')" aria-expanded="${offen}">
       <span class="day-t"><b>${TAGE[d]}${istHeute?'<i class="heutetag">HEUTE</i>':""}</b>
         <span class="day-k">${esc(kurz)}</span></span>
-      <span class="day-z">${voll} von 3<i class="chev${offen?" auf":""}">${IKON.chevron}</i></span>
+      <span class="day-z">${voll} von 2<i class="chev${offen?" auf":""}">${IKON.chevron}</i></span>
     </button>
     ${offen?eintraege.map(({mk,k,e})=>{
       const r=e&&R(e.r);
+      if(e&&e.aus) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
+        <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-m">
+          <span class="slot-n" style="color:var(--ink-3);font-weight:400">Auswärts</span>
+          <span class="slot-s">Kein Essen geplant</span></span></button>
+        <button class="btn btn-ghost btn-s" onclick="mut('plan/${k}',null)" aria-label="entfernen">${IKON.kreuz}</button></div>`;
       if(!r) return `<div class="slot"><span class="slot-l">${MAHL[mk].slice(0,6)}</span>
         <button class="pick" onclick="waehle('${k}','${mk}')"><span class="slot-e">+ Gericht wählen</span></button></div>`;
       const [lbl,,dot]=KIND[r.k];
@@ -3434,17 +3397,15 @@ function vWoche(){
   const knapp=schnitt&&schnitt<PROTEINZIEL;
   const ex=extraListe(planWoche);
   const hinweise=wochenHinweise();
-  /* Der Wochenumschalter sitzt am Plan, nicht über der Seite: „Heute“ betrifft
-     immer die laufende Woche und wandert sonst mit weg. */
   const wahl=`<div class="toggle" style="width:100%">
     ${[0,1,2].map(w=>`<button style="flex:1" aria-pressed="${planWoche===w}" onclick="planWoche=${w};render()">${["Diese","Nächste","Übernächste"][w]}<br><span style="font-family:var(--mono);font-size:10px;opacity:.75">${kwPlus(w)}</span></button>`).join("")}</div>`;
   const meta=belegt?[`${z.veg} vegetarisch`,z.fisch?`${z.fisch} Fisch`:"",z.fleisch?`${z.fleisch} Fleisch`:"",
     schnitt?`Ø ${schnitt} g Protein`:""].filter(Boolean).join(" · "):"";
   const kopf=`<div class="card">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
-      <b style="font-size:17px">${belegt} von 21 geplant</b>
+      <b style="font-size:17px">${belegt} von 14 geplant</b>
       <span class="note">${kwPlus(planWoche)}</span></div>
-    <div class="progress"><i style="width:${belegt/21*100}%"></i></div>
+    <div class="progress"><i style="width:${belegt/14*100}%"></i></div>
     ${meta?`<p class="note" style="margin-top:8px">${meta}</p>`:""}
     ${knapp?`<p class="note" style="color:var(--sun);margin-top:8px">Ø ${schnitt} g Protein am Tag – Ziel sind ${PROTEINZIEL} g.
       <button class="btn btn-s" style="margin-left:6px" onclick="proteinSnack()">Snack ergänzen</button></p>`:""}
@@ -3454,10 +3415,13 @@ function vWoche(){
       <button class="btn btn-s" onclick="wocheMehr()">Weiteres${hinweise.length-(knapp?1:0)>0?" · "+(hinweise.length-(knapp?1:0)):""} …</button>
     </div></div>`;
 
-  return `${heuteKarte()}${kopf}
+  /* Der Plan ist die tägliche Ansicht, deshalb steht er ganz oben. Der
+     Wochenüberblick mit Vorschlagen/Abschließen kommt danach – man ruft ihn
+     seltener auf als man einen Tag nachsieht. */
+  return `${wahl}
     <div class="sect"><h2>Plan</h2>${belegt?`<button class="btn btn-s" onclick="alleTage(${[0,1,2,3,4,5,6].every(d=>tagOffen["w"+planWoche+"-"+d])?false:true})">${[0,1,2,3,4,5,6].every(d=>tagOffen["w"+planWoche+"-"+d])?"Alle zuklappen":"Alle aufklappen"}</button>`:""}</div>
-    ${wahl}
     <div style="margin-top:12px">${TAGE.map((tn,d)=>tagZeile(d)).join("")}</div>
+    <div style="margin-top:16px">${kopf}</div>
     ${ex.length?`<div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="wocheMehr()">Ändern</button></div>
       <p class="note" style="padding:0 3px">${ex.map(e=>{const r=R(e.r);return r?esc(r.n):"";}).filter(Boolean).join(" · ")}</p>`:""}
     ${belegt||ex.length?`<button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="vorratFrage()">Einkaufsliste für ${kwPlus(planWoche)} erstellen</button>
@@ -3474,7 +3438,6 @@ function alleTage(auf){
 function wocheMehr(){ openSheet(wocheMehrKoerper()); }
 function wocheMehrZeigen(){ openSheet(wocheMehrKoerper(),true); }
 function wocheMehrKoerper(){
-  const fruehstueckDa=[...Array(7)].some((_,d)=>{const e=S.plan["w"+planWoche+"-"+d+"-f"];return e&&R(e.r);});
   const {z,belegt}=planStat();
   const hinweise=wochenHinweise();
   const ex=extraListe(planWoche);
@@ -3482,7 +3445,7 @@ function wocheMehrKoerper(){
     .map(([,v])=>{const r=R(v.r);return r?`<div class="meal"><div class="meal-main" onclick="closeSheet();detail('${r.id}')"><div class="meal-name">${esc(r.n)}</div><div class="meal-sub">${v.kw} · ${KH[khVon(r)]}</div></div><button class="btn btn-s" onclick="closeSheet();einplanen('${r.id}')">Nochmal</button></div>`:"";}).join("");
   return `<div class="grab"></div>
     <h2 style="font-size:20px">${kwPlus(planWoche)}</h2>
-    <p class="note" style="margin:6px 0 14px">${belegt} von 21 Mahlzeiten geplant · ${z.veg} vegetarisch, ${z.fisch} Fisch, ${z.fleisch} Fleisch.</p>
+    <p class="note" style="margin:6px 0 14px">${belegt} von 14 Mahlzeiten geplant · ${z.veg} vegetarisch, ${z.fisch} Fisch, ${z.fleisch} Fleisch.</p>
     ${hinweise.length?`<div class="sect"><h2>Hinweise</h2></div>
       ${hinweise.map(h=>`<p class="note"${h.warn?' style="color:var(--sun)"':""}>${h.t}</p>`).join("")}`:""}
     <div class="sect"><h2>Zusätzlich</h2><button class="btn btn-s" onclick="closeSheet();extraWaehlen()">Hinzufügen</button></div>
@@ -3494,9 +3457,6 @@ function wocheMehrKoerper(){
         <span class="mini"><button onclick="extraPortion('${e.id}',-1);wocheMehrZeigen()">−</button><b>${e.p===0?"R":(e.p||2)}</b><button onclick="extraPortion('${e.id}',1);wocheMehrZeigen()">+</button></span>
         <button class="btn btn-ghost btn-s" onclick="mut('extra/${e.id}',null,false);wocheMehrZeigen()" aria-label="entfernen">${IKON.kreuz}</button></div>`;}).join("")
       :`<p class="note">Nichts zusätzlich geplant. Hier landen Dinge außerhalb des Wochenplans – zum Grillen mitbringen, Snacks, ein Kuchen.</p>`}
-    ${fruehstueckDa?`<div class="sect"><h2>Abkürzung</h2></div>
-      <button class="btn btn-wide" onclick="closeSheet();fruehstueckUebernehmen()">Frühstück für alle Tage übernehmen</button>
-      <p class="note" style="margin-top:6px">Setzt das Frühstück des ersten belegten Tages auf alle sieben Tage.</p>`:""}
     ${hist?`<div class="sect"><h2>Zuletzt gekocht</h2></div>${hist}`:""}
     <div class="sect"><h2>Von vorn</h2></div>
     <button class="btn btn-wide" onclick="if(confirm('Den Plan dieser Woche leeren? Die Einkaufsliste bleibt stehen.')){closeSheet();leereWoche()}">Plan dieser Woche leeren</button>
@@ -3623,6 +3583,7 @@ function waehle(k,mk){
   window.wq=v=>{q=v;const el=document.getElementById("wtreffer");if(el)el.innerHTML=treffer();};
   window.__schnellHier=()=>schnellInPlatz(k,mk);
   openSheet(`<div class="grab"></div><h2 style="font-size:20px">${MAHL[mk]} · ${TAGE[slotTag(k)]}</h2>
+    <button class="btn btn-wide" style="margin:4px 0 14px" onclick="keinEssenSetzen('${k}')">Kein Essen planen · auswärts</button>
     ${schnellFormular("__schnellHier()","Ohne Zutaten steht das Gericht nur im Plan und erzeugt keine Einkäufe.")}
     <input type="search" placeholder="Suchen" oninput="wq(this.value)" style="margin:12px 0">
     <div id="wtreffer">${treffer()}</div>
@@ -3633,6 +3594,12 @@ function setSlot(k,rid){
   /* Schnellgerichte gehören nicht in die Sammlung – sonst stünden sie doch wieder
      unter „Aus eurer Liste". */
   if(!S.sammlung[rid]&&!istSchnell(R(rid))) mut("sammlung/"+rid,Date.now(),false);
+  closeSheet();
+}
+/* Bewusst kein Essen zuhause – auswärts oder unterwegs. Zählt als geplant
+   (die Entscheidung ist gefallen), erzeugt aber keine Einkäufe und kein Protein. */
+function keinEssenSetzen(k){
+  mut("plan/"+k,{r:null,aus:true});
   closeSheet();
 }
 
@@ -3734,7 +3701,7 @@ function autoWoche(){
      Was von Hand geplant wurde, merken wir uns: auch das Protein-Auffüllen darf
      es später nicht austauschen, sonst verschwindet ein bewusst gesetztes Gericht. */
   const plan={}, festeFelder=new Set();
-  slots().forEach(k=>{ if(S.plan[k]&&R(S.plan[k].r)){ plan[k]=S.plan[k]; festeFelder.add(k); } });
+  slots().forEach(k=>{ if(S.plan[k]&&(R(S.plan[k].r)||S.plan[k].aus)){ plan[k]=S.plan[k]; festeFelder.add(k); } });
   const benutzt=new Set(Object.values(plan).map(e=>e.r));
   const blTag=[0,0,0,0,0,0,0];
   slots().forEach(k=>{const e=plan[k];const r=e&&R(e.r);if(r&&r.bl===2)blTag[slotTag(k)]++;});
@@ -3795,7 +3762,7 @@ function proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen,festeFelder,blT
   const bl=blTag||[0,0,0,0,0,0,0];
   for(let d=0;d<7;d++){
     for(let runde=0;runde<4;runde++){
-      const felder=["f","m","a"].map(mk=>"w"+planWoche+"-"+d+"-"+mk).filter(k=>plan[k]);
+      const felder=["m","a"].map(mk=>"w"+planWoche+"-"+d+"-"+mk).filter(k=>plan[k]);
       if(!felder.length) break;
       const summe=felder.reduce((s,k)=>s+((R(plan[k].r)||{p:0}).p||0),0);
       if(summe>=PROTEIN_MINDEST) break;
@@ -3831,7 +3798,7 @@ function proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen,festeFelder,blT
 }
 /* Protein je Tag, für den Hinweis im Wochenplan */
 function proteinTag(w,d){
-  return ["f","m","a"].reduce((s,mk)=>{const e=S.plan["w"+w+"-"+d+"-"+mk];const r=e&&R(e.r);return s+(r?r.p:0);},0);
+  return ["m","a"].reduce((s,mk)=>{const e=S.plan["w"+w+"-"+d+"-"+mk];const r=e&&R(e.r);return s+(r?r.p:0);},0);
 }
 function proteinSchnitt(w){
   const tage=[...Array(7)].map((_,d)=>proteinTag(w,d)).filter(x=>x>0);
