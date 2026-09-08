@@ -3129,7 +3129,17 @@ function grabsteinePflegen(pfad,wert){
   if(p.length===1&&WEG_FELDER.has(p[0])&&wert&&typeof wert==="object"&&!Array.isArray(wert)){
     const alt=S[p[0]]||{};
     Object.keys(alt).forEach(k=>{ if(!(k in wert)) grabstein(p[0],k); });
-    Object.keys(wert).forEach(k=>grabsteinWeg(p[0],k));
+    /* Ein Gerät mit veraltetem Stand (Woche vorschlagen, Abschließen, Plan leeren
+       auf einem Gerät, das eine Löschung woanders noch nicht kennt) darf einen
+       frischeren Grabstein nicht einfach mitlöschen – sonst kommt ein gerade erst
+       entferntes Gericht beim nächsten Massen-Schreiben zurück. Ist der Grabstein
+       jünger als der Eintrag selbst, fliegt der Eintrag aus dem zu sendenden
+       Objekt statt den Grabstein zu räumen. */
+    Object.keys(wert).forEach(k=>{
+      const totSeit=(S.weg||{})[wegSchluessel(p[0],k)]||0;
+      if(totSeit>0&&totSeit>=stempel(wert[k])){ delete wert[k]; return; }
+      grabsteinWeg(p[0],k);
+    });
   }
 }
 function stempeln(pfad,wert){
