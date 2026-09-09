@@ -2402,8 +2402,10 @@ function abgelaufeneWeg(){
   const h=isoHeute();
   const alt=angeboteListe().filter(p=>p.bis&&p.bis<h);
   if(!alt.length){alert("Es ist nichts abgelaufen.");return;}
-  const rest={...S.angebote}; alt.forEach(p=>delete rest[p.id]);
-  mut("angebote",rest);
+  /* Einzeln löschen statt das ganze Feld neu zu schreiben – sonst überschreibt
+     ein Gerät mit veraltetem Stand Angebote, die es selbst noch nicht kennt. */
+  alt.forEach(p=>mut("angebote/"+p.id,null,false));
+  render();
 }
 function angeboteSpeichern(){
   const roh=document.getElementById("angtext").value;
@@ -3550,7 +3552,10 @@ function wocheMehrKoerper(){
     <button class="btn btn-wide" onclick="if(confirm('Den Plan dieser Woche leeren? Die Einkaufsliste bleibt stehen.')){closeSheet();leereWoche()}">Plan dieser Woche leeren</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:14px" onclick="closeSheet()">Schließen</button>`;
 }
-function leereWoche(){const p={...S.plan};slots().forEach(k=>delete p[k]);mut("plan",p);}
+/* Einzeln löschen statt das ganze plan-Feld neu zu schreiben – sonst nimmt
+   ein Gerät mit veraltetem Stand andere Wochen oder gerade erst anderswo
+   gesetzte Felder mit sich und überschreibt sie beim Zurückschreiben. */
+function leereWoche(){ slots().forEach(k=>mut("plan/"+k,null,false)); render(); }
 /* 0 Portionen heißt: wird von Resten gegessen und taucht nicht auf der Einkaufsliste auf */
 function port(k,d){const e=S.plan[k];if(!e)return;mut("plan/"+k,{...e,p:Math.max(0,(e.p===0?0:(e.p||2))+d)});}
 /* Bis Version 3.1 wanderten beim Abschließen alle 21 Gerichte in den Verlauf –
@@ -3588,16 +3593,20 @@ function abschlussAlle(an){
   openSheet(abschlussKoerper(),true);
 }
 function wocheAbschliessenJetzt(){
-  const w=kwPlus(planWoche),v={...S.verlauf},p={...S.plan};
+  /* Einzeln schreiben statt verlauf/plan als Ganzes neu zu setzen – sonst
+     nimmt ein Gerät mit veraltetem Stand Verlaufseinträge oder Planfelder
+     mit sich, die es selbst noch nicht kennt, und überschreibt sie. */
+  const w=kwPlus(planWoche);
   let n=0;
   slots().forEach((k,i)=>{
-    if(!p[k]) return;
-    if(!abschlussAus[k]){ v[Date.now()+i]={r:p[k].r,kw:w}; n++; }
-    delete p[k];
+    const e=S.plan[k]; if(!e) return;
+    if(!abschlussAus[k]){ mut("verlauf/"+(Date.now()+i),{r:e.r,kw:w},false); n++; }
+    mut("plan/"+k,null,false);
   });
-  const keys=Object.keys(v).sort((a,b)=>b-a).slice(0,80);
-  mut("verlauf",Object.fromEntries(keys.map(k=>[k,v[k]])),false);
-  mut("plan",p);
+  /* Alte Verlaufseinträge über die letzten 80 hinaus einzeln aufräumen */
+  const zuAlt=Object.keys(S.verlauf||{}).sort((a,b)=>b-a).slice(80);
+  zuAlt.forEach(k=>mut("verlauf/"+k,null,false));
+  render();
   closeSheet();
   schnellAufraeumen();
   const kandidat=schnellVorschlag();
@@ -3833,8 +3842,12 @@ function autoWoche(){
     }
   }
   proteinAuffuellen(plan,pool,punkte,benutzt,andereWochen,festeFelder,blTag);
-  const ganz={...S.plan}; slots().forEach(k=>delete ganz[k]);
-  mut("plan",{...ganz,...plan});   /* andere Wochen bleiben stehen */
+  /* Nur die tatsächlich neu vorgeschlagenen Felder einzeln schreiben – von
+     Hand gesetzte (festeFelder) bleiben unangetastet, und ein Gerät mit
+     veraltetem Stand kann so weder andere Wochen noch anderswo gerade erst
+     gesetzte Felder mit einem Massen-Schreiben überschreiben. */
+  slots().forEach(k=>{ if(!festeFelder.has(k)) mut("plan/"+k,plan[k]||null,false); });
+  render();
 }
 
 /* ============ Rezepte ============ */
@@ -4939,9 +4952,14 @@ function postenWoher(id){
     <button class="btn btn-wide" style="margin-top:12px" onclick="postenBearbeiten('${id}')">Ändern oder entfernen</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Schließen</button>`);
 }
-function alleAb(v){const t=Date.now();const l={...S.liste};
-  Object.keys(l).forEach(k=>l[k]={...l[k],on:v,gekauft:v?((l[k].gekauft||0)+(l[k].q||0)):0,ts:t});
-  mut("liste",l);}
+/* Einzeln schreiben statt das ganze liste-Feld neu zu setzen – sonst
+   überschreibt ein Gerät mit veraltetem Stand Posten, die ein anderes Gerät
+   gerade erst hinzugefügt hat und die hier lokal noch fehlen. */
+function alleAb(v){
+  Object.entries(S.liste||{}).forEach(([k,i])=>
+    mut("liste/"+k,{...i,on:v,gekauft:v?((i.gekauft||0)+(i.q||0)):0},false));
+  render();
+}
 /* Beim Abhaken wird festgehalten, wie viel schon im Wagen liegt */
 function posten(id,an){
   const i=(S.liste||{})[id]; if(!i) return;
