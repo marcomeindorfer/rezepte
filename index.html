@@ -1217,7 +1217,7 @@ const BRUCH={"½":.5,"⅓":1/3,"⅔":2/3,"¼":.25,"¾":.75,"⅕":.2,"⅖":.4,"�
 const WORTZAHL={ein:1,eine:1,einen:1,einem:1,eines:1,zwei:2,drei:3,vier:4,"fünf":5,fuenf:5,
   sechs:6,sieben:7,acht:8,neun:9,zehn:10,elf:11,"zwölf":12,zwoelf:12,ein_halb:0.5};
 /* Unbestimmte Angaben tragen keine Zahl, gehören aber auch nicht in den Namen */
-const VAGE_RE=/^\s*(etwas|einige|ein paar|ein wenig|reichlich|nach belieben|nach bedarf|nach geschmack|je)\s+/i;
+const VAGE_RE=/^\s*(ca\.?|circa|zirka|ungefähr|etwas|einige|ein paar|ein wenig|reichlich|nach belieben|nach bedarf|nach geschmack|je)\s+/i;
 const HALB_RE=/^\s*(ein(e|en)?\s+halbe(r|s|n)?|halbe(r|s|n)?)\s+/i;
 function mengeLesen(text){
   let rest=text, menge=0, gefunden=false;
@@ -4676,6 +4676,16 @@ const gleicheZutat=(a,b)=>{const x=slug(a),y=slug(b);
 function imVorrat(name){
   return Object.values(S.vorrat).find(v=>gleicheZutat(name,v.n));
 }
+/* Saft steht im Rezept, aber im Markt kauft man dafür die Frucht – Limette,
+   Zitrone und Orange sind im Kühlregal ohnehin selten fertig gepresst zu
+   haben. [Frucht, ml pro Stück – grobe Richtwerte] */
+const SAFT_FRUCHT={limettensaft:["Limette",30],zitronensaft:["Zitrone",45],orangensaft:["Orange",120]};
+const ML_JE_EINHEIT={ml:1,l:1000,EL:15,TL:5};
+function fruchtStattSaft(name){
+  const a=slug(name);
+  for(const k in SAFT_FRUCHT) if(a.includes(k)) return SAFT_FRUCHT[k];
+  return null;
+}
 function listeBauen(){
   const map=new Map();
   const ausVorrat=new Set();   /* welche Zutaten der Vorrat deckt – verschiedene, nicht Vorkommen */
@@ -4694,12 +4704,20 @@ function listeBauen(){
       n=erneut[0];
     }
     /* Zubereitungs- und Serviehinweise gehören ins Rezept, nicht auf die
-       Liste: „(grob gehackt)“, „(zum Servieren)“, „(optional)“, „(etwas)“. */
-    n=n.replace(/\s*\([^)]*\)/g,"").replace(/\s{2,}/g," ").trim();
+       Liste: „(grob gehackt)“, „(zum Servieren)“, „(optional)“, „(etwas)“.
+       Die zweite Ersetzung räumt eine verwaiste Klammer weg, die durch
+       fehlerhaft importierten Text übrig bleiben kann. */
+    n=n.replace(/\s*\([^)]*\)/g,"").replace(/[()]/g,"").replace(/\s{2,}/g," ").trim();
     if(!n) return;
     if(istImmerDa(n)) return;   /* Wasser & Co – wird nie eingekauft */
     const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
     if(istGewuerz(n)&&!gewuerzFehlt[slug(n)]) return;   /* Gewürze gelten als vorhanden, außer aktiv verneint */
+    const saft=fruchtStattSaft(n);
+    if(saft&&ML_JE_EINHEIT[ein]){
+      const [frucht,mlProStk]=saft;
+      q=Math.max(1,Math.ceil(q*ML_JE_EINHEIT[ein]/mlProStk));
+      n=frucht; ein="Stk"; kat="og";
+    }
     /* Kilo und Gramm, Liter und Milliliter sind dieselbe Zutat – „500 g Mehl“ aus
        dem einen Rezept und „0,5 kg Mehl“ aus dem anderen dürfen nicht als zwei
        Posten auf der Liste landen. Gemeinsame Basis ist immer die kleine Einheit,
@@ -4708,10 +4726,16 @@ function listeBauen(){
     const einheit=basis?basis[0]:ein;
     const menge=q*(portionen||2)*(basis?basis[1]:1);
     const id=slug(n+"_"+einheit);
-    if(map.has(id)){
-      const alt=map.get(id);
-      alt.q+=menge;
-      if(rezeptId&&!alt.fuer.includes(rezeptId)) alt.fuer.push(rezeptId);
+    /* Einzahl und Mehrzahl derselben Zutat („Frühlingszwiebel“/„Frühlingszwiebeln“)
+       landen sonst als zwei Zeilen auf der Liste, nur weil das eine Rezept die
+       Einzahl schreibt und das andere die Mehrzahl. */
+    let ziel=map.get(id);
+    if(!ziel) for(const eintrag of map.values()){
+      if(eintrag.e===einheit&&gleicheZutat(eintrag.n,n)){ ziel=eintrag; break; }
+    }
+    if(ziel){
+      ziel.q+=menge;
+      if(rezeptId&&!ziel.fuer.includes(rezeptId)) ziel.fuer.push(rezeptId);
     } else {
       map.set(id,{n,q:menge,e:einheit,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||"",
         fuer:rezeptId?[rezeptId]:[]});
