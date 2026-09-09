@@ -1217,7 +1217,7 @@ const BRUCH={"½":.5,"⅓":1/3,"⅔":2/3,"¼":.25,"¾":.75,"⅕":.2,"⅖":.4,"�
 const WORTZAHL={ein:1,eine:1,einen:1,einem:1,eines:1,zwei:2,drei:3,vier:4,"fünf":5,fuenf:5,
   sechs:6,sieben:7,acht:8,neun:9,zehn:10,elf:11,"zwölf":12,zwoelf:12,ein_halb:0.5};
 /* Unbestimmte Angaben tragen keine Zahl, gehören aber auch nicht in den Namen */
-const VAGE_RE=/^\s*(ca\.?|circa|zirka|ungefähr|etwas|einige|ein paar|ein wenig|reichlich|nach belieben|nach bedarf|nach geschmack|je)\s+/i;
+const VAGE_RE=/^\s*(ca\.?|circa|zirka|ungefähr|etwas|einige|ein paar|ein wenig|reichlich|nach belieben|nach bedarf|nach geschmack|nach gefühl|je)\s+/i;
 const HALB_RE=/^\s*(ein(e|en)?\s+halbe(r|s|n)?|halbe(r|s|n)?)\s+/i;
 function mengeLesen(text){
   let rest=text, menge=0, gefunden=false;
@@ -1291,15 +1291,29 @@ function parseZutat(zeile){
      zählt auch das Zeilenende als Grenze – aber nur wenn wirklich eine Menge
      gefunden wurde, sonst würde ein einzelnes Wort wie „Dose“ als Zutat für
      leer erklärt statt als das, was es ist. */
+  /* Erst die Größe weg („eine kleine Prise“ → „Prise“), dann erst nach der
+     Einheit suchen – sonst blockiert „kleine“ die Erkennung von „Prise“
+     dahinter, und die Zutat bleibt ohne erkannte Einheit stehen. */
+  t=t.replace(GROESSE_RE,"");
   const mEinh=t.match(gelesen.gefunden?/^([A-Za-zÄÖÜäöü]+\.?)(?:\s+|$)/:/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
   if(mEinh){const k=mEinh[1].toLowerCase().replace(".","");if(EINH[k]){einheit=EINH[k];t=t.slice(mEinh[0].length);}}
-  t=t.replace(GROESSE_RE,"");
   const name=(label||t.trim()).replace(/\s*,\s*$/,"");
   if(!name) return null;
   if(menge&&!einheit) einheit="Stk";
   return [name,menge,einheit,katFuer(name)];
 }
 const parseZutaten=txt=>String(txt||"").split("\n").map(parseZutat).filter(Boolean);
+/* Länger gespeicherte Rezepte tragen noch den Stand des Parsers von damals –
+   „Auberginen: 1 kleine Aubergine“ mit Menge 0 bleibt so stehen, bis jemand
+   die Zeile von Hand nachbessert. Für Anzeige und Bearbeiten-Formular wird
+   der Name deshalb erneut durch parseZutat() geschickt; eine bereits
+   vorhandene Menge bleibt unangetastet, eine fehlende wird nachgeholt. */
+function zutatAnzeige([n,q,e,kat]){
+  const erneut=parseZutat(n);
+  if(!erneut) return [n,q,e,kat];
+  if(!q&&erneut[1]) return [erneut[0],erneut[1],erneut[2]||e,kat];
+  return [erneut[0],q,e,kat];
+}
 const parseSchritte=txt=>String(txt||"").split("\n").map(z=>z.trim().replace(/^\d+[.)]\s*/,"")).filter(Boolean);
 
 /* ===== Rezept aus einem Link holen ===== */
@@ -1927,7 +1941,7 @@ function neuesRezept(vorgabe){
 function rezeptBearbeiten(id){
   const r=R(id); if(!r) return;
   nf={id,n:r.n,q:r.q||"",k:r.k,kFest:!!r.kFest,typ:typVon(r),ma:[...(r.ma||[])],min:r.min,p:r.p,why:r.why||"",
-      zText:r.z.map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
+      zText:r.z.map(x=>zutatAnzeige(x)).map(([n,q,e])=>(q?(Number.isInteger(q)?q:String(q).replace(".",","))+" "+(e?e+" ":""):"")+n).join("\n"),
       sText:(r.s||[]).join("\n"),port:1,status:"",roh:"",pAuto:false,minAuto:false};
   formZeigen();
 }
@@ -3004,7 +3018,7 @@ function kw(d=new Date()){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth()
    „Bund“ oder „Glas“ bleiben bewusst draußen, die ändern sich beim Zählen
    umgangssprachlich meist nicht ("2 Bund Radieschen", nicht "2 Bunde"). */
 const EINH_PLURAL={Dose:"Dosen",Zehe:"Zehen",Scheibe:"Scheiben",Flasche:"Flaschen",Packung:"Packungen",
-  Portion:"Portionen",Kugel:"Kugeln",Tasse:"Tassen",Schale:"Schalen",Stange:"Stangen",Zweig:"Zweige",
+  Portion:"Portionen",Kugel:"Kugeln",Tasse:"Tassen",Schale:"Schalen",Stange:"Stangen",Zweig:"Zweige",Prise:"Prisen",
   Knolle:"Knollen",Rispe:"Rispen",Kopf:"Köpfe",Stiel:"Stiele"};
 function fmt(q,e){let v;
   /* Zusammengeführte Mengen aus mehreren Rezepten (750 g + 500 g Mehl) sollen im
@@ -4139,7 +4153,7 @@ function detail(id,slotK){
     <p class="note" style="font-size:14.5px;color:var(--ink-2)">${esc(r.why)}</p>
     ${r.q?`<p style="margin-top:10px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:14px">Originalrezept öffnen</a></p>`:""}
     <div class="sect"><h2>Zutaten</h2><div class="stepper"><button onclick="dp(-1)">−</button><b>${p}</b><button onclick="dp(1)">+</button></div></div>
-    <div class="card">${r.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span class="q">${fmtZutat(q*p,e)}</span></div>`).join("")}</div>
+    <div class="card">${r.z.map(x=>zutatAnzeige(x)).map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span class="q">${fmtZutat(q*p,e)}</span></div>`).join("")}</div>
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${r.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`
@@ -4460,7 +4474,7 @@ function ideeDetail(id){
       ${S.still&&i.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
     <p class="note">${esc(i.why)}</p>
     <div class="sect"><h2>Zutaten je Portion</h2></div>
-    ${i.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span>${fmtZutat(q,e)}</span></div>`).join("")}
+    ${i.z.map(x=>zutatAnzeige(x)).map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span>${fmtZutat(q,e)}</span></div>`).join("")}
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${i.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     <button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="closeSheet();ideeUebernehmen('${i.id}')">In meine Sammlung</button>
