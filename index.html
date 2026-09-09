@@ -1256,7 +1256,12 @@ function mengeLesen(text){
   if(gefunden) menge=Math.round(menge*1000)/1000;
   return {menge,rest,gefunden};
 }
-/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "½ TL Zimt" · "Salz" */
+/* „1 kleine Aubergine“, „2 große Zwiebeln“: die Größe gehört nicht in den
+   Namen – sonst gilt „kleine Aubergine“ als andere Zutat als „Aubergine“ aus
+   dem nächsten Rezept, beide landen getrennt und unzusammengeführt auf der
+   Einkaufsliste, und ein Vorratseintrag „Aubergine“ erkennt sie nicht wieder. */
+const GROESSE_RE=/^(kleine[rs]?|gro(?:ß|ss)e[rs]?|mittelgro(?:ß|ss)e[rs]?|reife[rs]?|frische[rs]?|junge[rs]?)\s+/i;
+/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "½ TL Zimt" · "Salz" · "1 kleine Aubergine" */
 function parseZutat(zeile){
   let t=zeile.trim().replace(/^[-–•*]\s*/,"");
   if(!t) return null;
@@ -1265,6 +1270,7 @@ function parseZutat(zeile){
   let menge=gelesen.menge; t=gelesen.rest;
   const mEinh=t.match(/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
   if(mEinh){const k=mEinh[1].toLowerCase().replace(".","");if(EINH[k]){einheit=EINH[k];t=t.slice(mEinh[0].length);}}
+  t=t.replace(GROESSE_RE,"");
   const name=t.trim().replace(/\s*,\s*$/,"");
   if(!name) return null;
   if(menge&&!einheit) einheit="Stk";
@@ -2975,7 +2981,10 @@ function fmt(q,e){let v;
      Markt nicht als „1250 g" auffallen – ab einem Kilo/Liter zeigt sich das grobe Maß. */
   if(e==="g"&&q>=1000){e="kg";q=q/1000;}
   else if(e==="ml"&&q>=1000){e="l";q=q/1000;}
-  if(["Stk","Dose","Bund","Zehe","EL","TL"].includes(e))v=Math.round(q*2)/2;
+  /* Stück, Dosen, Bund und Zehen kauft man ganz – „3,5 Auberginen“ ist keine
+     Einkaufsmenge. EL/TL bleiben halbschrittig, das ist beim Kochen gemeint. */
+  if(["Stk","Dose","Bund","Zehe"].includes(e))v=Math.ceil(q-0.001);
+  else if(["EL","TL"].includes(e))v=Math.round(q*2)/2;
   else if(e==="Prise")v=Math.max(1,Math.round(q));
   /* Kilo und Liter sind grobe Maße – dort zählt die Nachkommastelle. „1,5 kg“
      als „2 kg“ zu zeigen, wäre ein halbes Kilo daneben. Bei Gramm und Millilitern
@@ -3142,10 +3151,18 @@ function grabsteinePflegen(pfad,wert){
        frischeren Grabstein nicht einfach mitlöschen – sonst kommt ein gerade erst
        entferntes Gericht beim nächsten Massen-Schreiben zurück. Ist der Grabstein
        jünger als der Eintrag selbst, fliegt der Eintrag aus dem zu sendenden
-       Objekt statt den Grabstein zu räumen. */
+       Objekt statt den Grabstein zu räumen.
+       Das gilt aber nur für Einträge mit echtem eigenen Zeitstempel – die stammen
+       aus einem alten, mitgeschleppten Stand. Ein frisch erzeugter Eintrag ohne
+       Zeitstempel (Woche vorschlagen bringt neue Vorschläge, die Einkaufsliste
+       wird bei jedem Aufbau komplett neu berechnet) ist die gerade getroffene,
+       aktuelle Entscheidung – der schlägt jeden noch so alten Grabstein. Sonst
+       verschwinden frisch vorgeschlagene Gerichte oder neu berechnete
+       Einkaufsposten sofort wieder, sobald irgendwann einmal etwas mit demselben
+       Schlüssel gelöscht wurde. */
     Object.keys(wert).forEach(k=>{
       const totSeit=(S.weg||{})[wegSchluessel(p[0],k)]||0;
-      if(totIstJuenger(totSeit,wert[k])){ delete wert[k]; return; }
+      if(stempel(wert[k])>0&&totIstJuenger(totSeit,wert[k])){ delete wert[k]; return; }
       grabsteinWeg(p[0],k);
     });
   }
@@ -4639,11 +4656,11 @@ function vorratFrage(){
   window.gt=(id,fehlt)=>{ if(fehlt) gewuerzFehlt[id]=true; else delete gewuerzFehlt[id]; openSheet(body(),true); };
   openSheet(body());
 }
-/* Vorratstreffer: nur exakt oder als einfache Mehrzahl, damit Kokosmilch nicht als Milch durchgeht */
+/* Nur exakt oder als einfache Mehrzahl, damit „Kokosmilch“ nicht als „Milch“ durchgeht */
+const gleicheZutat=(a,b)=>{const x=slug(a),y=slug(b);
+  return x===y||x===y+"n"||x===y+"e"||x+"n"===y||x+"e"===y;};
 function imVorrat(name){
-  const a=slug(name);
-  return Object.values(S.vorrat).find(v=>{const b=slug(v.n);
-    return b===a||b===a+"n"||b===a+"e"||b+"n"===a||b+"e"===a;});
+  return Object.values(S.vorrat).find(v=>gleicheZutat(name,v.n));
 }
 function listeBauen(){
   const map=new Map();
@@ -4700,7 +4717,10 @@ function listeBauen(){
       nach:alt.nach,ang:alt.ang,bearbeitet:true};
   });
   Object.values(S.vorrat).filter(v=>!v.da).forEach(v=>{const id=slug(v.n+"_vorrat");
-    if(!Object.values(liste).some(i=>i.n===v.n))liste[id]={n:v.n,q:0,e:"",k:v.k,on:false,nach:true,
+    /* Unscharfer statt exakter Namensvergleich – sonst landet neben „Aubergine“
+       aus dem Vorrat noch eine zweite Zeile „Nachfüllen“, nur weil ein Rezept
+       sie als „kleine Aubergine“ oder in der Mehrzahl führt. */
+    if(!Object.values(liste).some(i=>gleicheZutat(i.n,v.n)))liste[id]={n:v.n,q:0,e:"",k:v.k,on:false,nach:true,
       ang:zutatImAngebot(v.n,planWoche)||""};});
   S.listeInfo={ausVorrat:ausVorrat.size,gebaut:Date.now(),woche:planWoche};
   mut("liste",liste);closeSheet();go("einkauf");
