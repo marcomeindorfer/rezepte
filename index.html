@@ -1252,6 +1252,12 @@ function mengeLesen(text){
     gefunden=true;
   }else if(BRUCH[rest[0]]){                                   /* ½ */
     menge=BRUCH[rest[0]]; weg(1); gefunden=true;
+  }else{
+    /* Fehlerhafter Import lässt vom Bruch manchmal nur „/2“ übrig, der
+       Zähler „1“ davor geht verloren. Ohne diesen Schritt bleibt „/2 TL
+       Backpulver“ unverändert und ohne erkannte Menge stehen. */
+    const nurNenner=rest.match(/^\/\s*(\d+)/);
+    if(nurNenner&&+nurNenner[1]){ menge=1/(+nurNenner[1]); weg(nurNenner[0].length); gefunden=true; }
   }
   if(gefunden) menge=Math.round(menge*1000)/1000;
   return {menge,rest,gefunden};
@@ -1272,6 +1278,9 @@ const LABEL_RE=/^([^:\d][^:]{0,39}):\s*(.+)$/;
 function parseZutat(zeile){
   let t=zeile.trim().replace(/^[-–•*]\s*/,"");
   if(!t) return null;
+  /* Fehlerhafter Import verdoppelt gelegentlich Klammern: „Apfelmark
+     ((Apfelmus))“ statt „Apfelmark (Apfelmus)“. */
+  t=t.replace(/\({2,}/g,"(").replace(/\){2,}/g,")");
   let label="";
   const dp=t.match(LABEL_RE);
   if(dp){ label=dp[1].trim(); t=dp[2].trim(); }
@@ -3014,6 +3023,10 @@ function fmt(q,e){let v;
   else if(q<20)v=Math.round(q); else v=Math.round(q/5)*5;
   const einheit=(v!==1&&EINH_PLURAL[e])?EINH_PLURAL[e]:e;
   return (Number.isInteger(v)?v:v.toFixed(1).replace(".",","))+" "+einheit;}
+/* Ohne erkannte Menge im Rezepttext („brauner Zucker nach Belieben“) zeigte
+   die Zutatenliste bisher eine bedeutungslose „0" an. „Nach Bedarf" sagt,
+   was gemeint ist, statt eine Zahl vorzutäuschen, die es nicht gibt. */
+const fmtZutat=(q,e)=>q?fmt(q,e):"nach Bedarf";
 const KIND={fisch:["Fisch","t-fisch","d-fisch","k-fisch"],fleisch:["Fleisch","t-fleisch","d-fleisch","k-fleisch"],veg:["Vegetarisch","t-veg","d-veg","k-veg"]};
 
 /* ============ Speicher & Sync ============ */
@@ -3383,7 +3396,7 @@ function render(){
 }
 
 /* ============ Wochenplan ============ */
-let planWoche=0, erledigtWeg=false, einkaufAnsicht="woche";   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
+let planWoche=0, erledigtWeg=true, einkaufAnsicht="woche";   /* 0 = diese Woche, 1 = nächste, 2 = übernächste */
 const slots=(w=planWoche)=>{const a=[];for(let d=0;d<7;d++)for(const mk of["m","a"])a.push("w"+w+"-"+d+"-"+mk);return a;};
 const slotTag=k=>+k.split("-")[1];
 const slotMahl=k=>k.split("-")[2];
@@ -4126,7 +4139,7 @@ function detail(id,slotK){
     <p class="note" style="font-size:14.5px;color:var(--ink-2)">${esc(r.why)}</p>
     ${r.q?`<p style="margin-top:10px"><a href="${esc(r.q)}" target="_blank" rel="noopener" style="color:var(--sea);font-size:14px">Originalrezept öffnen</a></p>`:""}
     <div class="sect"><h2>Zutaten</h2><div class="stepper"><button onclick="dp(-1)">−</button><b>${p}</b><button onclick="dp(1)">+</button></div></div>
-    <div class="card">${r.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span class="q">${fmt(q*p,e)}</span></div>`).join("")}</div>
+    <div class="card">${r.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span class="q">${fmtZutat(q*p,e)}</span></div>`).join("")}</div>
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${r.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     ${slotK?`<button class="btn btn-primary btn-wide" onclick="mut('plan/${slotK}',{r:'${r.id}',p:${p}});closeSheet()">Portionen übernehmen</button>`
@@ -4447,7 +4460,7 @@ function ideeDetail(id){
       ${S.still&&i.bl===2?'<span class="tag t-sun">blähend</span>':""}</div>
     <p class="note">${esc(i.why)}</p>
     <div class="sect"><h2>Zutaten je Portion</h2></div>
-    ${i.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span>${fmt(q,e)}</span></div>`).join("")}
+    ${i.z.map(([n,q,e])=>`<div class="ingline"><span>${esc(n)}</span><span>${fmtZutat(q,e)}</span></div>`).join("")}
     <div class="sect"><h2>Zubereitung</h2></div>
     <ol class="steps">${i.s.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     <button class="btn btn-primary btn-wide" style="margin-top:14px" onclick="closeSheet();ideeUebernehmen('${i.id}')">In meine Sammlung</button>
@@ -4897,7 +4910,7 @@ function postenWoher(id){
     let p=0;
     slots().forEach(k=>{const e=S.plan[k]; if(e&&e.r===r.id&&e.p!==0) p+=(e.p||2);});
     extraListe(planWoche).forEach(e=>{ if(e.r===r.id&&e.p!==0) p+=(e.p||2); });
-    return p?fmt(z[1]*p,z[2]):"";
+    return p?fmtZutat(z[1]*p,z[2]):"";
   };
   openSheet(`<div class="grab"></div>
     <h2 style="font-size:20px">${esc(i.n)}</h2>
