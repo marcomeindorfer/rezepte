@@ -1261,17 +1261,31 @@ function mengeLesen(text){
    dem nächsten Rezept, beide landen getrennt und unzusammengeführt auf der
    Einkaufsliste, und ein Vorratseintrag „Aubergine“ erkennt sie nicht wieder. */
 const GROESSE_RE=/^(kleine[rs]?|gro(?:ß|ss)e[rs]?|mittelgro(?:ß|ss)e[rs]?|reife[rs]?|frische[rs]?|junge[rs]?)\s+/i;
-/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "½ TL Zimt" · "Salz" · "1 kleine Aubergine" */
+/* Manche Quellen schreiben Zutaten als „Auberginen: 1 kleine Aubergine“ oder
+   „Blattspinat: ⅓ Packung“ – der eigentliche Produktname steht vor dem
+   Doppelpunkt, Menge/Einheit meist danach. Ohne diesen Schritt bleibt die
+   ganze Zeile ein einziger Name ohne erkannte Menge („nachfüllen“ statt „1
+   Stk“). Nur wortartige Label ohne Ziffern zählen, damit „1:2“ oder eine
+   Uhrzeit nicht als Label missverstanden werden. */
+const LABEL_RE=/^([^:\d][^:]{0,39}):\s*(.+)$/;
+/* "200 g Möhren" · "1 Dose Kichererbsen" · "1,5 EL Olivenöl" · "½ TL Zimt" · "Salz" · "1 kleine Aubergine" · "Auberginen: 1 kleine Aubergine" */
 function parseZutat(zeile){
   let t=zeile.trim().replace(/^[-–•*]\s*/,"");
   if(!t) return null;
+  let label="";
+  const dp=t.match(LABEL_RE);
+  if(dp){ label=dp[1].trim(); t=dp[2].trim(); }
   let einheit="";
   const gelesen=mengeLesen(t);
   let menge=gelesen.menge; t=gelesen.rest;
-  const mEinh=t.match(/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
+  /* Steht die Einheit als letztes Wort da („⅓ Packung“, nichts mehr danach),
+     zählt auch das Zeilenende als Grenze – aber nur wenn wirklich eine Menge
+     gefunden wurde, sonst würde ein einzelnes Wort wie „Dose“ als Zutat für
+     leer erklärt statt als das, was es ist. */
+  const mEinh=t.match(gelesen.gefunden?/^([A-Za-zÄÖÜäöü]+\.?)(?:\s+|$)/:/^([A-Za-zÄÖÜäöü]+\.?)\s+/);
   if(mEinh){const k=mEinh[1].toLowerCase().replace(".","");if(EINH[k]){einheit=EINH[k];t=t.slice(mEinh[0].length);}}
   t=t.replace(GROESSE_RE,"");
-  const name=t.trim().replace(/\s*,\s*$/,"");
+  const name=(label||t.trim()).replace(/\s*,\s*$/,"");
   if(!name) return null;
   if(menge&&!einheit) einheit="Stk";
   return [name,menge,einheit,katFuer(name)];
@@ -4668,6 +4682,21 @@ function listeBauen(){
   /* Im Markt steht man vor „Lauch, 120 g“ und weiß nicht mehr, wofür.
      Deshalb merkt sich jeder Posten, aus welchen Gerichten er stammt. */
   const dazu=(n,q,ein,kat,portionen,rezeptId)=>{
+    /* Manche Importe liefern Zeilen wie „Auberginen: 1 kleine Aubergine“ oder
+       „Blattspinat: ⅓ Packung“ – Name und Menge in einem String, dazu noch
+       ineinander verschachtelt. Erneut durch den Zutaten-Parser geschickt löst
+       das auf, auch bei schon länger gespeicherten Rezepten und ohne sie
+       anzufassen: gefunden wird die Menge nur übernommen, wenn sie bisher
+       fehlte, der bereinigte Name aber immer. */
+    const erneut=parseZutat(n);
+    if(erneut){
+      if(!q&&erneut[1]){ q=erneut[1]; ein=erneut[2]||ein; }
+      n=erneut[0];
+    }
+    /* Zubereitungs- und Serviehinweise gehören ins Rezept, nicht auf die
+       Liste: „(grob gehackt)“, „(zum Servieren)“, „(optional)“, „(etwas)“. */
+    n=n.replace(/\s*\([^)]*\)/g,"").replace(/\s{2,}/g," ").trim();
+    if(!n) return;
     if(istImmerDa(n)) return;   /* Wasser & Co – wird nie eingekauft */
     const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
     if(istGewuerz(n)&&!gewuerzFehlt[slug(n)]) return;   /* Gewürze gelten als vorhanden, außer aktiv verneint */
