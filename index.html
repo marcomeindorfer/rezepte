@@ -1194,6 +1194,10 @@ const EINH={g:"g",gr:"g",gramm:"g",kg:"kg",ml:"ml",l:"l",liter:"l",el:"EL",esslo
  "päckchen":"Packung",paeckchen:"Packung",beutel:"Beutel",flasche:"Flasche",tube:"Tube",
  topf:"Topf",netz:"Netz",rispe:"Rispe",knolle:"Knolle",stiel:"Stiel",stiele:"Stiel",
  kugel:"Kugel",kugeln:"Kugel",portion:"Portion",portionen:"Portion",dosen:"Dose"};
+/* Für die Einkaufsliste: Kilo/Gramm und Liter/Milliliter sind dieselbe Größe,
+   nur anders geschrieben – zum Zusammenführen rechnet sich alles auf die kleine
+   Einheit um. [Basiseinheit, Faktor auf die Basiseinheit] */
+const EINH_BASIS={g:["g",1],kg:["g",1000],ml:["ml",1],l:["ml",1000]};
 
 function katFuer(name){
   const idx=KAT_INDEX(), a=slug(name);
@@ -2967,6 +2971,10 @@ const monat=()=>new Date().getMonth()+1;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function kw(d=new Date()){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const j=new Date(Date.UTC(t.getUTCFullYear(),0,1));return "KW "+Math.ceil(((t-j)/86400000+1)/7);}
 function fmt(q,e){let v;
+  /* Zusammengeführte Mengen aus mehreren Rezepten (750 g + 500 g Mehl) sollen im
+     Markt nicht als „1250 g" auffallen – ab einem Kilo/Liter zeigt sich das grobe Maß. */
+  if(e==="g"&&q>=1000){e="kg";q=q/1000;}
+  else if(e==="ml"&&q>=1000){e="l";q=q/1000;}
   if(["Stk","Dose","Bund","Zehe","EL","TL"].includes(e))v=Math.round(q*2)/2;
   else if(e==="Prise")v=Math.max(1,Math.round(q));
   /* Kilo und Liter sind grobe Maße – dort zählt die Nachkommastelle. „1,5 kg“
@@ -4556,6 +4564,25 @@ const vorZeit=ts=>{
   return "vor "+tage+(tage===1?" Tag":" Tagen");
 };
 
+/* Steht immer im Schrank, wird nie eingekauft – landet gar nicht erst auf der
+   Liste, ohne dass jemand danach gefragt wird. Leitungswasser ist kein
+   Einkauf; Mineral- oder Sodawasser dagegen schon, deshalb kein Wortteil-Treffer. */
+const IMMER_DA=new Set(["wasser","leitungswasser"]);
+const istImmerDa=name=>IMMER_DA.has(slug(name));
+/* Gewürze im engeren Sinn – nicht Öle, Soßen oder Backzutaten, die auch unter
+   „Öl, Gewürze & Backzutaten“ laufen. Wortteile, damit „Kreuzkümmel gemahlen“
+   genauso trifft wie „Kreuzkümmel“; ganze Wendungen extra, weil „Kräuter“ oder
+   „Hanout“ allein zu unspezifisch wären. */
+const GEWUERZ_WORT=["salz","pfeffer","kreuzkuemmel","zimt","paprikapulver","currypulver","curry",
+  "oregano","muskatnuss","muskat","kurkuma","rosmarin","thymian","kuemmel","majoran",
+  "ingwerpulver","knoblauchpulver","zwiebelpulver","chiliflocken","chilipulver","cayennepfeffer",
+  "lorbeer","nelken","kardamom","sternanis","vanillezucker","piment","sumach","zatar","garam"];
+const GEWUERZ_PHRASE=["kraeuter_der_provence","ras_el_hanout"];
+function istGewuerz(name){
+  const a=slug(name);
+  if(GEWUERZ_PHRASE.some(p=>a.includes(p))) return true;
+  return a.split("_").some(t=>GEWUERZ_WORT.includes(t));
+}
 /* Welche Vorratsdinge kommen in den Gerichten dieser Woche überhaupt vor?
    Alles andere jede Woche abzufragen ist eine Wand aus Schaltern ohne Nutzen. */
 function vorratGebraucht(){
@@ -4565,9 +4592,24 @@ function vorratGebraucht(){
   extraListe(planWoche).forEach(e=>{ if(e.p!==0) sammeln(R(e.r)); });
   return noetig;
 }
-let vorratAlle=false;
+/* Dieselbe Frage wie beim Vorrat, aber ohne Vorlauf: Gewürze müssen nicht
+   erst im Vorratsschrank angelegt sein, um hier aufzutauchen – sie gelten
+   für diesen Einkauf einfach als vorhanden, bis jemand aktiv widerspricht. */
+function gewuerzeGebraucht(){
+  const karte=new Map();
+  const sammeln=r=>{ if(!r) return; (r.z||[]).forEach(([n])=>{
+    if(!istGewuerz(n)) return;
+    if(imVorrat(n)) return;   /* schon im Vorratsschrank angelegt – wird dort abgefragt, nicht doppelt hier */
+    const id=slug(n);
+    if(!karte.has(id)) karte.set(id,n);
+  });};
+  slots().forEach(k=>{const e=S.plan[k]; if(e&&e.p!==0) sammeln(R(e.r));});
+  extraListe(planWoche).forEach(e=>{ if(e.p!==0) sammeln(R(e.r)); });
+  return [...karte.entries()].map(([id,n])=>({id,n}));
+}
+let vorratAlle=false, gewuerzFehlt={};
 function vorratFrage(){
-  vorratAlle=false;
+  vorratAlle=false; gewuerzFehlt={};
   const body=()=>{
     const noetig=vorratGebraucht();
     const alleEintraege=Object.entries(S.vorrat);
@@ -4576,18 +4618,25 @@ function vorratFrage(){
     const rest=alleEintraege.length-zeigen.length;
     const zeile=([id,v])=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(v.n)}</div><div class="meal-sub">${ABT[v.k]}</div></div>
       <div class="toggle"><button aria-pressed="${!!v.da}" onclick="vt('${id}',true)">Da</button><button aria-pressed="${!v.da}" onclick="vt('${id}',false)">Fehlt</button></div></div>`;
+    const gewuerze=gewuerzeGebraucht();
+    const gzeile=({id,n})=>`<div class="meal"><div class="meal-main"><div class="meal-name" style="font-size:15px">${esc(n)}</div></div>
+      <div class="toggle"><button aria-pressed="${!gewuerzFehlt[id]}" onclick="gt('${id}',false)">Da</button><button aria-pressed="${!!gewuerzFehlt[id]}" onclick="gt('${id}',true)">Fehlt</button></div></div>`;
     return `<div class="grab"></div><h2 style="font-size:20px">Was ist noch da?</h2>
     <p class="note" style="margin:7px 0 16px">${relevant.length&&!vorratAlle
       ? "Nur das, was in den Gerichten dieser Woche vorkommt. Alles auf „Fehlt“ landet auf der Einkaufsliste."
       : "Alles auf „Fehlt“ landet automatisch auf der Einkaufsliste."}</p>
     ${zeigen.map(zeile).join("")}
     ${rest>0?`<button class="btn btn-s btn-wide" style="margin-top:10px" onclick="vorratAlle=true;openSheet(vorratKoerper(),true)">Restliche ${rest} auch zeigen</button>`:""}
+    ${gewuerze.length?`<div class="sect" style="margin-top:16px"><h2>Gewürze</h2></div>
+      <p class="note" style="margin:0 0 10px">Gilt standardmäßig als vorhanden. Nur bei „Fehlt“ kommt ein Gewürz auf die Liste.</p>
+      ${gewuerze.map(gzeile).join("")}`:""}
     <div style="margin-top:16px"><button class="btn btn-primary btn-wide" onclick="listeBauen()">Liste erstellen</button>
     <button class="btn btn-wide btn-ghost" style="margin-top:6px" onclick="closeSheet()">Abbrechen</button></div>`;
   };
   window.vorratKoerper=body;
   window.vt=(id,d)=>{const v=(S.vorrat||{})[id]; if(!v)return;
     mut("vorrat/"+id,{...v,da:d},false);openSheet(body(),true);};
+  window.gt=(id,fehlt)=>{ if(fehlt) gewuerzFehlt[id]=true; else delete gewuerzFehlt[id]; openSheet(body(),true); };
   openSheet(body());
 }
 /* Vorratstreffer: nur exakt oder als einfache Mehrzahl, damit Kokosmilch nicht als Milch durchgeht */
@@ -4602,14 +4651,23 @@ function listeBauen(){
   /* Im Markt steht man vor „Lauch, 120 g“ und weiß nicht mehr, wofür.
      Deshalb merkt sich jeder Posten, aus welchen Gerichten er stammt. */
   const dazu=(n,q,ein,kat,portionen,rezeptId)=>{
+    if(istImmerDa(n)) return;   /* Wasser & Co – wird nie eingekauft */
     const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
-    const id=slug(n+"_"+ein), menge=q*(portionen||2);
+    if(istGewuerz(n)&&!gewuerzFehlt[slug(n)]) return;   /* Gewürze gelten als vorhanden, außer aktiv verneint */
+    /* Kilo und Gramm, Liter und Milliliter sind dieselbe Zutat – „500 g Mehl“ aus
+       dem einen Rezept und „0,5 kg Mehl“ aus dem anderen dürfen nicht als zwei
+       Posten auf der Liste landen. Gemeinsame Basis ist immer die kleine Einheit,
+       fmt() macht daraus beim Anzeigen wieder ein passendes Kilo oder Liter. */
+    const basis=EINH_BASIS[ein];
+    const einheit=basis?basis[0]:ein;
+    const menge=q*(portionen||2)*(basis?basis[1]:1);
+    const id=slug(n+"_"+einheit);
     if(map.has(id)){
       const alt=map.get(id);
       alt.q+=menge;
       if(rezeptId&&!alt.fuer.includes(rezeptId)) alt.fuer.push(rezeptId);
     } else {
-      map.set(id,{n,q:menge,e:ein,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||"",
+      map.set(id,{n,q:menge,e:einheit,k:kat,on:false,ang:zutatImAngebot(n,planWoche)||"",
         fuer:rezeptId?[rezeptId]:[]});
     }
   };
