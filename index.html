@@ -2990,6 +2990,13 @@ const R=id=>{
 const monat=()=>new Date().getMonth()+1;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function kw(d=new Date()){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));const j=new Date(Date.UTC(t.getUTCFullYear(),0,1));return "KW "+Math.ceil(((t-j)/86400000+1)/7);}
+/* „2 Zehe Knoblauch“ ist falsch, „2 Zehen“ richtig – nur für Einheiten, bei
+   denen die Mehrzahl im Alltag auch wirklich gesagt wird. Maßwörter wie
+   „Bund“ oder „Glas“ bleiben bewusst draußen, die ändern sich beim Zählen
+   umgangssprachlich meist nicht ("2 Bund Radieschen", nicht "2 Bunde"). */
+const EINH_PLURAL={Dose:"Dosen",Zehe:"Zehen",Scheibe:"Scheiben",Flasche:"Flaschen",Packung:"Packungen",
+  Portion:"Portionen",Kugel:"Kugeln",Tasse:"Tassen",Schale:"Schalen",Stange:"Stangen",Zweig:"Zweige",
+  Knolle:"Knollen",Rispe:"Rispen",Kopf:"Köpfe",Stiel:"Stiele"};
 function fmt(q,e){let v;
   /* Zusammengeführte Mengen aus mehreren Rezepten (750 g + 500 g Mehl) sollen im
      Markt nicht als „1250 g" auffallen – ab einem Kilo/Liter zeigt sich das grobe Maß. */
@@ -3005,7 +3012,8 @@ function fmt(q,e){let v;
      ist das Runden dagegen richtig, da will im Markt niemand 187 lesen. */
   else if(e==="kg"||e==="l")v=Math.round(q*10)/10;
   else if(q<20)v=Math.round(q); else v=Math.round(q/5)*5;
-  return (Number.isInteger(v)?v:v.toFixed(1).replace(".",","))+" "+e;}
+  const einheit=(v!==1&&EINH_PLURAL[e])?EINH_PLURAL[e]:e;
+  return (Number.isInteger(v)?v:v.toFixed(1).replace(".",","))+" "+einheit;}
 const KIND={fisch:["Fisch","t-fisch","d-fisch","k-fisch"],fleisch:["Fleisch","t-fleisch","d-fleisch","k-fleisch"],veg:["Vegetarisch","t-veg","d-veg","k-veg"]};
 
 /* ============ Speicher & Sync ============ */
@@ -4709,28 +4717,45 @@ function listeBauen(){
        fehlerhaft importierten Text übrig bleiben kann. */
     n=n.replace(/\s*\([^)]*\)/g,"").replace(/[()]/g,"").replace(/\s{2,}/g," ").trim();
     if(!n) return;
-    if(istImmerDa(n)) return;   /* Wasser & Co – wird nie eingekauft */
-    const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
-    if(istGewuerz(n)&&!gewuerzFehlt[slug(n)]) return;   /* Gewürze gelten als vorhanden, außer aktiv verneint */
+    /* Alles, was den Namen noch verändert – Knoblauchzehen, Saft, vage
+       Packungsgrößen – muss VOR der Vorrats-/Gewürz-Prüfung passieren. Sonst
+       prüft imVorrat() den alten Namen, findet keinen Treffer, und dieselbe
+       Zutat taucht unter zwei Namen auf: einmal ausgeschlossen (weil im
+       Vorrat als vorhanden markiert), einmal nicht (weil der Vorratsabgleich
+       die umbenannte Form nie zu sehen bekam). */
+    if(!ein||ein==="Stk"){
+      const zehe=n.match(/^(.+?)zehen?$/i);
+      if(zehe&&zehe[1].trim()){ n=zehe[1].trim(); ein="Zehe"; }
+    }
     const saft=fruchtStattSaft(n);
     if(saft&&ML_JE_EINHEIT[ein]){
       const [frucht,mlProStk]=saft;
       q=Math.max(1,Math.ceil(q*ML_JE_EINHEIT[ein]/mlProStk));
       n=frucht; ein="Stk"; kat="og";
     }
-    /* Jede Zutat aus einem Gericht bekommt eine echte Menge – „nachfüllen“ ist
-       ausschließlich für Vorratsposten reserviert, die von Hand als fehlend
-       markiert wurden. Ohne erkennbare Menge im Rezepttext („etwas Petersilie“,
-       „Salz“) gilt ersatzweise 1 Stück – besser eine grobe Zahl als gar keine. */
-    if(!q) q=1;
-    if(!ein) ein="Stk";
+    /* „Packung“ und „Beutel“ sagen nichts über die tatsächliche Menge – je
+       nach Produkt steckt darin mal 200 g, mal 500 g. Auf der Liste zählt
+       dann besser die Anzahl der Packungen. */
+    if(ein==="Packung"||ein==="Beutel") ein="Stk";
+    if(istImmerDa(n)) return;   /* Wasser & Co – wird nie eingekauft */
+    const v=imVorrat(n); if(v&&v.da){ ausVorrat.add(v.n); return; }
+    if(istGewuerz(n)&&!gewuerzFehlt[slug(n)]) return;   /* Gewürze gelten als vorhanden, außer aktiv verneint */
+    /* Ohne erkennbare Menge im Rezepttext („etwas Petersilie“, „Chili
+       (optional)“) gilt ersatzweise 1 Stück – besser eine grobe Zahl als gar
+       keine oder „nachfüllen“, das bleibt dem Vorrats-Fallback vorbehalten.
+       Mit der Portionenzahl multipliziert würde daraus bei mehreren Gerichten
+       schnell eine absurde Menge (vier Gerichte mit „etwas Chili“ ergäben acht
+       Stück statt vier) – ein vager Wunsch bleibt darum unabhängig von der
+       Portionenzahl ein einzelnes Stück je Gericht. */
+    let synthetisch=false;
+    if(!q){ q=1; ein="Stk"; synthetisch=true; }
     /* Kilo und Gramm, Liter und Milliliter sind dieselbe Zutat – „500 g Mehl“ aus
        dem einen Rezept und „0,5 kg Mehl“ aus dem anderen dürfen nicht als zwei
        Posten auf der Liste landen. Gemeinsame Basis ist immer die kleine Einheit,
        fmt() macht daraus beim Anzeigen wieder ein passendes Kilo oder Liter. */
     const basis=EINH_BASIS[ein];
     const einheit=basis?basis[0]:ein;
-    const menge=q*(portionen||2)*(basis?basis[1]:1);
+    const menge=synthetisch?q:q*(portionen||2)*(basis?basis[1]:1);
     const id=slug(n+"_"+einheit);
     /* Einzahl und Mehrzahl derselben Zutat („Frühlingszwiebel“/„Frühlingszwiebeln“)
        landen sonst als zwei Zeilen auf der Liste, nur weil das eine Rezept die
