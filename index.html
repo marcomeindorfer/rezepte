@@ -3219,7 +3219,19 @@ function grabsteinePflegen(pfad,wert){
 function stempeln(pfad,wert){
   if(!wert||typeof wert!=="object"||Array.isArray(wert)) return wert;
   const p=String(pfad).split("/").filter(Boolean);
-  return (p.length===2&&GESTEMPELT.has(p[0])) ? {...wert,ts:Date.now()} : wert;
+  if(p.length===2&&GESTEMPELT.has(p[0])) return {...wert,ts:Date.now()};
+  /* Ganzer Sammelfeld-Ersatz (z. B. Wochenplan vorschlagen, Portionen auffüllen):
+     unveränderte Einträge tragen ihren Zeitstempel schon in sich, aber frisch
+     erzeugte Einträge aus so einem Massen-Schreiben hatten bisher gar keinen.
+     Beim Zusammenführen zählte das als "ältester Stand" (Zeitpunkt 0) – ein
+     Gerät mit veraltetem, aber echt gestempeltem Plan hat den gerade erst
+     vorgeschlagenen Plan dadurch immer verdrängt. */
+  if(p.length===1&&GESTEMPELT.has(p[0])){
+    const jetzt=Date.now();
+    return Object.fromEntries(Object.entries(wert).map(([k,v])=>
+      [k,(v&&typeof v==="object"&&!Array.isArray(v)&&!stempel(v))?{...v,ts:jetzt}:v]));
+  }
+  return wert;
 }
 function mut(pfad,wert,neuZeichnen=true){
   wert=stempeln(pfad,wert);
