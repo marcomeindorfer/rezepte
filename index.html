@@ -4718,6 +4718,12 @@ function listeBauen(){
       q=Math.max(1,Math.ceil(q*ML_JE_EINHEIT[ein]/mlProStk));
       n=frucht; ein="Stk"; kat="og";
     }
+    /* Jede Zutat aus einem Gericht bekommt eine echte Menge – „nachfüllen“ ist
+       ausschließlich für Vorratsposten reserviert, die von Hand als fehlend
+       markiert wurden. Ohne erkennbare Menge im Rezepttext („etwas Petersilie“,
+       „Salz“) gilt ersatzweise 1 Stück – besser eine grobe Zahl als gar keine. */
+    if(!q) q=1;
+    if(!ein) ein="Stk";
     /* Kilo und Gramm, Liter und Milliliter sind dieselbe Zutat – „500 g Mehl“ aus
        dem einen Rezept und „0,5 kg Mehl“ aus dem anderen dürfen nicht als zwei
        Posten auf der Liste landen. Gemeinsame Basis ist immer die kleine Einheit,
@@ -4761,8 +4767,10 @@ function listeBauen(){
     const schon=alt?(alt.gekauft||(alt.on?(alt.q||0):0)):0;
     const rest=Math.max(0,(v.q||0)-schon);
     const erledigt=schon>0&&rest<=0.001;
-    liste[id]={...v, q:erledigt?(v.q||0):(schon>0?rest:v.q), on:erledigt,
-      gekauft:schon, nach:v.q===0?true:undefined};
+    /* "nachfüllen" bleibt dem Vorrats-Fallback weiter unten vorbehalten – jede
+       Zutat aus einem Gericht hat inzwischen immer eine echte Menge (siehe
+       dazu()), verdient also auch eine Zahl statt der pauschalen Nachfüllen-Zeile. */
+    liste[id]={...v, q:erledigt?(v.q||0):(schon>0?rest:v.q), on:erledigt, gekauft:schon};
     /* Von Hand Geändertes gewinnt: Name, Menge, Einheit und Abteilung bleiben,
        wie sie eingetragen wurden. Sonst wäre jede Korrektur beim nächsten
        Aufbau der Liste wieder verschwunden. */
